@@ -1,0 +1,2 @@
+"""Socratia backend application."""
+

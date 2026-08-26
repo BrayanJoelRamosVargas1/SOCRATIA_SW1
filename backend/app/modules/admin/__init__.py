@@ -1,0 +1,2 @@
+"""Administrative use cases boundary."""
+
