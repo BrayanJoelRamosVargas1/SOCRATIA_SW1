@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { ChartIcon, DocumentIcon, MicIcon } from "@/components/ui/icons";
@@ -35,7 +36,7 @@ export function Dashboard() {
         <Logo />
         <nav aria-label="Navegación principal">
           <a className="nav-item active" href="/dashboard">Resumen</a>
-          <span className="nav-item disabled">Documentos <small>Próximo</small></span>
+          <Link className="nav-item" href="/documents">Documentos</Link>
           <span className="nav-item disabled">Simulaciones <small>Próximo</small></span>
           <span className="nav-item disabled">Reportes <small>Próximo</small></span>
         </nav>
@@ -96,4 +97,3 @@ export function Dashboard() {
     </main>
   );
 }
-

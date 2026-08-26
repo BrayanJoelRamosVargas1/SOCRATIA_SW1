@@ -1,2 +1,1 @@
-"""Document ingestion boundary (Sprint 2)."""
-
+"""P2 document ingestion and preparation boundary."""

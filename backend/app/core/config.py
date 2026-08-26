@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,13 +28,18 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
     cors_origins: str = "http://localhost:3000"
+    local_storage_path: Path = Path("./uploads")
+    max_document_size_mb: int = Field(default=20, ge=1, le=100)
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
+    @property
+    def max_document_size_bytes(self) -> int:
+        return self.max_document_size_mb * 1024 * 1024
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

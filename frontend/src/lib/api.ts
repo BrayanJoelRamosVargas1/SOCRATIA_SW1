@@ -36,7 +36,8 @@ async function parseError(response: Response): Promise<ApiError> {
 
 async function execute<T>(path: string, options: RequestInit): Promise<T> {
   const headers = new Headers(options.headers);
-  if (options.body && !headers.has("Content-Type")) {
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   const response = await fetch(`${API_URL}${path}`, {
@@ -73,4 +74,3 @@ export async function apiRequest<T>(
     return execute<T>(path, options);
   }
 }
-
