@@ -43,3 +43,28 @@ export function ShieldIcon({ className }: IconProps) {
   );
 }
 
+export function PasswordVisibilityIcon({
+  className,
+  visible,
+}: IconProps & { visible: boolean }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.7" stroke="currentColor" strokeWidth="1.7" />
+      {visible && (
+        <path
+          d="m4 4 16 16"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}

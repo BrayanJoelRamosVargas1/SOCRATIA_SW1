@@ -58,3 +58,84 @@ def test_login_rejects_invalid_credentials(client: TestClient) -> None:
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "invalid_credentials"
 
+
+def test_registration_requires_fifteen_characters(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "short@example.com",
+            "full_name": "Short Password",
+            "password": "only-fourteen!",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "code": "weak_password",
+        "message": "La contraseña debe tener al menos 15 caracteres.",
+    }
+
+
+def test_registration_rejects_predictable_password(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "predictable@example.com",
+            "full_name": "Predictable Password",
+            "password": "passwordpassword",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "weak_password"
+
+
+def test_password_preserves_boundary_spaces(client: TestClient) -> None:
+    password = " una frase segura y memorable "
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "spaces@example.com",
+            "full_name": "Password Spaces",
+            "password": password,
+        },
+    )
+    assert registration.status_code == 201
+
+    trimmed_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "spaces@example.com", "password": password.strip()},
+    )
+    exact_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "spaces@example.com", "password": password},
+    )
+
+    assert trimmed_login.status_code == 401
+    assert exact_login.status_code == 200
+
+
+def test_login_uses_same_error_for_missing_account_and_wrong_password(
+    client: TestClient,
+) -> None:
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "existing@example.com",
+            "full_name": "Existing Account",
+            "password": "a memorable defense phrase",
+        },
+    )
+    assert registration.status_code == 201
+
+    missing = client.post(
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password"},
+    )
+    existing = client.post(
+        "/api/v1/auth/login",
+        json={"email": "existing@example.com", "password": "incorrect-password"},
+    )
+
+    assert missing.status_code == existing.status_code == 401
+    assert missing.json() == existing.json()

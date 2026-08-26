@@ -34,4 +34,9 @@ pertenezca al transporte HTTP ni a los servicios de aplicación.
 
 ## Estado
 
-Implementado y cubierto por las pruebas de autenticación y perfil del Sprint 1.
+Implementado y cubierto por las pruebas de autenticación y perfil.
+
+El alta aplica una política de contraseña de 15–128 caracteres, acepta espacios sin recortarlos y
+rechaza claves comunes, repetitivas, secuenciales o previsibles según el contexto. El login conserva
+un mensaje genérico para no revelar si una cuenta existe. La política y su UX están descritas en
+[`docs/security/password-policy.md`](../../../../docs/security/password-policy.md).

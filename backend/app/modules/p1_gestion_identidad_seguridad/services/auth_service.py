@@ -19,6 +19,7 @@ from app.modules.p1_gestion_identidad_seguridad.exceptions import (
     InvalidSessionError,
 )
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
+from app.modules.p1_gestion_identidad_seguridad.policies.password import validate_new_password
 from app.modules.p1_gestion_identidad_seguridad.repositories.session_repository import (
     SessionRepository,
 )
@@ -50,6 +51,7 @@ class AuthService:
 
     def register(self, payload: RegisterRequest, context: ClientContext) -> IssuedSession:
         email = str(payload.email).lower()
+        validate_new_password(payload.password, email=email, full_name=payload.full_name)
         if self.users.get_by_email(email) is not None:
             raise EmailAlreadyRegisteredError
 

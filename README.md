@@ -90,12 +90,18 @@ npm run build
 
 Los tokens se entregan en cookies `HttpOnly`; no se guardan credenciales en `localStorage`. El access token expira pronto. El refresh token es aleatorio, se persiste únicamente como hash, rota al renovarse y se revoca al cerrar sesión. En producción se debe usar HTTPS, `COOKIE_SECURE=true`, un `JWT_SECRET` aleatorio y orígenes CORS explícitos.
 
+Las contraseñas nuevas requieren al menos 15 caracteres, permiten frases y espacios y no imponen
+mezclas artificiales de mayúsculas/números/símbolos. Los espacios al inicio o al final se conservan
+exactamente y el formulario lo advierte antes del envío. FastAPI rechaza claves predecibles y Argon2
+protege su almacenamiento.
+
 Cada operación de documentos valida además la propiedad del recurso. Un usuario no puede consultar, procesar ni eliminar documentos de otra cuenta. PostgreSQL guarda metadata y una clave de almacenamiento; nunca guarda los bytes del archivo.
 
 ## Documentación
 
 - [Arquitectura y límites modulares](docs/architecture.md)
 - [Mapa de paquetes P1–P6](backend/app/modules/README.md)
+- [Política de contraseñas y UX](docs/security/password-policy.md)
 - [C4: contexto](docs/c4/context.md)
 - [C4: contenedores](docs/c4/containers.md)
 - [C4: componentes del backend](docs/c4/backend-components.md)

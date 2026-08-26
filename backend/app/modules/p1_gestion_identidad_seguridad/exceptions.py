@@ -19,6 +19,11 @@ class InvalidSessionError(DomainError):
         )
 
 
+class WeakPasswordError(DomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message, code="weak_password", status_code=422)
+
+
 class UserNotFoundError(DomainError):
     def __init__(self) -> None:
         super().__init__("Usuario no encontrado.", code="user_not_found", status_code=404)
