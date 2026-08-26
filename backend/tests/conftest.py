@@ -10,9 +10,11 @@ from app.core.database import Base, get_db
 from app.integrations.storage.dependencies import get_storage_provider
 from app.integrations.storage.local import LocalStorageProvider
 from app.main import app
-from app.modules.auth import models as auth_models  # noqa: F401
-from app.modules.documents import models as document_models  # noqa: F401
-from app.modules.users import models as user_models  # noqa: F401
+from app.modules.p1_gestion_identidad_seguridad.models import (
+    session as session_models,  # noqa: F401
+)
+from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401
+from app.modules.p2_gestion_documentos_preparacion.models import document  # noqa: F401
 
 
 @pytest.fixture

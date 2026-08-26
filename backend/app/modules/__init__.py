@@ -1,2 +1,1 @@
-"""Business modules of the Socratia modular monolith."""
-
+"""Business use-case packages of the Socratia modular monolith."""

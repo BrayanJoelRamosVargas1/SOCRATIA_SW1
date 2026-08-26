@@ -1,2 +1,0 @@
-"""Audit trail boundary."""
-

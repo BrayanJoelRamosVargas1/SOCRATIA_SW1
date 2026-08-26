@@ -5,9 +5,11 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.core.database import Base
-from app.modules.auth import models as auth_models  # noqa: F401
-from app.modules.documents import models as document_models  # noqa: F401
-from app.modules.users import models as user_models  # noqa: F401
+from app.modules.p1_gestion_identidad_seguridad.models import (
+    session as session_models,  # noqa: F401
+)
+from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401
+from app.modules.p2_gestion_documentos_preparacion.models import document  # noqa: F401
 
 config = context.config
 

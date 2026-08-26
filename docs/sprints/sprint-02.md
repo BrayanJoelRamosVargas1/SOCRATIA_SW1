@@ -1,7 +1,8 @@
 # Sprint 2 — Documentos y preparación
 
-Rama: `feature/documents`  
-Estado: primera mitad implementada
+- Rama funcional de origen: `feature/documents`
+- Rama del refactor arquitectónico: `refactor/modular-use-case-packages`
+- Estado: primera mitad implementada
 
 ## Objetivo del incremento
 
@@ -33,6 +34,13 @@ users/{user_id}/documents/{document_id}/{document_id}.{extension}
 ```
 
 El cambio futuro a S3 no modifica routers, servicios, repositorios ni policies.
+
+## Ubicación arquitectónica
+
+Los casos CU06–CU11 pertenecen a
+`backend/app/modules/p2_gestion_documentos_preparacion`. La autenticación requerida por sus rutas
+se consume desde la política pública de P1. Los adaptadores de almacenamiento y los futuros
+proveedores de vectores/LLM permanecen en `app/integrations`.
 
 ## Reglas implementadas
 
