@@ -58,3 +58,20 @@ class LoginSecurityRepository:
             AuthenticationEvent.event_type.in_(request_event_types),
         )
         return int(self.db.scalar(statement) or 0)
+
+    def count_password_reset_requests(
+        self,
+        *,
+        since: datetime,
+        identifier_hash: str | None = None,
+        ip_address: str | None = None,
+    ) -> int:
+        statement = select(func.count(AuthenticationEvent.id)).where(
+            AuthenticationEvent.event_type == "PASSWORD_RESET_REQUESTED",
+            AuthenticationEvent.created_at >= since,
+        )
+        if identifier_hash is not None:
+            statement = statement.where(AuthenticationEvent.identifier_hash == identifier_hash)
+        if ip_address is not None:
+            statement = statement.where(AuthenticationEvent.ip_address == ip_address)
+        return int(self.db.scalar(statement) or 0)

@@ -46,3 +46,12 @@ class EmailAlreadyRegisteredError(DomainError):
             code="email_already_registered",
             status_code=409,
         )
+
+
+class InvalidPasswordResetTokenError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "El enlace de recuperación no es válido, ya fue utilizado o expiró.",
+            code="invalid_password_reset_token",
+            status_code=400,
+        )

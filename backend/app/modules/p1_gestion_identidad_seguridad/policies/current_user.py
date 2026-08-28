@@ -31,7 +31,7 @@ def get_current_user(
         )
 
     try:
-        user_id = decode_access_token(token)
+        claims = decode_access_token(token)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -39,8 +39,8 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
-    user = UserRepository(db).get_by_id(user_id)
-    if user is None or not user.is_active:
+    user = UserRepository(db).get_by_id(claims.user_id)
+    if user is None or not user.is_active or user.auth_version != claims.auth_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired credentials",

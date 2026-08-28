@@ -4,8 +4,9 @@ Casos de uso: **CU01–CU05**.
 
 ## Responsabilidad
 
-Gestionar cuentas, credenciales, perfiles, roles y el ciclo de vida de las sesiones. P1 es
-propietario de las tablas `users`, `roles`, `user_roles` y `sessions`.
+Gestionar cuentas, credenciales, perfiles, roles, recuperación y el ciclo de vida de las sesiones.
+P1 es propietario de las tablas `users`, `roles`, `user_roles`, `sessions`, `login_security`,
+`authentication_events` y `password_reset_tokens`.
 
 ## Capas implementadas
 
@@ -24,7 +25,7 @@ pertenezca al transporte HTTP ni a los servicios de aplicación.
 ## Dependencias permitidas
 
 - `app/core` para configuración, seguridad y base de datos.
-- Ningún proveedor externo específico.
+- `app/integrations/email` mediante su interfaz `EmailProvider`; P1 no conoce Brevo ni `smtplib`.
 
 ## No permitido
 
@@ -44,3 +45,7 @@ un mensaje genérico para no revelar si una cuenta existe. La política y su UX 
 La protección de login aplica bloqueos progresivos de 5, 10 y 15 minutos por cuenta, una ventana
 deslizante por IP y eventos persistentes de seguridad. La decisión está documentada en
 [`docs/security/login-protection.md`](../../../../docs/security/login-protection.md).
+
+La recuperación envía correo real mediante el adaptador SMTP, usa tokens con hash, caducidad y uso
+único, y revoca toda autenticación anterior. El diseño y la configuración están en
+[`docs/security/password-recovery.md`](../../../../docs/security/password-recovery.md).

@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
+from app.integrations.email.base import OutboundEmail
+from app.integrations.email.dependencies import get_email_provider
 from app.integrations.storage.dependencies import get_storage_provider
 from app.integrations.storage.local import LocalStorageProvider
 from app.main import app
@@ -14,10 +16,21 @@ from app.modules.p1_gestion_identidad_seguridad.models import (
     login_security as login_security_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import (
+    password_reset as password_reset_models,  # noqa: F401
+)
+from app.modules.p1_gestion_identidad_seguridad.models import (
     session as session_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401
 from app.modules.p2_gestion_documentos_preparacion.models import document  # noqa: F401
+
+
+class FakeEmailProvider:
+    def __init__(self) -> None:
+        self.messages: list[OutboundEmail] = []
+
+    def send(self, message: OutboundEmail) -> None:
+        self.messages.append(message)
 
 
 @pytest.fixture
@@ -43,15 +56,22 @@ def storage_provider(tmp_path: Path) -> LocalStorageProvider:
 
 
 @pytest.fixture
+def email_provider() -> FakeEmailProvider:
+    return FakeEmailProvider()
+
+
+@pytest.fixture
 def client(
     db_session: Session,
     storage_provider: LocalStorageProvider,
+    email_provider: FakeEmailProvider,
 ) -> TestClient:
     def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_storage_provider] = lambda: storage_provider
+    app.dependency_overrides[get_email_provider] = lambda: email_provider
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

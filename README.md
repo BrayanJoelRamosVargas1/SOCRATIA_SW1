@@ -8,6 +8,7 @@ Sprint 1 está congelado en `v0.1.0-sprint1`. La primera mitad de Sprint 2 añad
 
 - API versionada en `/api/v1` y documentación OpenAPI en `/docs`.
 - Registro, inicio de sesión, renovación y cierre de sesión.
+- Recuperación de contraseña por correo transaccional con Brevo SMTP.
 - Access token corto y refresh session opaca, rotatoria y revocable.
 - Usuarios, roles y perfil editable.
 - Landing, registro, login y dashboard protegido.
@@ -95,6 +96,11 @@ mezclas artificiales de mayúsculas/números/símbolos. Los espacios al inicio o
 exactamente y el formulario lo advierte antes del envío. FastAPI rechaza claves predecibles y Argon2
 protege su almacenamiento.
 
+La recuperación devuelve una respuesta genérica, limita solicitudes por cuenta e IP y envía un
+enlace de un solo uso que vence en 15 minutos. Solo se almacena el hash del token. Al completar el
+cambio se revocan todas las sesiones y los access tokens anteriores. La configuración operativa se
+describe en [`docs/security/password-recovery.md`](docs/security/password-recovery.md).
+
 Cada operación de documentos valida además la propiedad del recurso. Un usuario no puede consultar, procesar ni eliminar documentos de otra cuenta. PostgreSQL guarda metadata y una clave de almacenamiento; nunca guarda los bytes del archivo.
 
 ## Documentación
@@ -103,6 +109,7 @@ Cada operación de documentos valida además la propiedad del recurso. Un usuari
 - [Mapa de paquetes P1–P6](backend/app/modules/README.md)
 - [Política de contraseñas y UX](docs/security/password-policy.md)
 - [Protección progresiva de login](docs/security/login-protection.md)
+- [Recuperación de contraseña y SMTP](docs/security/password-recovery.md)
 - [C4: contexto](docs/c4/context.md)
 - [C4: contenedores](docs/c4/containers.md)
 - [C4: componentes del backend](docs/c4/backend-components.md)

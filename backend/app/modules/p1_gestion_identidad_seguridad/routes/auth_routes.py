@@ -1,22 +1,31 @@
 from ipaddress import ip_address as parse_ip_address
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
+from app.integrations.email.base import EmailProvider
+from app.integrations.email.dependencies import get_email_provider
 from app.modules.p1_gestion_identidad_seguridad.schemas.auth import (
     AuthResponse,
+    ForgotPasswordRequest,
     LoginRequest,
     MessageResponse,
     RegisterRequest,
+    ResetPasswordRequest,
 )
 from app.modules.p1_gestion_identidad_seguridad.schemas.user import UserResponse
 from app.modules.p1_gestion_identidad_seguridad.services.auth_service import (
     AuthService,
     ClientContext,
     IssuedSession,
+)
+from app.modules.p1_gestion_identidad_seguridad.services.password_reset_service import (
+    GENERIC_RESPONSE,
+    PasswordResetService,
+    deliver_password_reset_email,
 )
 
 router = APIRouter()
@@ -89,6 +98,37 @@ def login(
     issued = AuthService(db).login(payload, client_context(request))
     set_auth_cookies(response, issued, settings)
     return AuthResponse(user=UserResponse.from_user(issued.user))
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Annotated[Session, Depends(get_db)],
+    email_provider: Annotated[EmailProvider, Depends(get_email_provider)],
+) -> MessageResponse:
+    message = PasswordResetService(db).request_reset(str(payload.email), client_context(request))
+    if message is not None:
+        background_tasks.add_task(deliver_password_reset_email, email_provider, message)
+    return MessageResponse(message=GENERIC_RESPONSE)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> MessageResponse:
+    settings = get_settings()
+    PasswordResetService(db).reset_password(
+        payload.token,
+        payload.password,
+        client_context(request),
+    )
+    clear_auth_cookies(response, settings)
+    return MessageResponse(message="Tu contraseña fue restablecida. Ya puedes iniciar sesión.")
 
 
 @router.post("/refresh", response_model=AuthResponse)

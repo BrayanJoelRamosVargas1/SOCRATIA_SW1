@@ -149,6 +149,57 @@ class LoginSecurityService:
             self._reset_state(state)
             state.updated_at = now
 
+    def password_reset_is_rate_limited(
+        self,
+        identifier_hash: str,
+        ip_address: str | None,
+        now: datetime,
+    ) -> bool:
+        since = now - timedelta(seconds=self.settings.password_reset_rate_window_seconds)
+        identifier_count = self.repository.count_password_reset_requests(
+            since=since,
+            identifier_hash=identifier_hash,
+        )
+        ip_count = (
+            self.repository.count_password_reset_requests(since=since, ip_address=ip_address)
+            if ip_address
+            else 0
+        )
+        return (
+            identifier_count >= self.settings.password_reset_max_requests_per_identifier
+            or ip_count >= self.settings.password_reset_max_requests_per_ip
+        )
+
+    def record_password_reset_request(
+        self,
+        *,
+        user_id: str | None,
+        identifier_hash: str,
+        ip_address: str | None,
+        now: datetime,
+    ) -> None:
+        self.repository.record_event(
+            event_type=AuthenticationEventType.PASSWORD_RESET_REQUESTED.value,
+            user_id=user_id,
+            identifier_hash=identifier_hash,
+            ip_address=ip_address,
+            created_at=now,
+        )
+
+    def record_password_reset_completed(
+        self,
+        *,
+        user_id: str,
+        ip_address: str | None,
+        now: datetime,
+    ) -> None:
+        self.repository.record_event(
+            event_type=AuthenticationEventType.PASSWORD_RESET_COMPLETED.value,
+            user_id=user_id,
+            ip_address=ip_address,
+            created_at=now,
+        )
+
     def hash_identifier(self, value: str) -> str:
         return hmac.new(
             self.settings.jwt_secret.encode("utf-8"),

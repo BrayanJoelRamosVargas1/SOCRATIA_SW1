@@ -9,6 +9,9 @@ from app.modules.p1_gestion_identidad_seguridad.models import (
     login_security as login_security_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import (
+    password_reset as password_reset_models,  # noqa: F401
+)
+from app.modules.p1_gestion_identidad_seguridad.models import (
     session as session_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.modules.p1_gestion_identidad_seguridad.models.session import RefreshSession
@@ -35,4 +35,16 @@ class SessionRepository:
 
     def revoke(self, session: RefreshSession, revoked_at: datetime) -> None:
         session.revoked_at = revoked_at
+        self.db.flush()
+
+    def revoke_all_for_user(self, user_id: str, revoked_at: datetime) -> None:
+        statement = (
+            update(RefreshSession)
+            .where(
+                RefreshSession.user_id == user_id,
+                RefreshSession.revoked_at.is_(None),
+            )
+            .values(revoked_at=revoked_at)
+        )
+        self.db.execute(statement)
         self.db.flush()

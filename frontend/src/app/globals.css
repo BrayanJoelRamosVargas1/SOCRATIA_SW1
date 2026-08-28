@@ -145,6 +145,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .auth-footer a { color: var(--teal); font-weight: 700; }
 .notice-card { padding: 22px; border: 1px solid #c8e8db; border-radius: 14px; background: #f1faf6; }
 .notice-card p { margin: 7px 0 0; color: var(--muted); line-height: 1.55; }
+.notice-card .button { margin-top: 18px; }
+.notice-error { border-color: #efccc6; background: #fff6f4; }
+.notice-error strong { color: #9d3429; }
 
 /* Dashboard */
 .loading-screen { display: grid; min-height: 100vh; place-content: center; color: var(--muted); text-align: center; }

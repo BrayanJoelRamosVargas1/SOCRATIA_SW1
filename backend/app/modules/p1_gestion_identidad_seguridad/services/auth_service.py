@@ -169,7 +169,7 @@ class AuthService:
         )
         return IssuedSession(
             user=user,
-            access_token=create_access_token(user.id),
+            access_token=create_access_token(user.id, user.auth_version),
             refresh_token=refresh_token,
         )
 

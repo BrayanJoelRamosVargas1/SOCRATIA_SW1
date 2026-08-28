@@ -11,8 +11,10 @@ class UserRepository:
     def get_by_id(self, user_id: str) -> User | None:
         return self.db.get(User, user_id)
 
-    def get_by_email(self, email: str) -> User | None:
+    def get_by_email(self, email: str, *, for_update: bool = False) -> User | None:
         statement = select(User).where(func.lower(User.email) == email.lower())
+        if for_update:
+            statement = statement.with_for_update()
         return self.db.scalar(statement)
 
     def create(self, *, email: str, full_name: str, password_hash: str) -> User:
@@ -20,6 +22,11 @@ class UserRepository:
         self.db.add(user)
         self.db.flush()
         return user
+
+    def update_password_hash(self, user: User, password_hash: str) -> None:
+        user.password_hash = password_hash
+        user.auth_version += 1
+        self.db.flush()
 
     def get_or_create_role(self, name: str, description: str | None = None) -> Role:
         role = self.db.scalar(select(Role).where(Role.name == name))
