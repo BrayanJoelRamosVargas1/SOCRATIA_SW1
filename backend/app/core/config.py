@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(default=15, ge=1, le=1440)
     refresh_token_expire_days: int = Field(default=7, ge=1, le=90)
+    login_ip_max_attempts: int = Field(default=20, ge=5, le=500)
+    login_ip_window_seconds: int = Field(default=60, ge=10, le=3600)
+    trust_proxy_headers: bool = False
 
     access_cookie_name: str = "socratia_access"
     refresh_cookie_name: str = "socratia_refresh"

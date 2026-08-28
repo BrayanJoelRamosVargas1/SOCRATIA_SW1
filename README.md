@@ -102,6 +102,7 @@ Cada operación de documentos valida además la propiedad del recurso. Un usuari
 - [Arquitectura y límites modulares](docs/architecture.md)
 - [Mapa de paquetes P1–P6](backend/app/modules/README.md)
 - [Política de contraseñas y UX](docs/security/password-policy.md)
+- [Protección progresiva de login](docs/security/login-protection.md)
 - [C4: contexto](docs/c4/context.md)
 - [C4: contenedores](docs/c4/containers.md)
 - [C4: componentes del backend](docs/c4/backend-components.md)

@@ -11,6 +11,9 @@ from app.integrations.storage.dependencies import get_storage_provider
 from app.integrations.storage.local import LocalStorageProvider
 from app.main import app
 from app.modules.p1_gestion_identidad_seguridad.models import (
+    login_security as login_security_models,  # noqa: F401
+)
+from app.modules.p1_gestion_identidad_seguridad.models import (
     session as session_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401

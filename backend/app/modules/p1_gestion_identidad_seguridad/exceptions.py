@@ -4,9 +4,19 @@ from app.core.exceptions import DomainError
 class InvalidCredentialsError(DomainError):
     def __init__(self) -> None:
         super().__init__(
-            "Correo o contraseña incorrectos.",
+            "No se pudo iniciar sesión. Verifica tus datos o, si realizaste varios intentos, "
+            "espera unos minutos.",
             code="invalid_credentials",
             status_code=401,
+        )
+
+
+class LoginRateLimitError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Demasiados intentos de inicio de sesión. Espera unos minutos y vuelve a intentarlo.",
+            code="login_rate_limited",
+            status_code=429,
         )
 
 

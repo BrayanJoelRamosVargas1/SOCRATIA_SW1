@@ -40,3 +40,7 @@ El alta aplica una política de contraseña de 15–128 caracteres, acepta espac
 rechaza claves comunes, repetitivas, secuenciales o previsibles según el contexto. El login conserva
 un mensaje genérico para no revelar si una cuenta existe. La política y su UX están descritas en
 [`docs/security/password-policy.md`](../../../../docs/security/password-policy.md).
+
+La protección de login aplica bloqueos progresivos de 5, 10 y 15 minutos por cuenta, una ventana
+deslizante por IP y eventos persistentes de seguridad. La decisión está documentada en
+[`docs/security/login-protection.md`](../../../../docs/security/login-protection.md).

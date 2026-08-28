@@ -17,6 +17,7 @@ from app.modules.p1_gestion_identidad_seguridad.exceptions import (
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
     InvalidSessionError,
+    LoginRateLimitError,
 )
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p1_gestion_identidad_seguridad.policies.password import validate_new_password
@@ -27,6 +28,9 @@ from app.modules.p1_gestion_identidad_seguridad.repositories.user_repository imp
     UserRepository,
 )
 from app.modules.p1_gestion_identidad_seguridad.schemas.auth import LoginRequest, RegisterRequest
+from app.modules.p1_gestion_identidad_seguridad.services.login_security_service import (
+    LoginSecurityService,
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,7 @@ class AuthService:
         self.users = UserRepository(db)
         self.sessions = SessionRepository(db)
         self.settings = get_settings()
+        self.login_security = LoginSecurityService(db, self.settings)
 
     def register(self, payload: RegisterRequest, context: ClientContext) -> IssuedSession:
         email = str(payload.email).lower()
@@ -75,13 +80,53 @@ class AuthService:
         return issued
 
     def login(self, payload: LoginRequest, context: ClientContext) -> IssuedSession:
-        user = self.users.get_by_email(str(payload.email))
+        email = str(payload.email).lower()
+        now = datetime.now(UTC)
+        if self.login_security.ip_is_rate_limited(context.ip_address, now):
+            self.login_security.record_rate_limited(
+                email,
+                now=now,
+                ip_address=context.ip_address,
+            )
+            self.db.commit()
+            raise LoginRateLimitError
+
+        user = self.users.get_by_email(email)
         if user is None:
             verify_password(payload.password, DUMMY_PASSWORD_HASH)
-            raise InvalidCredentialsError
-        if not verify_password(payload.password, user.password_hash) or not user.is_active:
+            self.login_security.record_unknown_failure(
+                email,
+                now=now,
+                ip_address=context.ip_address,
+            )
+            self.db.commit()
             raise InvalidCredentialsError
 
+        security_state = self.login_security.prepare_state(user.id, now)
+        if self.login_security.is_locked(security_state, now):
+            verify_password(payload.password, DUMMY_PASSWORD_HASH)
+            self.login_security.record_locked_attempt(
+                security_state,
+                now=now,
+                ip_address=context.ip_address,
+            )
+            self.db.commit()
+            raise InvalidCredentialsError
+
+        if not verify_password(payload.password, user.password_hash) or not user.is_active:
+            self.login_security.record_failure(
+                security_state,
+                now=now,
+                ip_address=context.ip_address,
+            )
+            self.db.commit()
+            raise InvalidCredentialsError
+
+        self.login_security.record_success(
+            user.id,
+            now=now,
+            ip_address=context.ip_address,
+        )
         issued = self._issue(user, context)
         self.db.commit()
         return issued

@@ -1,3 +1,4 @@
+from ipaddress import ip_address as parse_ip_address
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
@@ -22,10 +23,16 @@ router = APIRouter()
 
 
 def client_context(request: Request) -> ClientContext:
-    forwarded = request.headers.get("x-forwarded-for")
-    ip_address = forwarded.split(",")[0].strip() if forwarded else None
-    if ip_address is None and request.client:
-        ip_address = request.client.host
+    settings = get_settings()
+    raw_ip = request.client.host if request.client else None
+    if settings.trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            raw_ip = forwarded.split(",", 1)[0].strip()
+    try:
+        ip_address = str(parse_ip_address(raw_ip)) if raw_ip else None
+    except ValueError:
+        ip_address = None
     return ClientContext(
         user_agent=request.headers.get("user-agent"),
         ip_address=ip_address,
