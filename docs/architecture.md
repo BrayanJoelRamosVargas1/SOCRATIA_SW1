@@ -67,6 +67,7 @@ Los proveedores externos permanecen fuera de P1–P6:
 
 ```text
 app/integrations/
+├── email/
 ├── llm/
 ├── payments/
 ├── storage/
@@ -76,6 +77,21 @@ app/integrations/
 ```
 
 Una integración puede servir a varios paquetes y no contiene reglas funcionales del negocio.
+
+## AWS y resiliencia de proveedores
+
+AWS es el cloud principal, no un proveedor intercambiable más. La producción se proyecta sobre
+Route 53, ALB, ECS Fargate, RDS PostgreSQL Multi-AZ, S3, Secrets Manager y CloudWatch. La alta
+disponibilidad de cómputo y base de datos pertenece a esa infraestructura administrada.
+
+Las capacidades externas dependen de contratos propios. Cuando una capacidad justifique más de un
+adaptador, un router aplicará timeout, reintentos limitados, circuit breaker, fallback seguro y
+telemetría. La selección podrá variar según la operación: jurado en vivo, análisis documental y
+evaluación no comparten necesariamente el mismo orden de proveedores.
+
+La regla completa, sus cinco niveles y el estado incremental se definen en
+[`docs/provider-resilience.md`](provider-resilience.md). Ningún fallback descrito allí debe
+presentarse como implementado antes de contar con código, pruebas, telemetría y operación real.
 
 ## Autenticación
 

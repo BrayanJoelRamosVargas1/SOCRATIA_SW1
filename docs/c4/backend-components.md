@@ -32,13 +32,17 @@ flowchart TB
 
   subgraph Integrations[Integraciones externas compartidas]
     Storage[StorageProvider]
-    LLM[LLMProvider]
+    LLM[Capability providers / LLM routers]
     PaymentProvider[PaymentProvider]
     VectorDB[VectorStoreProvider]
-    Speech[STT / TTS]
+    Speech[STTProvider / TTSProvider]
+    Email[EmailProvider]
+    Resilience[Timeout · retry · circuit breaker · fallback]
+    Telemetry[Provider telemetry]
   end
 
   API --> Auth --> Users
+  Auth --> Email
   API --> Documents
   Documents --> Users
   Documents --> Storage
@@ -54,4 +58,13 @@ flowchart TB
   Payments --> PaymentProvider
   API --> Admin
   Admin --> Audit
+  LLM --> Resilience
+  Speech --> Resilience
+  Email --> Resilience
+  VectorDB --> Resilience
+  Resilience --> Telemetry --> Audit
 ```
+
+Las flechas hacia `Resilience` expresan la dirección adoptada. Hoy solo `EmailProvider` y
+`StorageProvider` tienen adaptadores funcionales; los routers y fallbacks se incorporan por sprint
+cuando existan proveedores reales y pruebas de fallo.

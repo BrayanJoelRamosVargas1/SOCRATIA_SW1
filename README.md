@@ -106,6 +106,7 @@ Cada operación de documentos valida además la propiedad del recurso. Un usuari
 ## Documentación
 
 - [Arquitectura y límites modulares](docs/architecture.md)
+- [Resiliencia y redundancia de proveedores](docs/provider-resilience.md)
 - [Mapa de paquetes P1–P6](backend/app/modules/README.md)
 - [Política de contraseñas y UX](docs/security/password-policy.md)
 - [Protección progresiva de login](docs/security/login-protection.md)
