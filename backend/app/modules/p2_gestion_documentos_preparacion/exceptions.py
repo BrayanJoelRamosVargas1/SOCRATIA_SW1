@@ -29,3 +29,30 @@ class DocumentStorageError(DomainError):
             code="document_storage_unavailable",
             status_code=503,
         )
+
+
+class DocumentAlreadyProcessingError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "El documento ya se esta procesando.",
+            code="document_already_processing",
+            status_code=409,
+        )
+
+
+class DocumentContentError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "No fue posible extraer texto util del documento.",
+            code="document_content_unreadable",
+            status_code=422,
+        )
+
+
+class DocumentProcessingUnavailableError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "No fue posible procesar el documento. Intenta nuevamente.",
+            code="document_processing_unavailable",
+            status_code=503,
+        )

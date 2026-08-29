@@ -5,7 +5,7 @@
 Socratia se implementa como SaaS web en un monorepo. El backend es un monolito modular FastAPI,
 el frontend usa Next.js y PostgreSQL almacena los datos relacionales. Docker Compose ejecuta el
 entorno local. En producción, los contenedores se alojarán en AWS, PostgreSQL migrará a RDS y los
-documentos a S3. Pinecone y los proveedores de IA entrarán en sprints posteriores. MediaPipe se
+documentos a S3. Gemini Embedding y Pinecone ya implementan CU09; S3 y los proveedores generativos entrarán en incrementos posteriores. MediaPipe se
 ejecutará en el navegador y enviará únicamente métricas al backend.
 
 Los límites funcionales del backend reflejan los seis paquetes y los 37 casos de uso del modelo
@@ -67,6 +67,7 @@ Los proveedores externos permanecen fuera de P1–P6:
 
 ```text
 app/integrations/
+├── embeddings/
 ├── email/
 ├── llm/
 ├── payments/
@@ -104,7 +105,7 @@ presentarse como implementado antes de contar con código, pruebas, telemetría 
 
 ## Próximos incrementos
 
-1. Completar P2: procesamiento, S3, RAG y preguntas.
+1. Completar P2: S3, retrieval RAG, preguntas y material de exposición.
 2. Implementar P3: simulación, WebSocket y voz.
 3. Implementar P4: MediaPipe, evaluación y reportes.
 4. Implementar P5 y P6: suscripciones, pagos, administración y auditoría.

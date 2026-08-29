@@ -14,3 +14,6 @@ class StorageProvider(Protocol):
 
     def exists(self, key: str) -> bool:
         """Return whether key exists."""
+
+    def read(self, key: str) -> bytes:
+        """Load all bytes stored under key."""

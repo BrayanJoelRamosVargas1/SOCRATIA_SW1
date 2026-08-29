@@ -9,6 +9,7 @@ flowchart TB
   end
   subgraph P2[P2 — Gestión de documentos y preparación · CU06–CU11]
     Documents[Documents]
+    Processing[Document processing]
     RAG[RAG]
     Questions[Questions]
   end
@@ -32,6 +33,7 @@ flowchart TB
 
   subgraph Integrations[Integraciones externas compartidas]
     Storage[StorageProvider]
+    Embeddings[EmbeddingProvider / Gemini]
     LLM[Capability providers / LLM routers]
     PaymentProvider[PaymentProvider]
     VectorDB[VectorStoreProvider]
@@ -46,6 +48,10 @@ flowchart TB
   API --> Documents
   Documents --> Users
   Documents --> Storage
+  Documents --> Processing
+  Processing --> Storage
+  Processing --> Embeddings
+  Processing --> VectorDB
   Documents --> RAG --> VectorDB
   RAG --> LLM
   RAG --> Questions --> Simulations
@@ -59,12 +65,14 @@ flowchart TB
   API --> Admin
   Admin --> Audit
   LLM --> Resilience
+  Embeddings --> Resilience
   Speech --> Resilience
   Email --> Resilience
   VectorDB --> Resilience
   Resilience --> Telemetry --> Audit
 ```
 
-Las flechas hacia `Resilience` expresan la dirección adoptada. Hoy solo `EmailProvider` y
-`StorageProvider` tienen adaptadores funcionales; los routers y fallbacks se incorporan por sprint
-cuando existan proveedores reales y pruebas de fallo.
+Las flechas hacia `Resilience` expresan la dirección adoptada. Hoy `EmailProvider`,
+`StorageProvider`, `EmbeddingProvider` y `VectorStoreProvider` tienen adaptadores funcionales. Los
+routers y fallbacks se incorporan por sprint cuando existan proveedores alternativos reales y
+pruebas de fallo.

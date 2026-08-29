@@ -22,6 +22,15 @@ export type ProcessingStep = {
 export type ProcessingStatus = {
   document_id: string;
   status: DocumentStatus;
+  chunk_count: number;
   history: ProcessingStep[];
+};
+
+export type DocumentProcessingResult = {
+  document_id: string;
+  status: DocumentStatus;
+  chunk_count: number;
+  embedding_model: string;
+  embedding_dimensions: number;
 };
 

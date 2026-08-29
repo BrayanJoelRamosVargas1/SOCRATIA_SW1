@@ -14,13 +14,15 @@ Casos de uso: **CU06–CU11**.
 ## Responsabilidad
 
 Gestionar documentos académicos y preparar el conocimiento que utilizarán las simulaciones.
-P2 es propietario de las tablas `documents` y `document_processing`.
+P2 es propietario de las tablas `documents`, `document_processing` y `document_chunks`.
 
 ## Capas implementadas
 
 ```text
 routes -> services -> repositories -> PostgreSQL
                    -> StorageProvider -> LocalStorageProvider
+                   -> EmbeddingProvider -> GeminiEmbeddingProvider
+                   -> VectorStoreProvider -> PineconeVectorStoreProvider
    |          |
 schemas    models
    |
@@ -35,7 +37,9 @@ requiera.
 
 - P1 para obtener el usuario autenticado.
 - `StorageProvider` para los archivos.
-- En incrementos posteriores: `VectorStoreProvider` y `LLMProvider`.
+- `EmbeddingProvider` para convertir chunks en vectores.
+- `VectorStoreProvider` para indexar y eliminar vectores.
+- En incrementos posteriores: `LLMProvider` para CU10/CU11.
 
 ## No permitido
 
@@ -50,5 +54,6 @@ documento ajeno responde `404` para no revelar que el identificador existe.
 
 ## Estado
 
-CU06–CU08 y eliminación segura están implementados. Procesamiento, RAG, preguntas y material de
-exposición continúan pendientes en Sprint 2.
+CU06-CU09 y la eliminación segura están implementados. El flujo CU09 extrae PDF/DOCX, normaliza,
+fragmenta, genera embeddings Gemini y escribe en Pinecone. RAG, preguntas, material de exposición
+y S3 continúan pendientes en Sprint 2.
