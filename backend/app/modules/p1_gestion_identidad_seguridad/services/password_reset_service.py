@@ -141,6 +141,7 @@ class PasswordResetService:
 def deliver_password_reset_email(provider: EmailProvider, message: OutboundEmail) -> None:
     try:
         provider.send(message)
+        logger.info("Password reset email accepted by SMTP relay")
     except EmailDeliveryError:
         # The public response stays generic. No address or token is written to logs.
         logger.exception("Password reset email delivery failed")
