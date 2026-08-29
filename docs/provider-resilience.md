@@ -162,8 +162,8 @@ incluyen en imágenes ni repositorios.
 
 | Fase | Implementar | Solo mantener diseñado |
 |---|---|---|
-| Actual | `EmailProvider` + SMTP/Brevo | SES como fallback |
-| P2 | S3, Gemini, Pinecone y sus contratos | pgvector y proveedor LLM alternativo |
+| Actual | SMTP/Brevo y CU09 con Gemini Embedding + Pinecone | SES y pgvector como fallbacks |
+| P2 siguiente | S3, retrieval RAG y proveedor generativo | proveedor LLM alternativo |
 | P3 | Groq para jurado/STT y ElevenLabs | Gemini/OpenAI, Polly/Azure |
 | Endurecimiento | routers, métricas, circuit breakers y fallbacks probados | multi-cloud |
 | DR futuro | procedimientos multi-región/multi-cloud medidos | — |

@@ -31,4 +31,13 @@ class ProcessingStepResponse(BaseModel):
 class ProcessingStatusResponse(BaseModel):
     document_id: str
     status: DocumentStatus
+    chunk_count: int
     history: list[ProcessingStepResponse]
+
+
+class DocumentProcessingResponse(BaseModel):
+    document_id: str
+    status: DocumentStatus
+    chunk_count: int
+    embedding_model: str
+    embedding_dimensions: int

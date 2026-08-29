@@ -1,11 +1,8 @@
-from datetime import datetime
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.p2_gestion_documentos_preparacion.models.document import (
     Document,
-    DocumentProcessing,
     DocumentStatus,
 )
 
@@ -37,28 +34,6 @@ class DocumentRepository:
         self.db.flush()
         return document
 
-    def add_processing_event(
-        self,
-        *,
-        document: Document,
-        status: DocumentStatus,
-        stage: str,
-        started_at: datetime,
-        finished_at: datetime | None = None,
-        error_message: str | None = None,
-    ) -> DocumentProcessing:
-        event = DocumentProcessing(
-            document=document,
-            status=status,
-            stage=stage,
-            started_at=started_at,
-            finished_at=finished_at,
-            error_message=error_message,
-        )
-        self.db.add(event)
-        self.db.flush()
-        return event
-
     def list_by_owner(self, user_id: str) -> list[Document]:
         statement = (
             select(Document)
@@ -69,6 +44,10 @@ class DocumentRepository:
 
     def get_by_id(self, document_id: str) -> Document | None:
         return self.db.get(Document, document_id)
+
+    def get_by_id_for_update(self, document_id: str) -> Document | None:
+        statement = select(Document).where(Document.id == document_id).with_for_update()
+        return self.db.scalars(statement).unique().one_or_none()
 
     def delete(self, document: Document) -> None:
         self.db.delete(document)

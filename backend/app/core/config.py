@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import EmailStr, Field, SecretStr, field_validator
+from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,10 +49,50 @@ class Settings(BaseSettings):
     local_storage_path: Path = Path("./uploads")
     max_document_size_mb: int = Field(default=20, ge=1, le=100)
 
+    embedding_provider: str = "gemini"
+    gemini_api_key: SecretStr | None = None
+    gemini_embedding_model: str = "gemini-embedding-2"
+    embedding_dimensions: int = Field(default=768, ge=128, le=3072)
+    embedding_batch_size: int = Field(default=20, ge=1, le=100)
+    embedding_timeout_seconds: int = Field(default=60, ge=5, le=300)
+
+    vector_primary_provider: str = "pinecone"
+    pinecone_api_key: SecretStr | None = None
+    pinecone_index_name: str = "socratia-documents"
+    pinecone_namespace_prefix: str = "socratia"
+    pinecone_cloud: str = "aws"
+    pinecone_region: str = "us-east-1"
+    pinecone_timeout_seconds: int = Field(default=60, ge=5, le=300)
+
+    document_chunk_size_chars: int = Field(default=3000, ge=500, le=12000)
+    document_chunk_overlap_chars: int = Field(default=400, ge=0, le=3000)
+    document_max_chunks: int = Field(default=500, ge=1, le=5000)
+
+    groq_api_key: SecretStr | None = None
+    groq_live_model: str | None = None
+    groq_stt_model: str = "whisper-large-v3-turbo"
+
     @field_validator("mail_from_email", mode="before")
     @classmethod
     def empty_sender_is_unconfigured(cls, value: object) -> object:
         return None if value == "" else value
+
+    @field_validator(
+        "gemini_api_key",
+        "pinecone_api_key",
+        "groq_api_key",
+        "groq_live_model",
+        mode="before",
+    )
+    @classmethod
+    def empty_provider_value_is_unconfigured(cls, value: object) -> object:
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def validate_document_chunking(self) -> "Settings":
+        if self.document_chunk_overlap_chars >= self.document_chunk_size_chars:
+            raise ValueError("DOCUMENT_CHUNK_OVERLAP_CHARS must be smaller than chunk size")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

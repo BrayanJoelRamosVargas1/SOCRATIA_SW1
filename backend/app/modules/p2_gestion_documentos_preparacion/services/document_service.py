@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.integrations.storage import StorageError, StorageProvider
+from app.integrations.vector_db import VectorStoreError, VectorStoreProvider
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p2_gestion_documentos_preparacion.exceptions import (
+    DocumentAlreadyProcessingError,
+    DocumentProcessingUnavailableError,
     DocumentStorageError,
     DocumentTooLargeError,
     InvalidDocumentFileError,
@@ -21,6 +24,9 @@ from app.modules.p2_gestion_documentos_preparacion.models.document import (
 from app.modules.p2_gestion_documentos_preparacion.policies.document_policy import DocumentPolicy
 from app.modules.p2_gestion_documentos_preparacion.repositories.document_repository import (
     DocumentRepository,
+)
+from app.modules.p2_gestion_documentos_preparacion.repositories.processing_repository import (
+    ProcessingRepository,
 )
 from app.modules.p2_gestion_documentos_preparacion.schemas.document import (
     ProcessingStatusResponse,
@@ -42,10 +48,17 @@ ALLOWED_DOCUMENTS = {
 
 
 class DocumentService:
-    def __init__(self, db: Session, storage: StorageProvider) -> None:
+    def __init__(
+        self,
+        db: Session,
+        storage: StorageProvider,
+        vectors: VectorStoreProvider | None = None,
+    ) -> None:
         self.db = db
         self.storage = storage
+        self.vectors = vectors
         self.documents = DocumentRepository(db)
+        self.processing = ProcessingRepository(db)
         self.settings = get_settings()
 
     def upload(self, user: User, file: UploadFile) -> Document:
@@ -73,7 +86,7 @@ class DocumentService:
                 storage_key=storage_key,
             )
             now = datetime.now(UTC)
-            self.documents.add_processing_event(
+            self.processing.add_event(
                 document=document,
                 status=DocumentStatus.UPLOADED,
                 stage="UPLOAD",
@@ -102,11 +115,25 @@ class DocumentService:
         return ProcessingStatusResponse(
             document_id=document.id,
             status=document.status,
+            chunk_count=self.processing.count_chunks(document.id),
             history=list(document.processing_history),
         )
 
     def delete_for(self, user: User, document_id: str) -> None:
         document = DocumentPolicy.can_delete(user, self.documents.get_by_id(document_id))
+        if document.status == DocumentStatus.PROCESSING:
+            raise DocumentAlreadyProcessingError
+        vector_ids = self.processing.vector_ids(document.id)
+        if vector_ids:
+            if self.vectors is None:
+                raise DocumentProcessingUnavailableError
+            try:
+                self.vectors.delete(
+                    namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
+                    ids=vector_ids,
+                )
+            except VectorStoreError as exc:
+                raise DocumentProcessingUnavailableError from exc
         try:
             self.storage.delete(document.storage_key)
         except StorageError as exc:
@@ -141,6 +168,11 @@ class DocumentService:
             try:
                 with zipfile.ZipFile(file.file) as archive:
                     names = set(archive.namelist())
+                    uncompressed_size = sum(info.file_size for info in archive.infolist())
+                    if uncompressed_size > self.settings.max_document_size_bytes * 5:
+                        raise InvalidDocumentFileError(
+                            "El contenido descomprimido del DOCX supera el limite permitido."
+                        )
                     if "[Content_Types].xml" not in names or "word/document.xml" not in names:
                         raise InvalidDocumentFileError(
                             "El contenido no corresponde a un DOCX válido."

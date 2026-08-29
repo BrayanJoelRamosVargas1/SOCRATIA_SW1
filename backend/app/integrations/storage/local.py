@@ -50,6 +50,12 @@ class LocalStorageProvider:
     def exists(self, key: str) -> bool:
         return self.path_for(key).is_file()
 
+    def read(self, key: str) -> bytes:
+        try:
+            return self.path_for(key).read_bytes()
+        except OSError as exc:
+            raise StorageError("Could not read document") from exc
+
     def _remove_empty_parents(self, directory: Path) -> None:
         while directory != self.root and directory.is_relative_to(self.root):
             try:

@@ -21,8 +21,9 @@ selección y fallback.
 |---|---|---|---|
 | Email | `EmailProvider` + SMTP/Brevo | Amazon SES | Brevo → SES |
 | Storage | `StorageProvider` + filesystem local | Amazon S3 | copia externa futura |
-| LLM | reservado | Gemini en P2 | rutas por operación |
-| Vector DB | reservado | Pinecone en P2 | PostgreSQL/pgvector |
+| Embeddings | `EmbeddingProvider` + Gemini Embedding 2 | evaluar calidad 768/1536 | modelo alternativo futuro |
+| LLM | reservado | Gemini generativo en CU10 | rutas por operación |
+| Vector DB | `VectorStoreProvider` + Pinecone serverless | retrieval de CU10 | PostgreSQL/pgvector |
 | STT | reservado | Groq Whisper en P3 | OpenAI/Azure |
 | TTS | reservado | ElevenLabs en P3 | Amazon Polly/Azure |
 | Payments | reservado | se decide en P5 | se decide en P5 |
