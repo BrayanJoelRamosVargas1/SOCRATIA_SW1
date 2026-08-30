@@ -61,7 +61,7 @@ class DocumentProcessingUnavailableError(DomainError):
 class DocumentNotProcessedError(DomainError):
     def __init__(self) -> None:
         super().__init__(
-            "Procesa el documento antes de generar su banco de preguntas.",
+            "Procesa el documento antes de generar contenido de preparación.",
             code="document_not_processed",
             status_code=409,
         )
@@ -81,5 +81,32 @@ class QuestionGenerationFailedError(DomainError):
         super().__init__(
             "No fue posible generar las preguntas. Intenta nuevamente.",
             code="QUESTION_GENERATION_FAILED",
+            status_code=503,
+        )
+
+
+class PresentationMaterialNotFoundError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Este documento aun no tiene material de exposición.",
+            code="presentation_material_not_found",
+            status_code=404,
+        )
+
+
+class PresentationMaterialAlreadyExistsError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "El documento ya tiene material. Usa la opción de regenerar.",
+            code="presentation_material_already_exists",
+            status_code=409,
+        )
+
+
+class PresentationGenerationFailedError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "No fue posible generar el material de exposición. Intenta nuevamente.",
+            code="PRESENTATION_GENERATION_FAILED",
             status_code=503,
         )

@@ -162,8 +162,8 @@ incluyen en imágenes ni repositorios.
 
 | Fase | Implementar | Solo mantener diseñado |
 |---|---|---|
-| Actual | SMTP/Brevo, CU09 con Gemini Embedding + Pinecone y CU10 RAG Gemini → Groq | SES y pgvector como fallbacks |
-| P2 siguiente | S3 y material de exposición | proveedor alternativo de almacenamiento |
+| Actual | SMTP/Brevo, CU09 vectorial y CU10/CU11 RAG Gemini → Groq | SES y pgvector como fallbacks |
+| P2 cerrado | Banco de preguntas y exposición con fallback/circuit breaker probados | S3 antes de producción |
 | P3 | Groq para jurado/STT y ElevenLabs | Gemini/OpenAI, Polly/Azure |
 | Endurecimiento | routers, métricas, circuit breakers y fallbacks probados | multi-cloud |
 | DR futuro | procedimientos multi-región/multi-cloud medidos | — |

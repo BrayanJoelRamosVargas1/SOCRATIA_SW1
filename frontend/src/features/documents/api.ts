@@ -3,6 +3,7 @@ import type {
   Document,
   DocumentProcessingResult,
   ProcessingStatus,
+  PresentationMaterial,
   QuestionBank,
 } from "@/types/document";
 
@@ -37,6 +38,30 @@ export function getQuestionBank(documentId: string): Promise<QuestionBank> {
 export function generateQuestionBank(documentId: string): Promise<QuestionBank> {
   return apiRequest<QuestionBank>(`/documents/${documentId}/questions/generate`, {
     method: "POST",
+  });
+}
+
+export function getPresentationMaterial(documentId: string): Promise<PresentationMaterial> {
+  return apiRequest<PresentationMaterial>(`/documents/${documentId}/presentation`);
+}
+
+export function generatePresentationMaterial(
+  documentId: string,
+  durationMinutes: number,
+): Promise<PresentationMaterial> {
+  return apiRequest<PresentationMaterial>(`/documents/${documentId}/presentation/generate`, {
+    method: "POST",
+    body: JSON.stringify({ duration_minutes: durationMinutes }),
+  });
+}
+
+export function regeneratePresentationMaterial(
+  documentId: string,
+  durationMinutes: number,
+): Promise<PresentationMaterial> {
+  return apiRequest<PresentationMaterial>(`/documents/${documentId}/presentation/regenerate`, {
+    method: "POST",
+    body: JSON.stringify({ duration_minutes: durationMinutes }),
   });
 }
 

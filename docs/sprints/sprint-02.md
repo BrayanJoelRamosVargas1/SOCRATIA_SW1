@@ -2,8 +2,9 @@
 
 - Rama funcional de CU09: `feature/document-processing`
 - Rama funcional de CU10: `feature/question-bank-rag`
+- Rama funcional de CU11: `feature/presentation-material`
 - Rama del refactor arquitectónico: `refactor/modular-use-case-packages`
-- Estado: CU06-CU10 implementados
+- Estado: CU06-CU11 implementados — P2 completo
 
 ## Objetivo del incremento
 
@@ -16,6 +17,7 @@ Completar el recorrido login → documentos → carga → procesamiento semánti
 - CU08: consultar estado e historial de procesamiento.
 - CU09: extraer, normalizar, fragmentar, vectorizar e indexar un documento.
 - CU10: recuperar evidencia y generar/consultar un banco de preguntas.
+- CU11: generar y consultar material de exposición ajustado a 5–30 minutos.
 - Eliminación segura del archivo y su metadata.
 
 ## API
@@ -28,6 +30,9 @@ GET    /api/v1/documents/{id}
 GET    /api/v1/documents/{id}/status
 POST   /api/v1/documents/{id}/questions/generate
 GET    /api/v1/documents/{id}/questions
+POST   /api/v1/documents/{id}/presentation/generate
+POST   /api/v1/documents/{id}/presentation/regenerate
+GET    /api/v1/documents/{id}/presentation
 DELETE /api/v1/documents/{id}
 ```
 
@@ -101,23 +106,25 @@ test_question_provider_circuit_breaker
 Evidencia actual:
 
 ```text
-pytest                         52 passed
+pytest                         63 passed
 ruff                           passed
 eslint                         passed
 next production build          passed
-alembic 001 -> 007              passed
+alembic 001 -> 008              passed
 POST /documents                HTTP 201
 POST /documents/{id}/process   HTTP 200 (Gemini + Pinecone reales)
 POST /questions/generate       HTTP 200 (Gemini real)
 fallback Gemini -> Groq        HTTP 200 (Groq real)
 GET /questions                 12 preguntas persistidas
+POST /presentation/generate    15 min · 10 slides (Gemini real)
+regenerate Gemini -> Groq      15 min · 10 slides (Groq real)
 GET ajeno                      HTTP 404
 GET después de recrear backend HTTP 200
 DELETE /documents/{id}         HTTP 204
 frontend /documents            HTTP 200
 ```
 
-## Pendiente en Sprint 2
+## Cierre de Sprint 2
 
-- S3 como adaptador de almacenamiento de producción.
-- Material de exposición.
+P2 está completo. S3 queda como sustitución de infraestructura antes del despliegue de producción,
+sin cambiar los casos de uso CU06–CU11.
