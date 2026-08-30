@@ -3,7 +3,12 @@ from collections.abc import Iterable
 
 import httpx
 
-from app.integrations.vector_db.base import VectorRecord, VectorStoreError
+from app.integrations.vector_db.base import (
+    VectorFilter,
+    VectorMatch,
+    VectorRecord,
+    VectorStoreError,
+)
 
 PINECONE_CONTROL_URL = "https://api.pinecone.io"
 PINECONE_API_VERSION = "2025-10"
@@ -64,6 +69,58 @@ class PineconeVectorStoreProvider:
                     f"https://{host}/vectors/delete",
                     json={"ids": batch, "namespace": namespace},
                 )
+
+    def query(
+        self,
+        *,
+        namespace: str,
+        vector: list[float],
+        top_k: int,
+        filters: VectorFilter,
+    ) -> list[VectorMatch]:
+        if len(vector) != self.dimensions:
+            raise VectorStoreError("Query dimensions do not match the Pinecone index")
+        if not filters:
+            raise VectorStoreError("Pinecone queries require metadata filters")
+        host = self._ensure_index()
+        with self._client() as client:
+            response = self._request(
+                client,
+                "POST",
+                f"https://{host}/query",
+                json={
+                    "namespace": namespace,
+                    "vector": vector,
+                    "topK": top_k,
+                    "filter": filters,
+                    "includeMetadata": True,
+                    "includeValues": False,
+                },
+            )
+        body = self._json_object(response)
+        raw_matches = body.get("matches")
+        if not isinstance(raw_matches, list):
+            raise VectorStoreError("Pinecone returned invalid query matches")
+
+        matches: list[VectorMatch] = []
+        for raw_match in raw_matches:
+            if not isinstance(raw_match, dict):
+                raise VectorStoreError("Pinecone returned an invalid query match")
+            match_id = raw_match.get("id")
+            score = raw_match.get("score")
+            metadata = raw_match.get("metadata", {})
+            if not isinstance(match_id, str) or not isinstance(score, (int, float)):
+                raise VectorStoreError("Pinecone returned an invalid query match")
+            if not isinstance(metadata, dict):
+                raise VectorStoreError("Pinecone returned invalid match metadata")
+            matches.append(
+                VectorMatch(
+                    id=match_id,
+                    score=float(score),
+                    metadata={str(key): value for key, value in metadata.items()},
+                )
+            )
+        return matches
 
     def _ensure_index(self) -> str:
         if self._host:

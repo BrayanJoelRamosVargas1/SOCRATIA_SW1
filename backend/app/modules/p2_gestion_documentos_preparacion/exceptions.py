@@ -56,3 +56,30 @@ class DocumentProcessingUnavailableError(DomainError):
             code="document_processing_unavailable",
             status_code=503,
         )
+
+
+class DocumentNotProcessedError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Procesa el documento antes de generar su banco de preguntas.",
+            code="document_not_processed",
+            status_code=409,
+        )
+
+
+class QuestionBankNotFoundError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Este documento aun no tiene un banco de preguntas.",
+            code="question_bank_not_found",
+            status_code=404,
+        )
+
+
+class QuestionGenerationFailedError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "No fue posible generar las preguntas. Intenta nuevamente.",
+            code="QUESTION_GENERATION_FAILED",
+            status_code=503,
+        )

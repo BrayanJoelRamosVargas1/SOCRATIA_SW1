@@ -8,20 +8,32 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { getCurrentUser } from "@/features/auth/api";
 import {
   deleteDocument,
+  generateQuestionBank,
   getDocument,
   getDocumentStatus,
+  getQuestionBank,
   processDocument,
 } from "@/features/documents/api";
 import { ApiError } from "@/lib/api";
-import type { Document, ProcessingStatus } from "@/types/document";
+import type {
+  Document,
+  ProcessingStatus,
+  QuestionBank,
+  QuestionCategory,
+} from "@/types/document";
 import type { User } from "@/types/user";
 
 function formatBytes(bytes: number): string {
-  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("es-BO", { dateStyle: "long", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("es-BO", {
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 const STAGE_NAMES: Record<string, string> = {
@@ -33,27 +45,70 @@ const STAGE_NAMES: Record<string, string> = {
   COMPLETE: "Documento listo",
 };
 
+const CATEGORY_ORDER: QuestionCategory[] = [
+  "CONCEPTUAL",
+  "METHODOLOGICAL",
+  "TECHNICAL",
+  "CRITICAL",
+];
+
+const CATEGORY_LABELS: Record<QuestionCategory, string> = {
+  CONCEPTUAL: "Conceptuales",
+  METHODOLOGICAL: "Metodológicas",
+  TECHNICAL: "Técnicas",
+  CRITICAL: "Críticas",
+};
+
+const ANALYSIS_MESSAGES = [
+  "Recuperando objetivos y metodología",
+  "Analizando arquitectura y decisiones técnicas",
+  "Contrastando resultados y evidencia",
+  "Detectando limitaciones, riesgos y supuestos",
+  "Construyendo preguntas de tribunal",
+];
+
 export function DocumentDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [user, setUser] = useState<User | null>(null);
   const [document, setDocument] = useState<Document | null>(null);
   const [processing, setProcessing] = useState<ProcessingStatus | null>(null);
+  const [questionBank, setQuestionBank] = useState<QuestionBank | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState(0);
   const [error, setError] = useState("");
 
   useEffect(() => {
     Promise.all([getCurrentUser(), getDocument(params.id), getDocumentStatus(params.id)])
-      .then(([currentUser, currentDocument, currentStatus]) => {
+      .then(async ([currentUser, currentDocument, currentStatus]) => {
         setUser(currentUser);
         setDocument(currentDocument);
         setProcessing(currentStatus);
+        if (currentDocument.status === "PROCESSED") {
+          try {
+            setQuestionBank(await getQuestionBank(params.id));
+          } catch (caught) {
+            if (!(caught instanceof ApiError && caught.status === 404)) throw caught;
+          }
+        }
       })
       .catch((caught) => {
-        if (caught instanceof ApiError && caught.status === 404) setError("El documento no existe o no pertenece a tu cuenta.");
-        else router.replace("/login");
+        if (caught instanceof ApiError && caught.status === 404) {
+          setError("El documento no existe o no pertenece a tu cuenta.");
+        } else {
+          router.replace("/login");
+        }
       });
   }, [params.id, router]);
+
+  useEffect(() => {
+    if (!isGenerating) return;
+    const interval = window.setInterval(() => {
+      setAnalysisMessage((current) => (current + 1) % ANALYSIS_MESSAGES.length);
+    }, 1800);
+    return () => window.clearInterval(interval);
+  }, [isGenerating]);
 
   async function remove() {
     if (!document || !window.confirm(`¿Eliminar “${document.original_name}”?`)) return;
@@ -69,7 +124,7 @@ export function DocumentDetailPage() {
     if (!document || isProcessing) return;
     setError("");
     setIsProcessing(true);
-    setDocument((current) => current ? { ...current, status: "PROCESSING" } : current);
+    setDocument((current) => (current ? { ...current, status: "PROCESSING" } : current));
     try {
       await processDocument(document.id);
       const [updatedDocument, updatedStatus] = await Promise.all([
@@ -91,11 +146,48 @@ export function DocumentDetailPage() {
     }
   }
 
+  async function runQuestionGeneration() {
+    if (!document || isGenerating) return;
+    if (
+      questionBank &&
+      !window.confirm("Esto reemplazará el banco de preguntas actual. ¿Quieres regenerarlo?")
+    ) {
+      return;
+    }
+    setError("");
+    setAnalysisMessage(0);
+    setIsGenerating(true);
+    try {
+      setQuestionBank(await generateQuestionBank(document.id));
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : "No pudimos generar el banco de preguntas.",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
   if (error && !user) {
-    return <main className="loading-screen detail-error"><h1>Documento no disponible</h1><p>{error}</p><Link className="button button-primary" href="/documents">Volver a mis documentos</Link></main>;
+    return (
+      <main className="loading-screen detail-error">
+        <h1>Documento no disponible</h1>
+        <p>{error}</p>
+        <Link className="button button-primary" href="/documents">
+          Volver a mis documentos
+        </Link>
+      </main>
+    );
   }
   if (!user || !document || !processing) {
-    return <main className="loading-screen"><div className="loading-orbit" /><p>Abriendo documento…</p></main>;
+    return (
+      <main className="loading-screen">
+        <div className="loading-orbit" />
+        <p>Abriendo documento…</p>
+      </main>
+    );
   }
 
   return (
@@ -104,15 +196,37 @@ export function DocumentDetailPage() {
       <section className="dashboard-content document-detail-content">
         <Link className="detail-back" href="/documents">← Mis documentos</Link>
         <header className="detail-header">
-          <div className={`file-mark detail-file-mark ${document.file_type.toLowerCase()}`}>{document.file_type}</div>
-          <div><p className="eyebrow">Documento de preparación</p><h1>{document.original_name}</h1><p>Cargado el {formatDate(document.created_at)}</p></div>
+          <div className={`file-mark detail-file-mark ${document.file_type.toLowerCase()}`}>
+            {document.file_type}
+          </div>
+          <div>
+            <p className="eyebrow">Documento de preparación</p>
+            <h1>{document.original_name}</h1>
+            <p>Cargado el {formatDate(document.created_at)}</p>
+          </div>
           <div className="detail-actions">
             {document.status !== "PROCESSED" && (
-              <button className="button button-primary" type="button" disabled={isProcessing} onClick={() => void runProcessing()}>
-                {isProcessing ? "Procesando…" : document.status === "ERROR" ? "Reintentar procesamiento" : "Procesar documento"}
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={isProcessing}
+                onClick={() => void runProcessing()}
+              >
+                {isProcessing
+                  ? "Procesando…"
+                  : document.status === "ERROR"
+                    ? "Reintentar procesamiento"
+                    : "Procesar documento"}
               </button>
             )}
-            <button className="danger-button" type="button" disabled={isProcessing} onClick={() => void remove()}>Eliminar documento</button>
+            <button
+              className="danger-button"
+              type="button"
+              disabled={isProcessing || isGenerating}
+              onClick={() => void remove()}
+            >
+              Eliminar documento
+            </button>
           </div>
         </header>
 
@@ -146,7 +260,64 @@ export function DocumentDetailPage() {
           </section>
         </div>
 
-        <section className="next-stage-card"><span>RAG</span><div><p className="eyebrow">Siguiente capacidad</p><h2>Este documento alimentará tu banco de preguntas.</h2><p>{document.status === "PROCESSED" ? `Ya hay ${processing.chunk_count} chunks indexados y listos para retrieval.` : "Primero procesa el documento para dejar sus chunks disponibles en Pinecone."}</p></div></section>
+        {document.status !== "PROCESSED" ? (
+          <section className="next-stage-card">
+            <span>RAG</span>
+            <div><p className="eyebrow">Siguiente capacidad</p><h2>Este documento alimentará tu banco de preguntas.</h2><p>Primero procésalo para dejar sus chunks disponibles en Pinecone.</p></div>
+          </section>
+        ) : (
+          <section className="question-bank-workspace">
+            <header className="question-bank-header">
+              <div>
+                <p className="eyebrow">CU10 · RAG documental</p>
+                <h2>{questionBank ? "Banco de preguntas" : "Documento listo para el tribunal"}</h2>
+                <p>{questionBank ? "Doce preguntas sustentadas exclusivamente en los fragmentos de este documento." : `${processing.chunk_count} chunks están indexados y listos para recuperar evidencia.`}</p>
+              </div>
+              <button className="button button-primary" type="button" disabled={isGenerating} onClick={() => void runQuestionGeneration()}>
+                {isGenerating ? "Generando…" : questionBank ? "Regenerar preguntas" : "Generar banco de preguntas"}
+              </button>
+            </header>
+
+            {isGenerating && (
+              <div className="question-analysis" aria-live="polite">
+                <div className="loading-orbit" />
+                <div><strong>Generando preguntas críticas…</strong><span>{ANALYSIS_MESSAGES[analysisMessage]}</span></div>
+              </div>
+            )}
+
+            {questionBank && !isGenerating && (
+              <>
+                <div className="question-bank-meta">
+                  <span><b>12</b> preguntas</span>
+                  <span><b>{questionBank.provider_used}</b> proveedor</span>
+                  <span><b>{questionBank.fallback_used ? "Sí" : "No"}</b> fallback</span>
+                  {questionBank.latency_ms !== null && <span><b>{(questionBank.latency_ms / 1000).toFixed(1)} s</b> generación</span>}
+                </div>
+                <div className="question-category-grid">
+                  {CATEGORY_ORDER.map((category) => {
+                    const questions = questionBank.questions.filter((question) => question.category === category);
+                    return (
+                      <section className={`question-category category-${category.toLowerCase()}`} key={category}>
+                        <div className="question-category-heading"><h3>{CATEGORY_LABELS[category]}</h3><span>{questions.length}</span></div>
+                        <ol>
+                          {questions.map((question) => (
+                            <li key={question.id}>
+                              <p>{question.question}</p>
+                              <div>
+                                <span className={`difficulty difficulty-${question.difficulty.toLowerCase()}`}>{question.difficulty === "HARD" ? "Difícil" : "Media"}</span>
+                                <small>Sustentada en evidencia del documento</small>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      </section>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+        )}
       </section>
     </main>
   );

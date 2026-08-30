@@ -4,7 +4,7 @@ Socratia es un SaaS web para preparar y simular defensas académicas. Este repos
 
 ## Estado del producto
 
-Sprint 1 está congelado en `v0.1.0-sprint1`. Sprint 2 ya cubre CU06-CU09: gestión segura y procesamiento semántico de documentos:
+Sprint 1 está congelado en `v0.1.0-sprint1`. Sprint 2 ya cubre CU06-CU10: gestión segura, procesamiento semántico y generación RAG de preguntas:
 
 - API versionada en `/api/v1` y documentación OpenAPI en `/docs`.
 - Registro, inicio de sesión, renovación y cierre de sesión.
@@ -22,9 +22,12 @@ Sprint 1 está congelado en `v0.1.0-sprint1`. Sprint 2 ya cubre CU06-CU09: gesti
 - Embeddings reales con `gemini-embedding-2` (768 dimensiones).
 - Chunks persistidos en PostgreSQL y vectores aislados por usuario en Pinecone.
 - Procesamiento observable mediante estados e historial por etapa.
+- Retrieval multi-intención sobre Pinecone, filtrado obligatoriamente por usuario y documento.
+- Banco RAG de 12 preguntas con Gemini 2.5 Flash y fallback automático a Groq.
+- Respuestas esperadas y chunks fuente guardados sólo para uso interno; nunca se exponen al alumno.
 - Paquetes funcionales P1–P6 visibles en `backend/app/modules`.
 
-La recuperación RAG, preguntas, material de exposición, voz, visión, evaluación y pagos quedan para los siguientes incrementos. Pinecone ya está operativo como base vectorial de CU09.
+El material de exposición, voz, visión, evaluación y pagos quedan para los siguientes incrementos. Pinecone ya opera como base vectorial de CU09 y fuente de recuperación de CU10.
 
 ## Inicio rápido con Docker
 

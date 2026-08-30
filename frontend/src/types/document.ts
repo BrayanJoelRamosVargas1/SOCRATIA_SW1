@@ -34,3 +34,26 @@ export type DocumentProcessingResult = {
   embedding_dimensions: number;
 };
 
+export type QuestionCategory = "CONCEPTUAL" | "METHODOLOGICAL" | "TECHNICAL" | "CRITICAL";
+export type QuestionDifficulty = "MEDIUM" | "HARD";
+
+export type Question = {
+  id: string;
+  question: string;
+  category: QuestionCategory;
+  difficulty: QuestionDifficulty;
+};
+
+export type QuestionBank = {
+  id: string;
+  document_id: string;
+  status: "READY";
+  provider_used: string;
+  model_used: string;
+  fallback_used: boolean;
+  latency_ms: number | null;
+  created_at: string;
+  updated_at: string;
+  questions: Question[];
+};
+

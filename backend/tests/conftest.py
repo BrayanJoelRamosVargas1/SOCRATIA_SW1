@@ -11,9 +11,24 @@ from app.integrations.email.base import OutboundEmail
 from app.integrations.email.dependencies import get_email_provider
 from app.integrations.embeddings.base import EmbeddingDocument, EmbeddingError
 from app.integrations.embeddings.dependencies import get_embedding_provider
+from app.integrations.llm import (
+    GeneratedQuestion,
+    GeneratedQuestionBank,
+    QuestionCategory,
+    QuestionDifficulty,
+    QuestionGenerationProviderError,
+    QuestionGenerationRequest,
+)
+from app.integrations.llm.dependencies import get_question_generation_router
+from app.integrations.llm.router import QuestionGenerationRouter
 from app.integrations.storage.dependencies import get_storage_provider
 from app.integrations.storage.local import LocalStorageProvider
-from app.integrations.vector_db.base import VectorRecord, VectorStoreError
+from app.integrations.vector_db.base import (
+    VectorFilter,
+    VectorMatch,
+    VectorRecord,
+    VectorStoreError,
+)
 from app.integrations.vector_db.dependencies import get_vector_store_provider
 from app.main import app
 from app.modules.p1_gestion_identidad_seguridad.models import (
@@ -26,7 +41,10 @@ from app.modules.p1_gestion_identidad_seguridad.models import (
     session as session_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401
-from app.modules.p2_gestion_documentos_preparacion.models import document  # noqa: F401
+from app.modules.p2_gestion_documentos_preparacion.models import (
+    document,  # noqa: F401
+    question_bank,  # noqa: F401
+)
 
 
 class FakeEmailProvider:
@@ -43,6 +61,7 @@ class FakeEmbeddingProvider:
 
     def __init__(self) -> None:
         self.documents: list[EmbeddingDocument] = []
+        self.queries: list[str] = []
         self.fail = False
 
     def embed_documents(self, documents: list[EmbeddingDocument]) -> list[list[float]]:
@@ -51,12 +70,20 @@ class FakeEmbeddingProvider:
         self.documents.extend(documents)
         return [[float(index + 1), 0.5, 0.25] for index, _ in enumerate(documents)]
 
+    def embed_queries(self, queries: list[str]) -> list[list[float]]:
+        if self.fail:
+            raise EmbeddingError("simulated embedding failure")
+        self.queries.extend(queries)
+        return [[float(index + 1), 0.25, 0.5] for index, _ in enumerate(queries)]
+
 
 class FakeVectorStoreProvider:
     def __init__(self) -> None:
         self.namespaces: dict[str, dict[str, VectorRecord]] = {}
         self.fail_upsert = False
         self.fail_delete = False
+        self.fail_query = False
+        self.query_calls: list[dict[str, object]] = []
 
     def upsert(self, *, namespace: str, records: list[VectorRecord]) -> None:
         if self.fail_upsert:
@@ -71,6 +98,89 @@ class FakeVectorStoreProvider:
         for vector_id in ids:
             target.pop(vector_id, None)
 
+    def query(
+        self,
+        *,
+        namespace: str,
+        vector: list[float],
+        top_k: int,
+        filters: VectorFilter,
+    ) -> list[VectorMatch]:
+        if self.fail_query:
+            raise VectorStoreError("simulated vector query failure")
+        self.query_calls.append(
+            {
+                "namespace": namespace,
+                "vector": vector,
+                "top_k": top_k,
+                "filters": filters,
+            }
+        )
+        records = list(self.namespaces.get(namespace, {}).values())
+        expected = self._equality_filters(filters)
+        filtered = [
+            record
+            for record in records
+            if all(record.metadata.get(key) == value for key, value in expected.items())
+        ]
+        return [
+            VectorMatch(id=record.id, score=1 - index * 0.01, metadata=record.metadata)
+            for index, record in enumerate(filtered[:top_k])
+        ]
+
+    @staticmethod
+    def _equality_filters(filters: VectorFilter) -> dict[str, object]:
+        clauses = filters.get("$and", [])
+        result: dict[str, object] = {}
+        if not isinstance(clauses, list):
+            return result
+        for clause in clauses:
+            if not isinstance(clause, dict):
+                continue
+            for key, expression in clause.items():
+                if isinstance(expression, dict) and "$eq" in expression:
+                    result[key] = expression["$eq"]
+        return result
+
+
+class FakeQuestionGenerationProvider:
+    def __init__(self, *, name: str, model: str) -> None:
+        self.name = name
+        self.model = model
+        self.requests: list[QuestionGenerationRequest] = []
+        self.failure: QuestionGenerationProviderError | None = None
+        self.invalid_source = False
+
+    def generate(self, request: QuestionGenerationRequest) -> GeneratedQuestionBank:
+        self.requests.append(request)
+        if self.failure is not None:
+            raise self.failure
+        chunk_ids = [chunk.id for chunk in request.chunks]
+        source_id = "foreign-document:0" if self.invalid_source else chunk_ids[0]
+        categories = [category for category in QuestionCategory for _ in range(3)]
+        return GeneratedQuestionBank(
+            questions=[
+                GeneratedQuestion(
+                    question=(
+                        f"Pregunta academica numero {position + 1}: explique y defienda "
+                        "la evidencia recuperada del documento."
+                    ),
+                    category=category,
+                    difficulty=(
+                        QuestionDifficulty.MEDIUM
+                        if position % 2 == 0
+                        else QuestionDifficulty.HARD
+                    ),
+                    source_chunk_ids=[source_id],
+                    expected_answer_points=[
+                        "Relacion directa con la evidencia citada",
+                        "Justificacion clara de la decision academica",
+                    ],
+                )
+                for position, category in enumerate(categories)
+            ]
+        )
+
 
 @pytest.fixture
 def db_session() -> Session:
@@ -79,6 +189,8 @@ def db_session() -> Session:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
     TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(engine)
     session = TestingSession()
@@ -110,12 +222,36 @@ def vector_store() -> FakeVectorStoreProvider:
 
 
 @pytest.fixture
+def question_primary() -> FakeQuestionGenerationProvider:
+    return FakeQuestionGenerationProvider(name="gemini", model="fake-gemini")
+
+
+@pytest.fixture
+def question_fallback() -> FakeQuestionGenerationProvider:
+    return FakeQuestionGenerationProvider(name="groq", model="fake-groq")
+
+
+@pytest.fixture
+def question_router(
+    question_primary: FakeQuestionGenerationProvider,
+    question_fallback: FakeQuestionGenerationProvider,
+) -> QuestionGenerationRouter:
+    return QuestionGenerationRouter(
+        primary=question_primary,
+        fallback=question_fallback,
+        failure_threshold=3,
+        recovery_seconds=60,
+    )
+
+
+@pytest.fixture
 def client(
     db_session: Session,
     storage_provider: LocalStorageProvider,
     email_provider: FakeEmailProvider,
     embedding_provider: FakeEmbeddingProvider,
     vector_store: FakeVectorStoreProvider,
+    question_router: QuestionGenerationRouter,
 ) -> TestClient:
     def override_get_db():
         yield db_session
@@ -125,6 +261,7 @@ def client(
     app.dependency_overrides[get_email_provider] = lambda: email_provider
     app.dependency_overrides[get_embedding_provider] = lambda: embedding_provider
     app.dependency_overrides[get_vector_store_provider] = lambda: vector_store
+    app.dependency_overrides[get_question_generation_router] = lambda: question_router
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

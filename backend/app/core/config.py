@@ -64,6 +64,18 @@ class Settings(BaseSettings):
     pinecone_region: str = "us-east-1"
     pinecone_timeout_seconds: int = Field(default=60, ge=5, le=300)
 
+    question_retrieval_top_k: int = Field(default=4, ge=1, le=20)
+    question_context_max_chars: int = Field(default=45000, ge=3000, le=120000)
+    question_generation_timeout_seconds: int = Field(default=90, ge=10, le=300)
+    question_generation_max_attempts: int = Field(default=2, ge=1, le=3)
+    gemini_question_max_output_tokens: int = Field(default=8192, ge=2048, le=16384)
+    groq_question_max_output_tokens: int = Field(default=4096, ge=2048, le=8192)
+    question_circuit_breaker_threshold: int = Field(default=3, ge=1, le=20)
+    question_circuit_breaker_recovery_seconds: int = Field(default=60, ge=5, le=3600)
+    gemini_question_model: str = "gemini-2.5-flash"
+    groq_question_model: str = "openai/gpt-oss-20b"
+    groq_question_max_context_chars: int = Field(default=10000, ge=3000, le=60000)
+
     document_chunk_size_chars: int = Field(default=3000, ge=500, le=12000)
     document_chunk_overlap_chars: int = Field(default=400, ge=0, le=3000)
     document_max_chunks: int = Field(default=500, ge=1, le=5000)
