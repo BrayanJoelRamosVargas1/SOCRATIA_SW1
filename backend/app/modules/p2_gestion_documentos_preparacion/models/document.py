@@ -72,6 +72,12 @@ class Document(Base):
         order_by="DocumentChunk.chunk_index",
         lazy="selectin",
     )
+    question_bank: Mapped["QuestionBank | None"] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+        lazy="selectin",
+    )
 
 
 class DocumentProcessing(Base):
@@ -126,3 +132,8 @@ class DocumentChunk(Base):
     )
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (  # noqa: E402
+    QuestionBank,
+)

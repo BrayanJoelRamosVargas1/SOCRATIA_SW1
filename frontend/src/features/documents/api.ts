@@ -1,5 +1,10 @@
 import { apiRequest } from "@/lib/api";
-import type { Document, DocumentProcessingResult, ProcessingStatus } from "@/types/document";
+import type {
+  Document,
+  DocumentProcessingResult,
+  ProcessingStatus,
+  QuestionBank,
+} from "@/types/document";
 
 export function listDocuments(): Promise<Document[]> {
   return apiRequest<Document[]>("/documents");
@@ -21,6 +26,16 @@ export function uploadDocument(file: File): Promise<Document> {
 
 export function processDocument(documentId: string): Promise<DocumentProcessingResult> {
   return apiRequest<DocumentProcessingResult>(`/documents/${documentId}/process`, {
+    method: "POST",
+  });
+}
+
+export function getQuestionBank(documentId: string): Promise<QuestionBank> {
+  return apiRequest<QuestionBank>(`/documents/${documentId}/questions`);
+}
+
+export function generateQuestionBank(documentId: string): Promise<QuestionBank> {
+  return apiRequest<QuestionBank>(`/documents/${documentId}/questions/generate`, {
     method: "POST",
   });
 }

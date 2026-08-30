@@ -36,6 +36,21 @@ class GeminiEmbeddingProvider:
         return self._dimensions
 
     def embed_documents(self, documents: list[EmbeddingDocument]) -> list[list[float]]:
+        return self._embed_documents(documents)
+
+    def embed_queries(self, queries: list[str]) -> list[list[float]]:
+        query_documents = [
+            EmbeddingDocument(title="consulta de recuperacion", text=query)
+            for query in queries
+        ]
+        return self._embed_documents(query_documents, is_query=True)
+
+    def _embed_documents(
+        self,
+        documents: list[EmbeddingDocument],
+        *,
+        is_query: bool = False,
+    ) -> list[list[float]]:
         if not documents:
             return []
         if not self.api_key:
@@ -48,13 +63,15 @@ class GeminiEmbeddingProvider:
         }
         with httpx.Client(headers=headers, timeout=self.timeout_seconds) as client:
             for batch in self._batches(documents):
-                embeddings.extend(self._embed_batch(client, batch))
+                embeddings.extend(self._embed_batch(client, batch, is_query=is_query))
         return embeddings
 
     def _embed_batch(
         self,
         client: httpx.Client,
         documents: list[EmbeddingDocument],
+        *,
+        is_query: bool = False,
     ) -> list[list[float]]:
         model_name = f"models/{self.model}"
         payload = {
@@ -63,7 +80,13 @@ class GeminiEmbeddingProvider:
                     "model": model_name,
                     "content": {
                         "parts": [
-                            {"text": f"title: {document.title} | text: {document.text}"}
+                            {
+                                "text": (
+                                    f"task: question answering | query: {document.text}"
+                                    if is_query
+                                    else f"title: {document.title} | text: {document.text}"
+                                )
+                            }
                         ]
                     },
                     "outputDimensionality": self.dimensions,

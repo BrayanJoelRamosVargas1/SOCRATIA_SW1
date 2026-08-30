@@ -162,8 +162,8 @@ incluyen en imágenes ni repositorios.
 
 | Fase | Implementar | Solo mantener diseñado |
 |---|---|---|
-| Actual | SMTP/Brevo y CU09 con Gemini Embedding + Pinecone | SES y pgvector como fallbacks |
-| P2 siguiente | S3, retrieval RAG y proveedor generativo | proveedor LLM alternativo |
+| Actual | SMTP/Brevo, CU09 con Gemini Embedding + Pinecone y CU10 RAG Gemini → Groq | SES y pgvector como fallbacks |
+| P2 siguiente | S3 y material de exposición | proveedor alternativo de almacenamiento |
 | P3 | Groq para jurado/STT y ElevenLabs | Gemini/OpenAI, Polly/Azure |
 | Endurecimiento | routers, métricas, circuit breakers y fallbacks probados | multi-cloud |
 | DR futuro | procedimientos multi-región/multi-cloud medidos | — |
@@ -171,6 +171,9 @@ incluyen en imágenes ni repositorios.
 ## Fuentes técnicas
 
 - [Compatibilidad OpenAI de Groq](https://console.groq.com/docs/openai)
+- [Salidas estructuradas de Gemini](https://ai.google.dev/gemini-api/docs/structured-output)
+- [Salidas estructuradas de Groq](https://console.groq.com/docs/structured-outputs)
+- [Búsqueda semántica de Pinecone](https://docs.pinecone.io/guides/search/semantic-search)
 - [Speech-to-Text de Groq](https://console.groq.com/docs/speech-to-text)
 - [Conexión SMTP cifrada con Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/smtp-connect.html)
 - [Failover Multi-AZ de Amazon RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.Failover.html)

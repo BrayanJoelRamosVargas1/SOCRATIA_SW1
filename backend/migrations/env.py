@@ -15,7 +15,10 @@ from app.modules.p1_gestion_identidad_seguridad.models import (
     session as session_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401
-from app.modules.p2_gestion_documentos_preparacion.models import document  # noqa: F401
+from app.modules.p2_gestion_documentos_preparacion.models import (
+    document,  # noqa: F401
+    question_bank,  # noqa: F401
+)
 
 config = context.config
 

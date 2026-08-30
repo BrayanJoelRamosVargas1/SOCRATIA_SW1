@@ -23,3 +23,6 @@ class EmbeddingProvider(Protocol):
 
     def embed_documents(self, documents: list[EmbeddingDocument]) -> list[list[float]]:
         """Generate one retrieval embedding per document, preserving input order."""
+
+    def embed_queries(self, queries: list[str]) -> list[list[float]]:
+        """Generate one retrieval embedding per search query, preserving input order."""
