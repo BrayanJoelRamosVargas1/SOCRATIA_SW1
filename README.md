@@ -27,6 +27,7 @@ Sprint 1 está congelado en `v0.1.0-sprint1`. P2 está completo: CU06-CU11 cubre
 - Respuestas esperadas y chunks fuente guardados sólo para uso interno; nunca se exponen al alumno.
 - Material de exposición ajustado a 5–30 minutos, con slides, guion, tiempos y fuentes internas.
 - Paquetes funcionales P1–P6 visibles en `backend/app/modules`.
+- P3-A: configuración de simulación, perfiles de jurado y calibración privada en navegador.
 
 Voz, visión, simulación, evaluación y pagos quedan para los siguientes incrementos. Pinecone opera como base vectorial de CU09 y fuente de recuperación de CU10/CU11.
 
@@ -124,3 +125,4 @@ Cada operación de documentos valida además la propiedad del recurso. Un usuari
 - [C4: componentes del backend](docs/c4/backend-components.md)
 - [Sprint 1: cierre](docs/sprints/sprint-01.md)
 - [Sprint 2: documentos](docs/sprints/sprint-02.md)
+- [Sprint 3: simulación](docs/sprints/sprint-03.md)

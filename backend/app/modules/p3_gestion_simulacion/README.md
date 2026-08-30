@@ -7,17 +7,25 @@ Casos de uso: **CU12–CU19**.
 Crear y ejecutar simulaciones de defensa, coordinar el jurado virtual y gestionar la interacción
 por voz durante una práctica.
 
-## Dependencias previstas
+## Dependencias
 
 - P2 para documentos, contexto y preguntas preparadas.
-- `LLMProvider`, `STTProvider` y `TTSProvider` mediante `app/integrations`.
+- P1 para el usuario autenticado.
+- P2 sólo mediante documentos procesados y bancos READY; P3 congela 12 preguntas por simulación.
+- MediaPipe y Web Audio se ejecutan localmente en el navegador durante CU14.
+- `LLMProvider`, `STTProvider` y `TTSProvider` se incorporarán en P3-B/P3-C.
 
 ## No permitido
 
 - Administrar usuarios, suscripciones o pagos.
 - Ser propietario de las reglas de evaluación y reportes finales.
 
-## Estado
+## P3-A — implementado
 
-Pendiente — Sprint 3. El paquete sólo declara el límite funcional hasta que sus casos de uso sean
-implementados.
+- CU12: crear, listar, consultar y eliminar configuraciones DRAFT/READY.
+- CU13: perfiles metodológico, técnico y crítico con bootstrap idempotente.
+- CU14: comprobación local de cámara, nivel de micrófono y detección de persona.
+- Máquina de estados explícita y selección congelada de preguntas BANK/FOLLOW_UP.
+- El backend sólo recibe booleanos de disponibilidad; no almacena frames ni audio.
+
+P3-B añadirá inicio, motor de sesión, turnos y WebSocket sin modificar esta frontera.

@@ -346,6 +346,33 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .speaker-notes { padding: 16px 18px; border-left: 3px solid var(--mint); border-radius: 0 9px 9px 0; background: #f2f8f5; }
 .speaker-notes strong { color: var(--teal-dark); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; }
 .speaker-notes p { margin: 7px 0 0; font-size: .77rem; line-height: 1.65; }
+.simulations-content { display: grid; align-content: start; gap: 24px; }
+.simulation-empty { padding: 55px; text-align: center; border: 1px dashed #b7cec5; border-radius: 18px; background: #f7fbf9; }
+.simulation-empty > b { color: var(--mint-dark); font-family: Georgia, serif; font-size: 2rem; }
+.simulation-empty h2 { margin: 10px 0 8px; font-family: Georgia, serif; font-size: 2rem; font-weight: 500; }
+.simulation-empty p { margin: 0 0 20px; color: var(--muted); }
+.simulation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.simulation-card { padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: 0 12px 35px rgba(16,44,57,.05); }
+.simulation-card-top, .simulation-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.simulation-state { padding: 6px 10px; border-radius: 99px; color: #716024; background: #fff2c9; font-size: .62rem; font-weight: 800; text-transform: uppercase; }
+.simulation-state.state-ready { color: #276c56; background: #dff4e9; }
+.simulation-card h2 { margin: 22px 0 7px; font-family: Georgia, serif; font-size: 1.35rem; font-weight: 500; }
+.simulation-card p, .simulation-card small { color: var(--muted); font-size: .72rem; }
+.simulation-card-actions { margin-top: 22px; }
+.simulation-form-card, .readiness-card { padding: 32px; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 14px 40px rgba(16,44,57,.06); }
+.simulation-field { display: grid; gap: 9px; margin-bottom: 28px; color: var(--ink); font-size: .72rem; font-weight: 750; }
+.simulation-field select { min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.jury-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.jury-option { padding: 20px; text-align: left; border: 1px solid var(--line); border-radius: 13px; color: var(--ink); background: #fff; cursor: pointer; }
+.jury-option.selected { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(34,119,102,.12); background: #f2faf6; }
+.jury-option > b, .jury-option > strong, .jury-option > small { display: block; }
+.jury-option > b { margin-bottom: 12px; font-size: 1.35rem; }.jury-option p { min-height: 48px; color: var(--muted); font-size: .7rem; line-height: 1.5; }.jury-option small { color: var(--teal); font-size: .58rem; }
+.duration-field > span { display: flex; align-items: center; gap: 20px; }.duration-field input { flex: 1; }.duration-field b { min-width: 85px; color: var(--teal-dark); }
+.simulation-submit { width: 100%; }.form-hint { margin: -18px 0 25px; color: #a35b35; font-size: .7rem; }
+.readiness-card h2 { margin: 0 0 24px; font-family: Georgia, serif; font-size: 1.8rem; font-weight: 500; }
+.readiness-list { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--line); }
+.readiness-list > div { display: flex; padding: 18px; align-items: center; gap: 13px; background: #fff; }.readiness-list b { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 50%; }.readiness-list b.ready { color: #286d56; background: #dff4e9; }.readiness-list b.pending { color: #967b2c; background: #fff2c9; }.readiness-list strong, .readiness-list small { display: block; }.readiness-list strong { font-size: .75rem; }.readiness-list small { margin-top: 3px; color: var(--muted); font-size: .64rem; }.readiness-actions { display: flex; margin-top: 24px; gap: 10px; }
+.calibration-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .7fr); gap: 18px; }.camera-panel { position: relative; min-height: 430px; overflow: hidden; border-radius: 17px; background: #0c1f28; }.camera-panel video { width: 100%; height: 100%; min-height: 430px; object-fit: cover; transform: scaleX(-1); }.camera-placeholder { position: absolute; inset: 0; display: grid; place-items: center; padding: 30px; color: #b8c7cc; text-align: center; }.privacy-badge { position: absolute; z-index: 2; top: 15px; left: 15px; padding: 8px 11px; border-radius: 99px; color: #d9eee6; background: rgba(5,20,27,.75); font-size: .62rem; backdrop-filter: blur(8px); }.device-panel { display: flex; padding: 25px; flex-direction: column; border: 1px solid var(--line); border-radius: 17px; background: #fff; }.device-panel h2 { margin: 0 0 22px; font-family: Georgia, serif; font-size: 1.5rem; font-weight: 500; }.device-panel label { display: grid; gap: 7px; font-size: .68rem; font-weight: 750; }.device-panel select { min-height: 43px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }.audio-meter { height: 11px; margin-top: 22px; overflow: hidden; border-radius: 99px; background: #e6ece9; }.audio-meter span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--mint-dark), #e7b94f); transition: width .1s; }.device-panel > small { margin-top: 7px; color: var(--muted); font-size: .62rem; }.calibration-checks { display: grid; gap: 10px; margin: 25px 0; padding: 0; list-style: none; color: var(--muted); font-size: .72rem; }.calibration-checks li.ready { color: #286d56; font-weight: 700; }.device-panel .button + .button { margin-top: 9px; }.calibration-error { margin: 0; }
 
 @media (max-width: 980px) {
   .landing-links > a:not(.button), .button-ghost { display: none; }
@@ -421,4 +448,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .presentation-header, .presentation-controls { align-items: stretch; flex-direction: column; }
   .presentation-controls .button { width: 100%; }
   .slide-content { padding: 18px; }
+  .simulation-grid, .jury-grid, .readiness-list, .calibration-grid { grid-template-columns: 1fr; }
+  .simulation-form-card, .readiness-card { padding: 23px 18px; }
+  .readiness-actions { flex-direction: column; }
+  .camera-panel, .camera-panel video { min-height: 300px; }
 }

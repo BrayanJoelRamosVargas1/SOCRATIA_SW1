@@ -20,6 +20,7 @@ from app.modules.p2_gestion_documentos_preparacion.models import (
     presentation_material,  # noqa: F401
     question_bank,  # noqa: F401
 )
+from app.modules.p3_gestion_simulacion import models as simulation_models  # noqa: F401, E402
 
 config = context.config
 
