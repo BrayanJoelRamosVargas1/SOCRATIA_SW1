@@ -57,3 +57,29 @@ export type QuestionBank = {
   questions: Question[];
 };
 
+export type PresentationSlide = {
+  id: string;
+  position: number;
+  title: string;
+  objective: string;
+  bullet_points: string[];
+  speaker_notes: string;
+  estimated_seconds: number;
+};
+
+export type PresentationMaterial = {
+  id: string;
+  document_id: string;
+  title: string;
+  duration_minutes: number;
+  target_word_count: number;
+  status: "READY";
+  provider_used: string;
+  model_used: string;
+  fallback_used: boolean;
+  latency_ms: number | null;
+  created_at: string;
+  updated_at: string;
+  slides: PresentationSlide[];
+};
+

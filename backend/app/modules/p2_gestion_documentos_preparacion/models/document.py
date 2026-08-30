@@ -78,6 +78,12 @@ class Document(Base):
         uselist=False,
         lazy="selectin",
     )
+    presentation_material: Mapped["PresentationMaterial | None"] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+        lazy="selectin",
+    )
 
 
 class DocumentProcessing(Base):
@@ -134,6 +140,9 @@ class DocumentChunk(Base):
     document: Mapped[Document] = relationship(back_populates="chunks")
 
 
+from app.modules.p2_gestion_documentos_preparacion.models.presentation_material import (  # noqa: E402
+    PresentationMaterial,
+)
 from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (  # noqa: E402
     QuestionBank,
 )

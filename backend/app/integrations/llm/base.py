@@ -64,16 +64,20 @@ class QuestionGenerationFailed(Exception):
 
 
 @dataclass(frozen=True, slots=True)
-class QuestionContextChunk:
+class DocumentContextChunk:
     id: str
     text: str
     score: float
 
 
+# Backwards-compatible public name retained for CU10.
+QuestionContextChunk = DocumentContextChunk
+
+
 @dataclass(frozen=True, slots=True)
 class QuestionGenerationRequest:
     document_name: str
-    chunks: tuple[QuestionContextChunk, ...]
+    chunks: tuple[DocumentContextChunk, ...]
 
     @property
     def allowed_chunk_ids(self) -> set[str]:

@@ -6,6 +6,11 @@ from app.modules.p2_gestion_documentos_preparacion.models.document import (
     DocumentProcessing,
     DocumentStatus,
 )
+from app.modules.p2_gestion_documentos_preparacion.models.presentation_material import (
+    PresentationMaterial,
+    PresentationMaterialStatus,
+    PresentationSlide,
+)
 from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (
     Question,
     QuestionBank,
@@ -17,6 +22,9 @@ __all__ = [
     "DocumentChunk",
     "DocumentProcessing",
     "DocumentStatus",
+    "PresentationMaterial",
+    "PresentationMaterialStatus",
+    "PresentationSlide",
     "Question",
     "QuestionBank",
     "QuestionBankStatus",

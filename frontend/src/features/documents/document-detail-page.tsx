@@ -8,16 +8,20 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { getCurrentUser } from "@/features/auth/api";
 import {
   deleteDocument,
+  generatePresentationMaterial,
   generateQuestionBank,
   getDocument,
   getDocumentStatus,
+  getPresentationMaterial,
   getQuestionBank,
   processDocument,
+  regeneratePresentationMaterial,
 } from "@/features/documents/api";
 import { ApiError } from "@/lib/api";
 import type {
   Document,
   ProcessingStatus,
+  PresentationMaterial,
   QuestionBank,
   QuestionCategory,
 } from "@/types/document";
@@ -34,6 +38,11 @@ function formatDate(value: string): string {
     dateStyle: "long",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 const STAGE_NAMES: Record<string, string> = {
@@ -74,8 +83,11 @@ export function DocumentDetailPage() {
   const [document, setDocument] = useState<Document | null>(null);
   const [processing, setProcessing] = useState<ProcessingStatus | null>(null);
   const [questionBank, setQuestionBank] = useState<QuestionBank | null>(null);
+  const [presentation, setPresentation] = useState<PresentationMaterial | null>(null);
+  const [durationMinutes, setDurationMinutes] = useState(15);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingPresentation, setIsGeneratingPresentation] = useState(false);
   const [analysisMessage, setAnalysisMessage] = useState(0);
   const [error, setError] = useState("");
 
@@ -88,6 +100,13 @@ export function DocumentDetailPage() {
         if (currentDocument.status === "PROCESSED") {
           try {
             setQuestionBank(await getQuestionBank(params.id));
+          } catch (caught) {
+            if (!(caught instanceof ApiError && caught.status === 404)) throw caught;
+          }
+          try {
+            const material = await getPresentationMaterial(params.id);
+            setPresentation(material);
+            setDurationMinutes(material.duration_minutes);
           } catch (caught) {
             if (!(caught instanceof ApiError && caught.status === 404)) throw caught;
           }
@@ -167,6 +186,30 @@ export function DocumentDetailPage() {
       );
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function runPresentationGeneration() {
+    if (!document || isGeneratingPresentation) return;
+    if (
+      presentation &&
+      !window.confirm("Esto reemplazará el material de exposición actual. ¿Quieres continuar?")
+    ) return;
+    setError("");
+    setIsGeneratingPresentation(true);
+    try {
+      const action = presentation
+        ? regeneratePresentationMaterial
+        : generatePresentationMaterial;
+      setPresentation(await action(document.id, durationMinutes));
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : "No pudimos generar el material de exposición.",
+      );
+    } finally {
+      setIsGeneratingPresentation(false);
     }
   }
 
@@ -266,6 +309,7 @@ export function DocumentDetailPage() {
             <div><p className="eyebrow">Siguiente capacidad</p><h2>Este documento alimentará tu banco de preguntas.</h2><p>Primero procésalo para dejar sus chunks disponibles en Pinecone.</p></div>
           </section>
         ) : (
+          <>
           <section className="question-bank-workspace">
             <header className="question-bank-header">
               <div>
@@ -317,6 +361,55 @@ export function DocumentDetailPage() {
               </>
             )}
           </section>
+          <section className="presentation-workspace">
+            <header className="question-bank-header presentation-header">
+              <div>
+                <p className="eyebrow">CU11 · Preparación de exposición</p>
+                <h2>{presentation ? presentation.title : "Convierte tu documento en una defensa"}</h2>
+                <p>Indica cuánto tiempo tienes y Socratia distribuirá la evidencia en una estructura presentable.</p>
+              </div>
+              <div className="presentation-controls">
+                <label>
+                  Tiempo disponible
+                  <span><input type="number" min="5" max="30" value={durationMinutes} onChange={(event) => setDurationMinutes(Number(event.target.value))} /> minutos</span>
+                </label>
+                <button className="button button-primary" type="button" disabled={isGeneratingPresentation || durationMinutes < 5 || durationMinutes > 30} onClick={() => void runPresentationGeneration()}>
+                  {isGeneratingPresentation ? "Preparando…" : presentation ? "Regenerar estructura" : "Generar estructura"}
+                </button>
+              </div>
+            </header>
+
+            {isGeneratingPresentation && (
+              <div className="question-analysis" aria-live="polite">
+                <div className="loading-orbit" />
+                <div><strong>Diseñando tu exposición…</strong><span>Distribuyendo evidencia, guion y tiempos</span></div>
+              </div>
+            )}
+
+            {presentation && !isGeneratingPresentation && (
+              <>
+                <div className="question-bank-meta presentation-meta">
+                  <span><b>{presentation.duration_minutes} min</b> exposición</span>
+                  <span><b>{presentation.slides.length}</b> diapositivas</span>
+                  <span><b>~{presentation.target_word_count}</b> palabras objetivo</span>
+                  <span><b>{presentation.provider_used}</b> {presentation.fallback_used ? "fallback" : "primario"}</span>
+                </div>
+                <div className="slide-list">
+                  {presentation.slides.map((slide) => (
+                    <details key={slide.id} className="slide-card">
+                      <summary><b>{String(slide.position).padStart(2, "0")}</b><span>{slide.title}</span><time>{formatDuration(slide.estimated_seconds)}</time></summary>
+                      <div className="slide-content">
+                        <p className="slide-objective"><strong>Objetivo:</strong> {slide.objective}</p>
+                        <ul>{slide.bullet_points.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>
+                        <div className="speaker-notes"><strong>Qué explicar</strong><p>{slide.speaker_notes}</p></div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+          </>
         )}
       </section>
     </main>

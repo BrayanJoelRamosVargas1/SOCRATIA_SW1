@@ -42,7 +42,7 @@ requiera.
 - `StorageProvider` para los archivos.
 - `EmbeddingProvider` para convertir chunks en vectores.
 - `VectorStoreProvider` para indexar, consultar y eliminar vectores.
-- `LLMProvider` para generar salidas estructuradas de CU10.
+- `LLMProvider` para generar salidas estructuradas de CU10 y CU11.
 
 ## No permitido
 
@@ -57,8 +57,9 @@ documento ajeno responde `404` para no revelar que el identificador existe.
 
 ## Estado
 
-CU06-CU10 y la eliminación segura están implementados. CU09 extrae PDF/DOCX, normaliza,
+CU06-CU11 y la eliminación segura están implementados. CU09 extrae PDF/DOCX, normaliza,
 fragmenta, genera embeddings Gemini y escribe en Pinecone. CU10 recupera evidencia mediante seis
 intenciones, genera exactamente 12 preguntas estructuradas y persiste la trazabilidad interna. Usa
 Gemini como proveedor primario, Groq como fallback y circuit breakers independientes. El material
-de exposición y S3 continúan pendientes en Sprint 2.
+CU11 reutiliza el mismo retrieval y resiliencia para producir una exposición ajustada a la duración.
+S3 queda como cambio de infraestructura posterior; P2 está funcionalmente completo.
