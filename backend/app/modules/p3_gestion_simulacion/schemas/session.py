@@ -89,5 +89,12 @@ class VoiceUtteranceEndMessage(BaseModel):
 
 
 class ServerEventState(BaseModel):
-    type: Literal["voice.listening", "voice.transcribing", "jury.thinking", "jury.speaking", "jury.finished", "error"]
+    type: Literal[
+        "voice.listening",
+        "voice.transcribing",
+        "jury.thinking",
+        "jury.speaking",
+        "jury.finished",
+        "error",
+    ]
     message: str | None = None

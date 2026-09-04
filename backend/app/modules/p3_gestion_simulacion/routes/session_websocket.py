@@ -1,6 +1,6 @@
 import logging
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -24,7 +24,6 @@ from app.modules.p3_gestion_simulacion.schemas.session import (
 )
 from app.modules.p3_gestion_simulacion.services.session_service import SessionService
 from app.modules.p3_gestion_simulacion.services.voice_service import VoiceService
-
 
 router = APIRouter()
 manager = SimulationConnectionManager()
@@ -85,11 +84,11 @@ async def simulation_session(
     await manager.connect(simulation_id, websocket)
     logger.info("WS_CONNECTED simulation_id=%s user_id=%s", simulation_id, user.id)
     await _send_snapshot(websocket, snapshot)
-    
+
     current_utterance_id: str | None = None
     current_mime_type: str | None = None
     audio_buffer = bytearray()
-    
+
     try:
         while True:
             # We can receive json or bytes
@@ -98,16 +97,17 @@ async def simulation_session(
                 if current_utterance_id:
                     audio_buffer.extend(message["bytes"])
                 continue
-                
+
             if "text" not in message:
                 continue
-                
+
             import json
+
             try:
                 msg_data = json.loads(message["text"])
             except json.JSONDecodeError:
                 continue
-                
+
             if msg_data.get("type") == "heartbeat":
                 await websocket.send_json(
                     {
@@ -142,7 +142,7 @@ async def simulation_session(
                             "payload": snapshot.current_question.model_dump(mode="json"),
                         }
                     )
-                    
+
             except ValidationError:
                 # Could be voice.utterance.start
                 try:
@@ -150,7 +150,9 @@ async def simulation_session(
                     current_utterance_id = str(start_msg.message_id)
                     current_mime_type = start_msg.payload.mime_type
                     audio_buffer.clear()
-                    await websocket.send_json(ServerEventState(type="voice.listening").model_dump(mode="json"))
+                    await websocket.send_json(
+                        ServerEventState(type="voice.listening").model_dump(mode="json")
+                    )
                     continue
                 except ValidationError:
                     pass
@@ -158,46 +160,70 @@ async def simulation_session(
                 try:
                     end_msg = VoiceUtteranceEndMessage.model_validate(msg_data)
                     if str(end_msg.message_id) == current_utterance_id:
-                        await websocket.send_json(ServerEventState(type="voice.transcribing").model_dump(mode="json"))
-                        
+                        await websocket.send_json(
+                            ServerEventState(type="voice.transcribing").model_dump(mode="json")
+                        )
+
                         # Process audio
                         try:
                             voice_svc = VoiceService(db, user, simulation_id)
-                            text, fallback, action, tts_stream, snapshot = await voice_svc.process_utterance(
+                            (
+                                text,
+                                fallback,
+                                action,
+                                tts_stream,
+                                snapshot,
+                            ) = await voice_svc.process_utterance(
                                 message_id=current_utterance_id,
                                 mime_type=current_mime_type or "audio/webm",
                                 audio_bytes=bytes(audio_buffer),
                             )
-                            
+
                             # Send text to client as if it were typed
-                            await websocket.send_json({
-                                "type": "voice.transcription",
-                                "message_id": current_utterance_id,
-                                "text": text
-                            })
-                            
-                            await websocket.send_json({
-                                "type": "session.state",
-                                "payload": snapshot.model_dump(mode="json"),
-                            })
-                            
+                            await websocket.send_json(
+                                {
+                                    "type": "voice.transcription",
+                                    "message_id": current_utterance_id,
+                                    "text": text,
+                                }
+                            )
+
+                            await websocket.send_json(
+                                {
+                                    "type": "session.state",
+                                    "payload": snapshot.model_dump(mode="json"),
+                                }
+                            )
+
                             if snapshot.current_question is not None:
-                                await websocket.send_json({
-                                    "type": "jury.question",
-                                    "sequence": snapshot.last_sequence,
-                                    "payload": snapshot.current_question.model_dump(mode="json"),
-                                })
-                                
+                                await websocket.send_json(
+                                    {
+                                        "type": "jury.question",
+                                        "sequence": snapshot.last_sequence,
+                                        "payload": snapshot.current_question.model_dump(
+                                            mode="json"
+                                        ),
+                                    }
+                                )
+
                             if tts_stream:
-                                await websocket.send_json(ServerEventState(type="jury.speaking").model_dump(mode="json"))
+                                await websocket.send_json(
+                                    ServerEventState(type="jury.speaking").model_dump(mode="json")
+                                )
                                 async for chunk in tts_stream:
                                     await websocket.send_bytes(chunk)
-                                await websocket.send_json(ServerEventState(type="jury.finished").model_dump(mode="json"))
-                                
+                                await websocket.send_json(
+                                    ServerEventState(type="jury.finished").model_dump(mode="json")
+                                )
+
                         except Exception as e:
                             logger.error("Voice processing error: %s", str(e))
-                            await websocket.send_json(ServerEventState(type="error", message="Error procesando voz.").model_dump(mode="json"))
-                        
+                            await websocket.send_json(
+                                ServerEventState(
+                                    type="error", message="Error procesando voz."
+                                ).model_dump(mode="json")
+                            )
+
                         current_utterance_id = None
                         current_mime_type = None
                         audio_buffer.clear()

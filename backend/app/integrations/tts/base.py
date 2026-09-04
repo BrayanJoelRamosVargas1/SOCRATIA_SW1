@@ -1,6 +1,6 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 
 @dataclasses.dataclass(frozen=True)
@@ -19,9 +19,7 @@ class TTSProviderError(Exception):
 class TTSProvider(ABC):
     @property
     @abstractmethod
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
     @abstractmethod
-    async def synthesize(self, request: TTSRequest) -> AsyncIterator[bytes]:
-        ...
+    async def synthesize(self, request: TTSRequest) -> AsyncIterator[bytes]: ...

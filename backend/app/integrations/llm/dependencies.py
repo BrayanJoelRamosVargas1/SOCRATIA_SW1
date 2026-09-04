@@ -3,13 +3,13 @@ from functools import lru_cache
 from app.core.config import get_settings
 from app.integrations.llm.gemini import GeminiQuestionGenerationProvider
 from app.integrations.llm.groq import GroqQuestionGenerationProvider
+from app.integrations.llm.jury_gemini import GeminiJuryRoutingProvider
+from app.integrations.llm.jury_groq import GroqJuryRoutingProvider
+from app.integrations.llm.jury_router import JuryRoutingRouter
 from app.integrations.llm.presentation_gemini import GeminiPresentationGenerationProvider
 from app.integrations.llm.presentation_groq import GroqPresentationGenerationProvider
 from app.integrations.llm.presentation_router import PresentationGenerationRouter
 from app.integrations.llm.router import QuestionGenerationRouter
-from app.integrations.llm.jury_gemini import GeminiJuryRoutingProvider
-from app.integrations.llm.jury_groq import GroqJuryRoutingProvider
-from app.integrations.llm.jury_router import JuryRoutingRouter
 
 
 @lru_cache

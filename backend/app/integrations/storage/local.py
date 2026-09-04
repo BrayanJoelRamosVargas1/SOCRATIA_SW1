@@ -63,4 +63,3 @@ class LocalStorageProvider:
             except OSError:
                 break
             directory = directory.parent
-

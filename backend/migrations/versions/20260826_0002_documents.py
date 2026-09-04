@@ -57,4 +57,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index(op.f("ix_documents_user_id"), table_name="documents")
     op.drop_table("documents")
-

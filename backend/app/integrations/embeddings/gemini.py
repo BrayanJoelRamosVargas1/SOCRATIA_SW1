@@ -40,8 +40,7 @@ class GeminiEmbeddingProvider:
 
     def embed_queries(self, queries: list[str]) -> list[list[float]]:
         query_documents = [
-            EmbeddingDocument(title="consulta de recuperacion", text=query)
-            for query in queries
+            EmbeddingDocument(title="consulta de recuperacion", text=query) for query in queries
         ]
         return self._embed_documents(query_documents, is_query=True)
 

@@ -145,9 +145,7 @@ class PineconeVectorStoreProvider:
                         "vector_type": "dense",
                         "dimension": self.dimensions,
                         "metric": "cosine",
-                        "spec": {
-                            "serverless": {"cloud": self.cloud, "region": self.region}
-                        },
+                        "spec": {"serverless": {"cloud": self.cloud, "region": self.region}},
                         "deletion_protection": "disabled",
                         "tags": {"application": "socratia"},
                     },
@@ -230,9 +228,7 @@ class PineconeVectorStoreProvider:
                 time.sleep(2**attempt)
                 continue
             if response.is_error and response.status_code not in allowed:
-                raise VectorStoreError(
-                    f"Pinecone rejected the request ({response.status_code})"
-                )
+                raise VectorStoreError(f"Pinecone rejected the request ({response.status_code})")
             return response
         raise VectorStoreError("Pinecone could not complete the request")
 

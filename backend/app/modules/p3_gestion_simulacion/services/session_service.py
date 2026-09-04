@@ -12,6 +12,7 @@ from app.modules.p3_gestion_simulacion.exceptions import (
 from app.modules.p3_gestion_simulacion.models import (
     Simulation,
     SimulationQuestion,
+    SimulationQuestionSource,
     SimulationQuestionStatus,
     SimulationStatus,
     SimulationTurn,
@@ -164,7 +165,7 @@ class SessionService:
         current.answered_at = now
 
         simulation.turn_state = SimulationTurnState.JURY_TURN
-        
+
         if route_automatically:
             next_question = self.turns.next_pending_question(simulation.id)
             if next_question is not None:
@@ -224,44 +225,47 @@ class SessionService:
         simulation = SimulationPolicy.assert_owner(
             user, self.simulations.get(simulation_id, for_update=True)
         )
-        if simulation.status != SimulationStatus.ACTIVE or simulation.turn_state != SimulationTurnState.JURY_TURN:
+        if (
+            simulation.status != SimulationStatus.ACTIVE
+            or simulation.turn_state != SimulationTurnState.JURY_TURN
+        ):
             raise InvalidTurnError
-        
+
         parent = self.db.query(SimulationQuestion).filter_by(id=parent_question_id).first()
         if not parent:
             raise InvalidTurnError
-            
+
         now = datetime.now(UTC)
         new_q = SimulationQuestion(
             simulation_id=simulation.id,
             position=parent.position,  # Follow up shares same position or we handle it otherwise. Actually position has unique constraint! We'll just assign position as max + 1? No, position is ordered. Let's just give it a high position temporarily, or better: position=max_position + 1
         )
-        # We need a proper way to add follow ups. 
+        # We need a proper way to add follow ups.
         # Wait, since position is unique per simulation_id, we need to shift others or just use a float?
         # SimulationQuestion.position is Integer.
         # Let's shift remaining questions down by 1.
         self.db.query(SimulationQuestion).filter(
             SimulationQuestion.simulation_id == simulation.id,
-            SimulationQuestion.position > parent.position
+            SimulationQuestion.position > parent.position,
         ).update({"position": SimulationQuestion.position + 1})
-        
+
         new_q.position = parent.position + 1
         new_q.source = SimulationQuestionSource.FOLLOW_UP
         new_q.status = SimulationQuestionStatus.PENDING
         new_q.prompt_text = text
         new_q.parent_question_id = parent.id
         new_q.follow_up_depth = parent.follow_up_depth + 1
-        
+
         self.db.add(new_q)
         self.db.flush()
-        
+
         turn = self._ask_question(simulation, new_q, now)
         simulation.turn_state = SimulationTurnState.WAITING_STUDENT
-        
+
         snapshot = self._snapshot(simulation)
         self.db.commit()
         return turn, snapshot
-        
+
     def proceed_to_next_bank_question(
         self,
         user: User,
@@ -270,20 +274,22 @@ class SessionService:
         simulation = SimulationPolicy.assert_owner(
             user, self.simulations.get(simulation_id, for_update=True)
         )
-        if simulation.status != SimulationStatus.ACTIVE or simulation.turn_state != SimulationTurnState.JURY_TURN:
+        if (
+            simulation.status != SimulationStatus.ACTIVE
+            or simulation.turn_state != SimulationTurnState.JURY_TURN
+        ):
             raise InvalidTurnError
-            
+
         now = datetime.now(UTC)
         next_question = self.turns.next_pending_question(simulation.id)
         turn = None
         if next_question is not None:
             turn = self._ask_question(simulation, next_question, now)
             simulation.turn_state = SimulationTurnState.WAITING_STUDENT
-            
+
         snapshot = self._snapshot(simulation)
         self.db.commit()
         return turn, snapshot
-
 
     def _snapshot(self, simulation: Simulation) -> SessionSnapshot:
         current = self.turns.current_question(simulation.id)

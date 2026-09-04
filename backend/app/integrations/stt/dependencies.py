@@ -9,7 +9,7 @@ class STTRouter:
     def __init__(self, primary: GroqSTTProvider, fallback: GeminiSTTProvider) -> None:
         self.primary = primary
         self.fallback = fallback
-        
+
     async def transcribe(self, request) -> tuple[str, bool, int]:
         # return text, fallback_used, latency
         try:

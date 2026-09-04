@@ -1,5 +1,5 @@
 import logging
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from sqlalchemy.orm import Session
 
@@ -68,15 +68,15 @@ class VoiceService:
 
         # 3. Jury LLM Router
         logger.info("VOICE_PROCESSING: Starting LiveJuryRouter")
-        
+
         simulation = self.session_service.simulations.get(self.simulation_id)
         current_question_model = self.session_service.turns.current_question(simulation.id)
-        
+
         if current_question_model and current_question_model.question:
             expected_points = current_question_model.question.expected_answer_points
         else:
             expected_points = []
-            
+
         llm_request = JuryRoutingRequest(
             question_text=snapshot.current_question.text,
             expected_answer_points=expected_points,
@@ -85,7 +85,7 @@ class VoiceService:
             strictness=simulation.jury_profile.strictness,
             interruption_level=simulation.jury_profile.interruption_level.value,
         )
-        
+
         try:
             llm_result = await llm.route(llm_request)
             decision = llm_result.decision
@@ -95,21 +95,20 @@ class VoiceService:
             logger.error("LiveJuryRouter failed, falling back to NEXT_BANK: %s", str(e))
             action = JuryAction.NEXT_BANK.value
             decision = None
-            
+
         # 4. Commit Jury decision to DB
         if action == JuryAction.FOLLOW_UP.value and decision and decision.follow_up_question:
             turn, snapshot = self.session_service.add_follow_up_question(
                 self.user,
                 self.simulation_id,
                 text=decision.follow_up_question,
-                parent_question_id=snapshot.current_question.id
+                parent_question_id=snapshot.current_question.id,
             )
         else:
             turn, snapshot = self.session_service.proceed_to_next_bank_question(
-                self.user,
-                self.simulation_id
+                self.user, self.simulation_id
             )
-            
+
         # 5. TTS for the jury question
         tts_stream = None
         if turn and turn.content:
@@ -119,5 +118,5 @@ class VoiceService:
             except Exception as e:
                 logger.error("TTS Failed: %s", str(e))
                 # Continue without TTS (fallback to browser speech synthesis)
-        
+
         return transcribed_text, fallback_used, action, tts_stream, snapshot

@@ -100,9 +100,9 @@ class SimulationTurn(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     client_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     input_mode: Mapped[SimulationTurnInputMode] = mapped_column(
-        enum_type(SimulationTurnInputMode, "simulation_turn_input_mode"), 
-        default=SimulationTurnInputMode.TEXT, 
-        nullable=False
+        enum_type(SimulationTurnInputMode, "simulation_turn_input_mode"),
+        default=SimulationTurnInputMode.TEXT,
+        nullable=False,
     )
     parent_turn_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("simulation_turns.id", ondelete="CASCADE"), nullable=True

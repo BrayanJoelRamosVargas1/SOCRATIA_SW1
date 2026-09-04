@@ -85,9 +85,7 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["jury_profile_id"], ["jury_profiles.id"]),
-        sa.ForeignKeyConstraint(
-            ["question_bank_id"], ["question_banks.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["question_bank_id"], ["question_banks.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -111,9 +109,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint("position >= 0", name="simulation_question_position"),
-        sa.CheckConstraint(
-            "source IN ('BANK', 'FOLLOW_UP')", name="simulation_question_source"
-        ),
+        sa.CheckConstraint("source IN ('BANK', 'FOLLOW_UP')", name="simulation_question_source"),
         sa.CheckConstraint(
             "status IN ('PENDING', 'ASKED', 'ANSWERED', 'SKIPPED')",
             name="simulation_question_status",
@@ -123,13 +119,9 @@ def upgrade() -> None:
             name="simulation_question_origin",
         ),
         sa.ForeignKeyConstraint(["question_id"], ["questions.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(
-            ["simulation_id"], ["simulations.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["simulation_id"], ["simulations.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "simulation_id", "position", name="uq_simulation_questions_position"
-        ),
+        sa.UniqueConstraint("simulation_id", "position", name="uq_simulation_questions_position"),
     )
     op.create_index(
         op.f("ix_simulation_questions_simulation_id"),

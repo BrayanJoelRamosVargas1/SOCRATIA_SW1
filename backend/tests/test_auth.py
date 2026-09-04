@@ -366,20 +366,29 @@ def test_password_reset_changes_password_and_revokes_every_session(
     )
 
     assert reset.status_code == 200
-    assert client.get(
-        "/api/v1/users/me",
-        headers={"authorization": f"Bearer {old_access}"},
-    ).status_code == 401
+    assert (
+        client.get(
+            "/api/v1/users/me",
+            headers={"authorization": f"Bearer {old_access}"},
+        ).status_code
+        == 401
+    )
     client.cookies.set("socratia_refresh", old_refresh)
     assert client.post("/api/v1/auth/refresh").status_code == 401
-    assert client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": old_password},
-    ).status_code == 401
-    assert client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": new_password},
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": old_password},
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": new_password},
+        ).status_code
+        == 200
+    )
 
     stored = db_session.scalar(select(PasswordResetToken))
     user = db_session.scalar(select(User).where(User.email == email))
@@ -458,10 +467,13 @@ def test_password_recovery_unlocks_account_after_successful_reset(
     assert response.status_code == 200
     assert state.locked_until is None
     assert state.failed_attempts == 0
-    assert client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": "a newly unlocked defense phrase"},
-    ).status_code == 200
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "a newly unlocked defense phrase"},
+        ).status_code
+        == 200
+    )
 
 
 def test_forgot_password_rate_limit_keeps_generic_response(

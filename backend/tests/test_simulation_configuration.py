@@ -159,15 +159,18 @@ def test_calibration_persists_only_readiness_and_moves_to_ready(client: TestClie
     assert ready.json()["status"] == "READY"
     assert ready.json()["camera_ready"] is True
     assert "frame" not in ready.json() and "audio" not in ready.json()
-    assert client.put(
-        url,
-        json={
-            "camera_ready": True,
-            "microphone_ready": True,
-            "vision_ready": True,
-            "video": "never accepted",
-        },
-    ).status_code == 422
+    assert (
+        client.put(
+            url,
+            json={
+                "camera_ready": True,
+                "microphone_ready": True,
+                "vision_ready": True,
+                "video": "never accepted",
+            },
+        ).status_code
+        == 422
+    )
 
 
 def test_delete_only_draft_or_ready_and_state_machine_rejects_terminal_transition(

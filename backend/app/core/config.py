@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     app_name: str = "Socratia API"
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
-    database_url: str = "postgresql+psycopg://socratia:socratia_dev_password@localhost:5432/socratia"
+    database_url: str = (
+        "postgresql+psycopg://socratia:socratia_dev_password@localhost:5432/socratia"
+    )
 
     jwt_secret: str = "change-this-development-secret-before-production"
     jwt_algorithm: str = "HS256"
@@ -83,7 +85,7 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     groq_live_model: str | None = None
     groq_stt_model: str = "whisper-large-v3-turbo"
-    
+
     elevenlabs_api_key: SecretStr | None = None
     elevenlabs_voice_id: str | None = None
 

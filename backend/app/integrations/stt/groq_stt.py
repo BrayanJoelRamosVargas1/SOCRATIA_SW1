@@ -27,10 +27,10 @@ class GroqSTTProvider(STTProvider):
     async def transcribe(self, request: STTRequest) -> STTResult:
         if not self.api_key:
             raise STTProviderError("Groq STT is not configured", provider=self.name)
-            
+
         start_time = time.monotonic()
         last_error: STTProviderError | None = None
-        
+
         for attempt in range(self.max_attempts):
             try:
                 text = await self._request(request)
@@ -55,19 +55,17 @@ class GroqSTTProvider(STTProvider):
             extension = ".ogg"
         elif "wav" in request.mime_type:
             extension = ".wav"
-        
+
         filename = f"audio{extension}"
-        
+
         data = {
             "model": self.model,
             "response_format": "json",
         }
         if request.prompt:
             data["prompt"] = request.prompt
-            
-        files = {
-            "file": (filename, request.audio_bytes, request.mime_type)
-        }
+
+        files = {"file": (filename, request.audio_bytes, request.mime_type)}
 
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             try:
@@ -89,15 +87,17 @@ class GroqSTTProvider(STTProvider):
                 "Groq is temporarily unavailable", provider=self.name, retryable=True
             )
         if response.is_error:
-            raise STTProviderError(f"Groq rejected the request: {response.status_code}", provider=self.name)
-            
+            raise STTProviderError(
+                f"Groq rejected the request: {response.status_code}", provider=self.name
+            )
+
         try:
             body = response.json()
             text = body.get("text")
         except (ValueError, TypeError) as exc:
             raise STTProviderError("Groq returned an invalid response", provider=self.name) from exc
-            
+
         if not isinstance(text, str):
             raise STTProviderError("Groq returned an empty response", provider=self.name)
-            
+
         return text

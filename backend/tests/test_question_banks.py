@@ -137,12 +137,15 @@ def test_generation_filters_deduplicates_persists_and_hides_internal_points(
     assert len(payload["questions"]) == 12
     assert all("expected_answer_points" not in item for item in payload["questions"])
     assert all("source_chunk_ids" not in item for item in payload["questions"])
-    assert {category: sum(q["category"] == category for q in payload["questions"]) for category in (
-        "CONCEPTUAL",
-        "METHODOLOGICAL",
-        "TECHNICAL",
-        "CRITICAL",
-    )} == {
+    assert {
+        category: sum(q["category"] == category for q in payload["questions"])
+        for category in (
+            "CONCEPTUAL",
+            "METHODOLOGICAL",
+            "TECHNICAL",
+            "CRITICAL",
+        )
+    } == {
         "CONCEPTUAL": 3,
         "METHODOLOGICAL": 3,
         "TECHNICAL": 3,

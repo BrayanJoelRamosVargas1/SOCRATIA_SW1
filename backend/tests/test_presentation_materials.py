@@ -76,17 +76,18 @@ def failure(provider: str) -> QuestionGenerationProviderError:
 
 
 def test_presentation_requires_authentication(client: TestClient) -> None:
-    assert client.post(
-        "/api/v1/documents/missing/presentation/generate",
-        json={"duration_minutes": 15},
-    ).status_code == 401
+    assert (
+        client.post(
+            "/api/v1/documents/missing/presentation/generate",
+            json={"duration_minutes": 15},
+        ).status_code
+        == 401
+    )
     assert client.get("/api/v1/documents/missing/presentation").status_code == 401
 
 
 @pytest.mark.parametrize("duration", [0, 4, 31, 900])
-def test_presentation_rejects_duration_outside_mvp_range(
-    client: TestClient, duration: int
-) -> None:
+def test_presentation_rejects_duration_outside_mvp_range(client: TestClient, duration: int) -> None:
     register(client, f"duration-{duration}@example.com")
     response = client.post(
         "/api/v1/documents/missing/presentation/generate",
@@ -106,10 +107,13 @@ def test_presentation_requires_processed_owned_document(client: TestClient) -> N
 
     processed_id = processed(client, "presentation-owner@example.com")
     register(client, "presentation-intruder@example.com")
-    assert client.post(
-        f"/api/v1/documents/{processed_id}/presentation/generate",
-        json={"duration_minutes": 15},
-    ).status_code == 404
+    assert (
+        client.post(
+            f"/api/v1/documents/{processed_id}/presentation/generate",
+            json={"duration_minutes": 15},
+        ).status_code
+        == 404
+    )
     assert client.get(f"/api/v1/documents/{processed_id}/presentation").status_code == 404
 
 
@@ -218,10 +222,13 @@ def test_both_provider_failures_preserve_document_and_failed_state(
 
 def test_delete_document_cascades_presentation(client: TestClient, db_session: Session) -> None:
     document_id = processed(client, "presentation-delete@example.com")
-    assert client.post(
-        f"/api/v1/documents/{document_id}/presentation/generate",
-        json={"duration_minutes": 5},
-    ).status_code == 200
+    assert (
+        client.post(
+            f"/api/v1/documents/{document_id}/presentation/generate",
+            json={"duration_minutes": 5},
+        ).status_code
+        == 200
+    )
     assert client.delete(f"/api/v1/documents/{document_id}").status_code == 204
     assert db_session.scalar(select(func.count()).select_from(PresentationMaterial)) == 0
     assert db_session.scalar(select(func.count()).select_from(PresentationSlide)) == 0

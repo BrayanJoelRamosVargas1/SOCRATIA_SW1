@@ -9,9 +9,7 @@ from app.integrations.vector_db.pinecone import PineconeVectorStoreProvider
 def get_vector_store_provider() -> VectorStoreProvider:
     settings = get_settings()
     if settings.vector_primary_provider.lower() != "pinecone":
-        raise RuntimeError(
-            f"Unsupported vector store provider: {settings.vector_primary_provider}"
-        )
+        raise RuntimeError(f"Unsupported vector store provider: {settings.vector_primary_provider}")
     return PineconeVectorStoreProvider(
         api_key=(
             settings.pinecone_api_key.get_secret_value() if settings.pinecone_api_key else None

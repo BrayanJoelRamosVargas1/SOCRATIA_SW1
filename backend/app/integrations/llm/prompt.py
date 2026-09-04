@@ -9,7 +9,7 @@ Devuelve solamente el objeto JSON solicitado por el esquema, sin markdown ni pro
 
 def build_question_prompt(request: QuestionGenerationRequest) -> str:
     context = "\n\n".join(
-        f"<chunk id=\"{chunk.id}\">\n{chunk.text}\n</chunk>" for chunk in request.chunks
+        f'<chunk id="{chunk.id}">\n{chunk.text}\n</chunk>' for chunk in request.chunks
     )
     valid_ids = ", ".join(chunk.id for chunk in request.chunks)
     return f"""Genera el banco de preguntas para el documento {request.document_name!r}.

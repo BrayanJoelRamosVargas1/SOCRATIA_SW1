@@ -73,9 +73,7 @@ class QuestionBankRepository:
         reason: str,
         latency_ms: int | None,
     ) -> None:
-        bank.status = (
-            QuestionBankStatus.READY if had_ready_questions else QuestionBankStatus.FAILED
-        )
+        bank.status = QuestionBankStatus.READY if had_ready_questions else QuestionBankStatus.FAILED
         bank.failure_reason = reason[:300]
         bank.latency_ms = latency_ms
         self.db.flush()

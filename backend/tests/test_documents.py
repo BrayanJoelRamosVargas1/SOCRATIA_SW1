@@ -60,8 +60,7 @@ def valid_pdf(text: str = "Socratia academic document") -> bytes:
         result.extend(f"{offset:010d} 00000 n \n".encode())
     result.extend(
         (
-            f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
-            f"startxref\n{xref_offset}\n%%EOF"
+            f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF"
         ).encode()
     )
     return bytes(result)

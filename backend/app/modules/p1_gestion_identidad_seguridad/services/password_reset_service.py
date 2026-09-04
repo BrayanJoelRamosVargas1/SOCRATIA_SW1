@@ -81,11 +81,7 @@ class PasswordResetService:
     def reset_password(self, raw_token: str, password: str, context: ClientContext) -> None:
         now = datetime.now(UTC)
         token = self.tokens.get_by_hash_for_update(hash_password_reset_token(raw_token))
-        if (
-            token is None
-            or token.used_at is not None
-            or self._as_utc(token.expires_at) <= now
-        ):
+        if token is None or token.used_at is not None or self._as_utc(token.expires_at) <= now:
             raise InvalidPasswordResetTokenError
 
         user = self.users.get_by_id(token.user_id)

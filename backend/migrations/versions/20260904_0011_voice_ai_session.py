@@ -17,8 +17,13 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     # 1. New columns for simulation_questions
-    op.add_column("simulation_questions", sa.Column("parent_question_id", sa.String(length=36), nullable=True))
-    op.add_column("simulation_questions", sa.Column("follow_up_depth", sa.Integer(), server_default="0", nullable=False))
+    op.add_column(
+        "simulation_questions", sa.Column("parent_question_id", sa.String(length=36), nullable=True)
+    )
+    op.add_column(
+        "simulation_questions",
+        sa.Column("follow_up_depth", sa.Integer(), server_default="0", nullable=False),
+    )
     op.create_foreign_key(
         "fk_simulation_questions_parent_id",
         "simulation_questions",
@@ -29,8 +34,13 @@ def upgrade() -> None:
     )
 
     # 2. New columns for simulation_turns
-    op.add_column("simulation_turns", sa.Column("input_mode", sa.String(length=30), server_default="TEXT", nullable=False))
-    op.add_column("simulation_turns", sa.Column("parent_turn_id", sa.String(length=36), nullable=True))
+    op.add_column(
+        "simulation_turns",
+        sa.Column("input_mode", sa.String(length=30), server_default="TEXT", nullable=False),
+    )
+    op.add_column(
+        "simulation_turns", sa.Column("parent_turn_id", sa.String(length=36), nullable=True)
+    )
     op.create_foreign_key(
         "fk_simulation_turns_parent_id",
         "simulation_turns",
@@ -95,6 +105,8 @@ def downgrade() -> None:
     op.drop_column("simulation_turns", "input_mode")
 
     # 3. Drop columns from simulation_questions
-    op.drop_constraint("fk_simulation_questions_parent_id", "simulation_questions", type_="foreignkey")
+    op.drop_constraint(
+        "fk_simulation_questions_parent_id", "simulation_questions", type_="foreignkey"
+    )
     op.drop_column("simulation_questions", "follow_up_depth")
     op.drop_column("simulation_questions", "parent_question_id")

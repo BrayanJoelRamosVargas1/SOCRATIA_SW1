@@ -86,8 +86,7 @@ class DocumentProcessingService:
 
             current_event = self._advance(document, current_event, "EMBEDDING")
             embedding_documents = [
-                EmbeddingDocument(title=document.original_name, text=chunk.text)
-                for chunk in chunks
+                EmbeddingDocument(title=document.original_name, text=chunk.text) for chunk in chunks
             ]
             embeddings = self.embeddings.embed_documents(embedding_documents)
             if len(embeddings) != len(chunks):

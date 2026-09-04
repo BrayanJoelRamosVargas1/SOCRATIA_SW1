@@ -53,9 +53,10 @@ class LoginSecurityService:
 
     @staticmethod
     def is_locked(state: LoginSecurity, now: datetime) -> bool:
-        return state.locked_until is not None and LoginSecurityService._as_utc(
-            state.locked_until
-        ) > now
+        return (
+            state.locked_until is not None
+            and LoginSecurityService._as_utc(state.locked_until) > now
+        )
 
     def record_failure(
         self,

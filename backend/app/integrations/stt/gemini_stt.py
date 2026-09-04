@@ -28,10 +28,10 @@ class GeminiSTTProvider(STTProvider):
     async def transcribe(self, request: STTRequest) -> STTResult:
         if not self.api_key:
             raise STTProviderError("Gemini STT is not configured", provider=self.name)
-            
+
         start_time = time.monotonic()
         last_error: STTProviderError | None = None
-        
+
         for attempt in range(self.max_attempts):
             try:
                 text = await self._request(request)
@@ -50,7 +50,9 @@ class GeminiSTTProvider(STTProvider):
         raise last_error
 
     async def _request(self, request: STTRequest) -> str:
-        prompt_text = "Please provide a verbatim transcription of this audio, with no additional commentary."
+        prompt_text = (
+            "Please provide a verbatim transcription of this audio, with no additional commentary."
+        )
         if request.prompt:
             prompt_text += f"\nContext/Prompt: {request.prompt}"
 
@@ -96,16 +98,20 @@ class GeminiSTTProvider(STTProvider):
                 "Gemini is temporarily unavailable", provider=self.name, retryable=True
             )
         if response.is_error:
-            raise STTProviderError(f"Gemini rejected the request: {response.status_code}", provider=self.name)
-            
+            raise STTProviderError(
+                f"Gemini rejected the request: {response.status_code}", provider=self.name
+            )
+
         try:
             body = response.json()
             parts = body["candidates"][0]["content"]["parts"]
             text = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
         except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise STTProviderError("Gemini returned an invalid response", provider=self.name) from exc
-            
+            raise STTProviderError(
+                "Gemini returned an invalid response", provider=self.name
+            ) from exc
+
         if not text:
             raise STTProviderError("Gemini returned an empty response", provider=self.name)
-            
+
         return text.strip()

@@ -23,6 +23,7 @@ from app.integrations.llm.jury_base import (
     JuryRoutingRequest,
     JuryRoutingResult,
 )
+from app.integrations.llm.jury_router import JuryRoutingRouter
 from app.integrations.llm.presentation import (
     GeneratedPresentation,
     GeneratedSlide,
@@ -32,7 +33,6 @@ from app.integrations.llm.presentation import (
 )
 from app.integrations.llm.presentation_router import PresentationGenerationRouter
 from app.integrations.llm.router import QuestionGenerationRouter
-from app.integrations.llm.jury_router import JuryRoutingRouter
 
 __all__ = [
     "DocumentContextChunk",

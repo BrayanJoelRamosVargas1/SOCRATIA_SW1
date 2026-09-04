@@ -58,4 +58,3 @@ def downgrade() -> None:
         table_name="document_processing",
     )
     op.drop_table("document_processing")
-

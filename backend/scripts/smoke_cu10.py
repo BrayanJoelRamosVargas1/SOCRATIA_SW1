@@ -98,8 +98,7 @@ def assert_public_bank(bank: dict[str, object], expected_provider: str) -> None:
     if not isinstance(questions, list) or len(questions) != 12:
         raise AssertionError("CU10 did not return exactly 12 questions")
     categories = {
-        category: 0
-        for category in ("CONCEPTUAL", "METHODOLOGICAL", "TECHNICAL", "CRITICAL")
+        category: 0 for category in ("CONCEPTUAL", "METHODOLOGICAL", "TECHNICAL", "CRITICAL")
     }
     for question in questions:
         if not isinstance(question, dict):

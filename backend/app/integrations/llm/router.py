@@ -56,9 +56,7 @@ class QuestionGenerationRouter:
                 logger.warning("Primary question provider failed: %s", primary_failure_reason)
             except ValueError:
                 self.primary_circuit.record_failure()
-                primary_failure_reason = (
-                    f"{self.primary.name}:{LLMErrorKind.INVALID_OUTPUT.value}"
-                )
+                primary_failure_reason = f"{self.primary.name}:{LLMErrorKind.INVALID_OUTPUT.value}"
                 logger.warning("Primary question provider returned semantically invalid output")
         else:
             primary_failure_reason = f"{self.primary.name}:{LLMErrorKind.CIRCUIT_OPEN.value}"

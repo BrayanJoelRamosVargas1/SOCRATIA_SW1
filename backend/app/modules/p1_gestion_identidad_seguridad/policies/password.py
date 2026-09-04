@@ -49,9 +49,7 @@ def validate_new_password(password: str, *, email: str, full_name: str) -> str:
             f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres."
         )
     if len(password) > PASSWORD_MAX_LENGTH:
-        raise WeakPasswordError(
-            f"La contraseña no puede superar {PASSWORD_MAX_LENGTH} caracteres."
-        )
+        raise WeakPasswordError(f"La contraseña no puede superar {PASSWORD_MAX_LENGTH} caracteres.")
 
     comparable = password.casefold()
     if (

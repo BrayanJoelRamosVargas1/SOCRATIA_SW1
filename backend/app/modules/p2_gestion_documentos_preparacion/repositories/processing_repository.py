@@ -81,7 +81,9 @@ class ProcessingRepository:
         return list(self.db.scalars(statement))
 
     def count_chunks(self, document_id: str) -> int:
-        statement = select(func.count()).select_from(DocumentChunk).where(
-            DocumentChunk.document_id == document_id
+        statement = (
+            select(func.count())
+            .select_from(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
         )
         return int(self.db.scalar(statement) or 0)

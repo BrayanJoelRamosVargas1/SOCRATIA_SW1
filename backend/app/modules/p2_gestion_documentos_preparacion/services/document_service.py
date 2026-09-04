@@ -64,9 +64,7 @@ class DocumentService:
     def upload(self, user: User, file: UploadFile) -> Document:
         original_name, extension, file_type, size = self._validate(file)
         document_id = str(uuid.uuid4())
-        storage_key = (
-            f"users/{user.id}/documents/{document_id}/{document_id}{extension}"
-        )
+        storage_key = f"users/{user.id}/documents/{document_id}/{document_id}{extension}"
 
         try:
             persisted_size = self.storage.save(storage_key, file.file)

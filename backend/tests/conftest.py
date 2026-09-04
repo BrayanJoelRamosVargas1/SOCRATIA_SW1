@@ -21,12 +21,11 @@ from app.integrations.llm import (
     QuestionGenerationProviderError,
     QuestionGenerationRequest,
 )
-from app.integrations.llm.presentation import PresentationGenerationRequest
 from app.integrations.llm.dependencies import (
     get_presentation_generation_router,
     get_question_generation_router,
 )
-from app.integrations.llm.presentation import slide_count_range
+from app.integrations.llm.presentation import PresentationGenerationRequest, slide_count_range
 from app.integrations.llm.presentation_router import PresentationGenerationRouter
 from app.integrations.llm.router import QuestionGenerationRouter
 from app.integrations.storage.dependencies import get_storage_provider
@@ -177,9 +176,7 @@ class FakeQuestionGenerationProvider:
                     ),
                     category=category,
                     difficulty=(
-                        QuestionDifficulty.MEDIUM
-                        if position % 2 == 0
-                        else QuestionDifficulty.HARD
+                        QuestionDifficulty.MEDIUM if position % 2 == 0 else QuestionDifficulty.HARD
                     ),
                     source_chunk_ids=[source_id],
                     expected_answer_points=[
