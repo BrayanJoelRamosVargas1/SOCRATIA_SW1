@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     groq_live_model: str | None = None
     groq_stt_model: str = "whisper-large-v3-turbo"
+    
+    elevenlabs_api_key: SecretStr | None = None
+    elevenlabs_voice_id: str | None = None
 
     @field_validator("mail_from_email", mode="before")
     @classmethod
@@ -94,6 +97,8 @@ class Settings(BaseSettings):
         "pinecone_api_key",
         "groq_api_key",
         "groq_live_model",
+        "elevenlabs_api_key",
+        "elevenlabs_voice_id",
         mode="before",
     )
     @classmethod

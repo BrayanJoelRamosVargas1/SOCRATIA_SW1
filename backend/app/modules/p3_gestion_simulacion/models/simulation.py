@@ -40,6 +40,12 @@ class SimulationStatus(StrEnum):
     ERROR = "ERROR"
 
 
+class SimulationTurnState(StrEnum):
+    JURY_TURN = "JURY_TURN"
+    WAITING_STUDENT = "WAITING_STUDENT"
+    PROCESSING = "PROCESSING"
+
+
 class SimulationQuestionStatus(StrEnum):
     PENDING = "PENDING"
     ASKED = "ASKED"
@@ -105,6 +111,10 @@ class Simulation(Base):
             "planned_duration_minutes >= 5 AND planned_duration_minutes <= 30",
             name="simulation_duration",
         ),
+        CheckConstraint(
+            "turn_state IS NULL OR turn_state IN ('JURY_TURN', 'WAITING_STUDENT', 'PROCESSING')",
+            name="simulation_turn_state",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -124,6 +134,9 @@ class Simulation(Base):
         enum_type(SimulationStatus, "simulation_status"),
         default=SimulationStatus.DRAFT,
         nullable=False,
+    )
+    turn_state: Mapped[SimulationTurnState | None] = mapped_column(
+        enum_type(SimulationTurnState, "simulation_turn_state"), nullable=True
     )
     planned_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     camera_ready: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -145,6 +158,12 @@ class Simulation(Base):
         back_populates="simulation",
         cascade="all, delete-orphan",
         order_by="SimulationQuestion.position",
+        lazy="selectin",
+    )
+    turns: Mapped[list["SimulationTurn"]] = relationship(
+        back_populates="simulation",
+        cascade="all, delete-orphan",
+        order_by="SimulationTurn.sequence",
         lazy="selectin",
     )
 
@@ -176,6 +195,10 @@ class SimulationQuestion(Base):
     question_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("questions.id", ondelete="SET NULL")
     )
+    parent_question_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("simulation_questions.id", ondelete="CASCADE")
+    )
+    follow_up_depth: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     source: Mapped[SimulationQuestionSource] = mapped_column(
         enum_type(SimulationQuestionSource, "simulation_question_source"), nullable=False
@@ -192,6 +215,7 @@ class SimulationQuestion(Base):
 
     simulation: Mapped[Simulation] = relationship(back_populates="questions")
     question = relationship("Question", lazy="joined")
+    parent_question = relationship("SimulationQuestion", remote_side=[id], lazy="selectin")
 
 
 from app.modules.p2_gestion_documentos_preparacion.models.document import (  # noqa: E402,F401
@@ -200,4 +224,7 @@ from app.modules.p2_gestion_documentos_preparacion.models.document import (  # n
 from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (  # noqa: E402,F401
     Question,
     QuestionBank,
+)
+from app.modules.p3_gestion_simulacion.models.simulation_turn import (  # noqa: E402,F401
+    SimulationTurn,
 )

@@ -28,8 +28,9 @@ Sprint 1 está congelado en `v0.1.0-sprint1`. P2 está completo: CU06-CU11 cubre
 - Material de exposición ajustado a 5–30 minutos, con slides, guion, tiempos y fuentes internas.
 - Paquetes funcionales P1–P6 visibles en `backend/app/modules`.
 - P3-A: configuración de simulación, perfiles de jurado y calibración privada en navegador.
+- P3-B: sesión persistente, WebSocket autenticado, turnos idempotentes y sala de respuesta escrita.
 
-Voz, visión, simulación, evaluación y pagos quedan para los siguientes incrementos. Pinecone opera como base vectorial de CU09 y fuente de recuperación de CU10/CU11.
+Voz en tiempo real, análisis visual, evaluación y pagos quedan para los siguientes incrementos. Pinecone opera como base vectorial de CU09 y fuente de recuperación de CU10/CU11.
 
 ## Inicio rápido con Docker
 

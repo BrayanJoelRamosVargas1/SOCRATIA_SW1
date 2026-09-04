@@ -2,7 +2,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
-from app.modules.p2_gestion_documentos_preparacion.models.document import Document, DocumentStatus
+from app.modules.p2_gestion_documentos_preparacion.models.document import (
+    Document,
+    DocumentStatus,
+)
 from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (
     QuestionBank,
     QuestionBankStatus,
@@ -21,8 +24,12 @@ from app.modules.p3_gestion_simulacion.models import (
     SimulationQuestionStatus,
     SimulationStatus,
 )
-from app.modules.p3_gestion_simulacion.policies.simulation_policy import SimulationPolicy
-from app.modules.p3_gestion_simulacion.repositories.jury_repository import JuryRepository
+from app.modules.p3_gestion_simulacion.policies.simulation_policy import (
+    SimulationPolicy,
+)
+from app.modules.p3_gestion_simulacion.repositories.jury_repository import (
+    JuryRepository,
+)
 from app.modules.p3_gestion_simulacion.repositories.simulation_repository import (
     SimulationRepository,
 )
@@ -100,6 +107,7 @@ class SimulationService:
                 position=position,
                 source=SimulationQuestionSource.BANK,
                 status=SimulationQuestionStatus.PENDING,
+                prompt_text=question.question,
             )
             for position, question in enumerate(bank.questions)
         )

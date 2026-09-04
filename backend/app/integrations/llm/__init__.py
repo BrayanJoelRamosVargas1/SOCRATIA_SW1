@@ -14,16 +14,25 @@ from app.integrations.llm.base import (
     QuestionGenerationRequest,
     QuestionGenerationResult,
 )
+from app.integrations.llm.jury_base import (
+    JuryAction,
+    JuryRoutingDecision,
+    JuryRoutingFailed,
+    JuryRoutingProvider,
+    JuryRoutingProviderError,
+    JuryRoutingRequest,
+    JuryRoutingResult,
+)
 from app.integrations.llm.presentation import (
     GeneratedPresentation,
     GeneratedSlide,
     PresentationGenerationFailed,
     PresentationGenerationProviderError,
-    PresentationGenerationRequest,
     PresentationGenerationResult,
 )
 from app.integrations.llm.presentation_router import PresentationGenerationRouter
 from app.integrations.llm.router import QuestionGenerationRouter
+from app.integrations.llm.jury_router import JuryRoutingRouter
 
 __all__ = [
     "DocumentContextChunk",
@@ -31,10 +40,17 @@ __all__ = [
     "GeneratedQuestion",
     "GeneratedQuestionBank",
     "GeneratedSlide",
+    "JuryAction",
+    "JuryRoutingDecision",
+    "JuryRoutingFailed",
+    "JuryRoutingProvider",
+    "JuryRoutingProviderError",
+    "JuryRoutingRequest",
+    "JuryRoutingResult",
+    "JuryRoutingRouter",
     "LLMErrorKind",
     "PresentationGenerationFailed",
     "PresentationGenerationProviderError",
-    "PresentationGenerationRequest",
     "PresentationGenerationResult",
     "PresentationGenerationRouter",
     "QuestionCategory",

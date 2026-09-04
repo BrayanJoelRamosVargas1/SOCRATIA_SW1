@@ -16,12 +16,12 @@ from app.integrations.llm import (
     GeneratedQuestion,
     GeneratedQuestionBank,
     GeneratedSlide,
-    PresentationGenerationRequest,
     QuestionCategory,
     QuestionDifficulty,
     QuestionGenerationProviderError,
     QuestionGenerationRequest,
 )
+from app.integrations.llm.presentation import PresentationGenerationRequest
 from app.integrations.llm.dependencies import (
     get_presentation_generation_router,
     get_question_generation_router,

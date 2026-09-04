@@ -5,13 +5,17 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
+from app.modules.p3_gestion_simulacion.schemas.session import SessionSnapshot
 from app.modules.p3_gestion_simulacion.schemas.simulation import (
     CalibrationInput,
     JuryProfileResponse,
     SimulationCreateInput,
     SimulationResponse,
 )
-from app.modules.p3_gestion_simulacion.services.simulation_service import SimulationService
+from app.modules.p3_gestion_simulacion.services.session_service import SessionService
+from app.modules.p3_gestion_simulacion.services.simulation_service import (
+    SimulationService,
+)
 
 router = APIRouter()
 Database = Annotated[Session, Depends(get_db)]
@@ -53,6 +57,24 @@ def get_simulation(
 ) -> SimulationResponse:
     simulation = SimulationService(db).get_for(current_user, simulation_id)
     return SimulationResponse.model_validate(simulation)
+
+
+@router.post("/simulations/{simulation_id}/start", response_model=SessionSnapshot)
+def start_simulation(
+    simulation_id: str,
+    current_user: CurrentUser,
+    db: Database,
+) -> SessionSnapshot:
+    return SessionService(db).start(current_user, simulation_id)
+
+
+@router.get("/simulations/{simulation_id}/session", response_model=SessionSnapshot)
+def get_simulation_session(
+    simulation_id: str,
+    current_user: CurrentUser,
+    db: Database,
+) -> SessionSnapshot:
+    return SessionService(db).get_snapshot(current_user, simulation_id)
 
 
 @router.put("/simulations/{simulation_id}/calibration", response_model=SimulationResponse)

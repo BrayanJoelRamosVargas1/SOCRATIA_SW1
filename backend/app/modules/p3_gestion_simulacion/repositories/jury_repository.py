@@ -58,9 +58,7 @@ class JuryRepository:
 
     def list_active(self) -> list[JuryProfile]:
         statement = (
-            select(JuryProfile)
-            .where(JuryProfile.is_active.is_(True))
-            .order_by(JuryProfile.id)
+            select(JuryProfile).where(JuryProfile.is_active.is_(True)).order_by(JuryProfile.id)
         )
         return list(self.db.scalars(statement))
 

@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api";
-import type { JuryProfile, Simulation } from "@/types/simulation";
+import type { JuryProfile, SessionSnapshot, Simulation } from "@/types/simulation";
 
 export function listJuryProfiles(): Promise<JuryProfile[]> {
   return apiRequest<JuryProfile[]>("/jury-profiles");
@@ -36,4 +36,12 @@ export function saveCalibration(
 
 export function deleteSimulation(id: string): Promise<void> {
   return apiRequest<void>(`/simulations/${id}`, { method: "DELETE" });
+}
+
+export function startSimulation(id: string): Promise<SessionSnapshot> {
+  return apiRequest<SessionSnapshot>(`/simulations/${id}/start`, { method: "POST" });
+}
+
+export function getSimulationSession(id: string): Promise<SessionSnapshot> {
+  return apiRequest<SessionSnapshot>(`/simulations/${id}/session`);
 }

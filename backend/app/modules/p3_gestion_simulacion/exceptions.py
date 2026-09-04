@@ -40,3 +40,26 @@ class SimulationCannotBeDeletedError(DomainError):
             code="simulation_cannot_be_deleted",
             status_code=409,
         )
+
+
+class SimulationNotReadyError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "La simulación debe estar lista y conservar sus 12 preguntas.",
+            code="simulation_not_ready",
+            status_code=409,
+        )
+
+
+class SimulationNotActiveError(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "La sesión de simulación no está activa.",
+            code="simulation_not_active",
+            status_code=409,
+        )
+
+
+class InvalidTurnError(DomainError):
+    def __init__(self, message: str = "La respuesta no corresponde al turno actual.") -> None:
+        super().__init__(message, code="invalid_turn", status_code=409)

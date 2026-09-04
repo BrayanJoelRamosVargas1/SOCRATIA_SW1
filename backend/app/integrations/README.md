@@ -30,5 +30,5 @@ selección y fallback.
 
 La estrategia adoptada está en
 [`docs/provider-resilience.md`](../../../docs/provider-resilience.md). AWS permanece como
-infraestructura principal; esta capa resuelve dependencias externas, no el failover de RDS, ECS o
+infraestructura principal; esta capa resuelve dependencias externas, no el failover de RDS, ECS/Fargate o
 zonas de disponibilidad.

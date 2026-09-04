@@ -7,6 +7,9 @@ from app.integrations.llm.presentation_gemini import GeminiPresentationGeneratio
 from app.integrations.llm.presentation_groq import GroqPresentationGenerationProvider
 from app.integrations.llm.presentation_router import PresentationGenerationRouter
 from app.integrations.llm.router import QuestionGenerationRouter
+from app.integrations.llm.jury_gemini import GeminiJuryRoutingProvider
+from app.integrations.llm.jury_groq import GroqJuryRoutingProvider
+from app.integrations.llm.jury_router import JuryRoutingRouter
 
 
 @lru_cache
@@ -54,6 +57,29 @@ def get_presentation_generation_router() -> PresentationGenerationRouter:
         max_context_chars=settings.groq_question_max_context_chars,
     )
     return PresentationGenerationRouter(
+        primary=primary,
+        fallback=fallback,
+        failure_threshold=settings.question_circuit_breaker_threshold,
+        recovery_seconds=settings.question_circuit_breaker_recovery_seconds,
+    )
+
+
+@lru_cache
+def get_jury_routing_router() -> JuryRoutingRouter:
+    settings = get_settings()
+    primary = GroqJuryRoutingProvider(
+        api_key=settings.groq_api_key.get_secret_value() if settings.groq_api_key else None,
+        model=settings.groq_question_model,  # Reusing model config for now
+        timeout_seconds=settings.question_generation_timeout_seconds,
+        max_attempts=settings.question_generation_max_attempts,
+    )
+    fallback = GeminiJuryRoutingProvider(
+        api_key=settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None,
+        model=settings.gemini_question_model,  # Reusing model config for now
+        timeout_seconds=settings.question_generation_timeout_seconds,
+        max_attempts=settings.question_generation_max_attempts,
+    )
+    return JuryRoutingRouter(
         primary=primary,
         fallback=fallback,
         failure_threshold=settings.question_circuit_breaker_threshold,
