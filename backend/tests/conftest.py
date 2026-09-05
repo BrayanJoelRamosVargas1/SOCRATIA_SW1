@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from collections.abc import Iterable
 
 from app.core.database import Base, get_db
 from app.integrations.email.base import OutboundEmail
@@ -72,18 +73,32 @@ class FakeEmbeddingProvider:
         self.documents: list[EmbeddingDocument] = []
         self.queries: list[str] = []
         self.fail = False
+        self.primary_provider = self
+        self.secondary_provider = self
 
-    def embed_documents(self, documents: list[EmbeddingDocument]) -> list[list[float]]:
+    def get_space_id_for_primary(self) -> str:
+        return "FAKE_PRIMARY_SPACE"
+        
+    def get_space_id_for_fallback(self) -> str:
+        return "FAKE_FALLBACK_SPACE"
+
+    def embed_documents(self, documents: list[EmbeddingDocument]) -> Iterable[list[list[float]]]:
         if self.fail:
             raise EmbeddingError("simulated embedding failure")
         self.documents.extend(documents)
-        return [[float(index + 1), 0.5, 0.25] for index, _ in enumerate(documents)]
+        yield [[float(index + 1), 0.5, 0.25] for index, _ in enumerate(documents)]
+        
+    def embed_documents_with_fallback(self, documents: list[EmbeddingDocument], use_fallback: bool = False) -> Iterable[list[list[float]]]:
+        return self.embed_documents(documents)
 
     def embed_queries(self, queries: list[str]) -> list[list[float]]:
         if self.fail:
             raise EmbeddingError("simulated embedding failure")
         self.queries.extend(queries)
         return [[float(index + 1), 0.25, 0.5] for index, _ in enumerate(queries)]
+        
+    def embed_queries_for_document(self, document: object, texts: list[str]) -> list[list[float]]:
+        return self.embed_queries(texts)
 
 
 class FakeVectorStoreProvider:
@@ -94,13 +109,13 @@ class FakeVectorStoreProvider:
         self.fail_query = False
         self.query_calls: list[dict[str, object]] = []
 
-    def upsert(self, *, namespace: str, records: list[VectorRecord]) -> None:
+    def upsert(self, *, namespace: str, records: list[VectorRecord], index_name: str | None = None, dimensions: int | None = None) -> None:
         if self.fail_upsert:
             raise VectorStoreError("simulated vector failure")
         target = self.namespaces.setdefault(namespace, {})
         target.update({record.id: record for record in records})
 
-    def delete(self, *, namespace: str, ids: list[str]) -> None:
+    def delete(self, *, namespace: str, ids: list[str], index_name: str | None = None) -> None:
         if self.fail_delete:
             raise VectorStoreError("simulated vector failure")
         target = self.namespaces.setdefault(namespace, {})
@@ -114,6 +129,8 @@ class FakeVectorStoreProvider:
         vector: list[float],
         top_k: int,
         filters: VectorFilter,
+        index_name: str | None = None,
+        dimensions: int | None = None,
     ) -> list[VectorMatch]:
         if self.fail_query:
             raise VectorStoreError("simulated vector query failure")

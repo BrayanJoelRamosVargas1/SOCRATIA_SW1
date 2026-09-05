@@ -119,17 +119,33 @@ class DocumentService:
 
     def delete_for(self, user: User, document_id: str) -> None:
         document = DocumentPolicy.can_delete(user, self.documents.get_by_id(document_id))
-        if document.status == DocumentStatus.PROCESSING:
+        if document.status not in (
+            DocumentStatus.UPLOADED,
+            DocumentStatus.PROCESSED,
+            DocumentStatus.ERROR,
+        ):
             raise DocumentAlreadyProcessingError
-        vector_ids = self.processing.vector_ids(document.id)
-        if vector_ids:
+        chunk_indices = self.processing.get_chunk_indices(document.id)
+        if chunk_indices:
             if self.vectors is None:
                 raise DocumentProcessingUnavailableError
             try:
-                self.vectors.delete(
-                    namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
-                    ids=vector_ids,
-                )
+                if not document.embedding_profiles:
+                    job = self.processing.get_job(document.id)
+                    model = job.current_embedding_space if job and job.current_embedding_space else "fake-embedding"
+                    vector_ids = [f"{document.id}:{model}:{index}" for index in chunk_indices]
+                    self.vectors.delete(
+                        namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
+                        ids=vector_ids,
+                    )
+                else:
+                    for profile in document.embedding_profiles:
+                        vector_ids = [f"{document.id}:{profile.model}:{index}" for index in chunk_indices]
+                        self.vectors.delete(
+                            namespace=profile.vector_namespace,
+                            ids=vector_ids,
+                            index_name=profile.vector_index,
+                        )
             except VectorStoreError as exc:
                 raise DocumentProcessingUnavailableError from exc
         try:

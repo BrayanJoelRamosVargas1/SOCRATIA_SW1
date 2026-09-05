@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(default=20, ge=1, le=100)
     embedding_timeout_seconds: int = Field(default=60, ge=5, le=300)
 
+    cohere_api_key: SecretStr | None = None
+    cohere_embedding_model: str = "embed-v4.0"
+    cohere_embedding_dimensions: int = Field(default=1024, ge=128, le=3072)
+
     vector_primary_provider: str = "pinecone"
     pinecone_api_key: SecretStr | None = None
     pinecone_index_name: str = "socratia-documents"
@@ -101,6 +105,7 @@ class Settings(BaseSettings):
         "groq_live_model",
         "elevenlabs_api_key",
         "elevenlabs_voice_id",
+        "cohere_api_key",
         mode="before",
     )
     @classmethod

@@ -5,7 +5,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.integrations.embeddings import EmbeddingDocument, EmbeddingError, EmbeddingProvider
+from app.integrations.embeddings import (
+    EmbeddingCoordinator,
+    EmbeddingDocument,
+    EmbeddingError,
+    FallbackTriggered,
+)
 from app.integrations.storage import StorageError, StorageProvider
 from app.integrations.vector_db import (
     VectorRecord,
@@ -22,7 +27,10 @@ from app.modules.p2_gestion_documentos_preparacion.exceptions import (
 from app.modules.p2_gestion_documentos_preparacion.models.document import (
     Document,
     DocumentProcessing,
+    DocumentProcessingJob,
     DocumentStatus,
+    EmbeddingProfile,
+    ProfileStatus,
 )
 from app.modules.p2_gestion_documentos_preparacion.policies.document_policy import DocumentPolicy
 from app.modules.p2_gestion_documentos_preparacion.repositories.document_repository import (
@@ -49,7 +57,7 @@ class DocumentProcessingService:
         self,
         db: Session,
         storage: StorageProvider,
-        embeddings: EmbeddingProvider,
+        embeddings: EmbeddingCoordinator,
         vectors: VectorStoreProvider,
     ) -> None:
         self.db = db
@@ -70,73 +78,162 @@ class DocumentProcessingService:
             user,
             self.documents.get_by_id_for_update(document_id),
         )
-        if document.status == DocumentStatus.PROCESSING:
+        if document.status not in (
+            DocumentStatus.UPLOADED,
+            DocumentStatus.ERROR,
+            DocumentStatus.PROCESSED,
+        ):
             raise DocumentAlreadyProcessingError
 
-        old_vector_ids = self.processing.vector_ids(document.id)
-        current_event = self._start(document, "EXTRACTION")
+        job = self.processing.get_job(document.id)
+        if not job:
+            job = self.processing.create_job(document)
+            
+        if not job.current_embedding_space:
+            job.current_embedding_space = self.embeddings.get_space_id_for_primary()
+            self.db.commit()
+
+        current_event = self._start(document, "EXTRACTION", DocumentStatus.EXTRACTING)
         try:
-            content = self.storage.read(document.storage_key)
-            text = self.extractor.extract(file_type=document.file_type, content=content)
+            if job.chunks_total > 0:
+                # Resume from checkpoint
+                logger.info("Resuming processing for %s from chunk %s/%s", document.id, job.chunks_embedded, job.chunks_total)
+                chunks = self.processing.get_chunks(document.id)
+            else:
+                content = self.storage.read(document.storage_key)
+                text = self.extractor.extract(file_type=document.file_type, content=content)
 
-            current_event = self._advance(document, current_event, "CHUNKING")
-            chunks = self.chunker.split(text)
-            if not chunks or len(chunks) > self.settings.document_max_chunks:
-                raise TextExtractionError("Document chunk count is outside accepted limits")
-
-            current_event = self._advance(document, current_event, "EMBEDDING")
-            embedding_documents = [
-                EmbeddingDocument(title=document.original_name, text=chunk.text) for chunk in chunks
-            ]
-            embeddings = self.embeddings.embed_documents(embedding_documents)
-            if len(embeddings) != len(chunks):
-                raise EmbeddingError("Embedding count does not match chunk count")
-
-            current_event = self._advance(document, current_event, "VECTOR_STORE")
-            namespace = self._namespace(user.id)
-            records = [
-                VectorRecord(
-                    id=f"{document.id}:{chunk.index}",
-                    values=embedding,
-                    metadata={
-                        "user_id": user.id,
-                        "document_id": document.id,
-                        "document_name": document.original_name,
-                        "chunk_index": chunk.index,
-                        "text": chunk.text,
-                    },
+                current_event = self._advance(
+                    document, current_event, "CHUNKING", DocumentStatus.CHUNKING
                 )
-                for chunk, embedding in zip(chunks, embeddings, strict=True)
-            ]
-            self.vectors.upsert(namespace=namespace, records=records)
-            new_vector_ids = {record.id for record in records}
-            obsolete_vector_ids = [
-                vector_id for vector_id in old_vector_ids if vector_id not in new_vector_ids
-            ]
-            self.vectors.delete(namespace=namespace, ids=obsolete_vector_ids)
+                raw_chunks = self.chunker.split(text)
+                if not raw_chunks or len(raw_chunks) > self.settings.document_max_chunks:
+                    raise TextExtractionError("Document chunk count is outside accepted limits")
 
-            chunk_inputs = [
-                ChunkInput(
-                    index=chunk.index,
-                    text=chunk.text,
-                    start_char=chunk.start_char,
-                    end_char=chunk.end_char,
+                chunk_inputs = [
+                    ChunkInput(
+                        index=chunk.index,
+                        text=chunk.text,
+                        start_char=chunk.start_char,
+                        end_char=chunk.end_char,
+                    )
+                    for chunk in raw_chunks
+                ]
+                chunks = self.processing.replace_chunks(
+                    document=document,
+                    chunks=chunk_inputs,
                 )
-                for chunk in chunks
-            ]
-            self.processing.replace_chunks(
-                document=document,
-                chunks=chunk_inputs,
-                model=self.embeddings.model,
-                dimensions=self.embeddings.dimensions,
+                
+                job.chunks_total = len(chunks)
+                job.chunks_embedded = 0
+                self.db.commit()
+
+            current_event = self._advance(
+                document, current_event, "EMBEDDING", DocumentStatus.EMBEDDING
             )
-            self._finish(document, current_event)
+
+            # --- EMBEDDING LOOP WITH FALLBACK ---
+            while True:
+                # Ensure staging profile exists for current space
+                use_fallback = (job.current_embedding_space == self.embeddings.get_space_id_for_fallback())
+                active_provider = self.embeddings.secondary_provider if use_fallback else self.embeddings.primary_provider
+                
+                profile = next((p for p in document.embedding_profiles if p.embedding_space_id == job.current_embedding_space), None)
+                if not profile:
+                    profile = EmbeddingProfile(
+                        document_id=document.id,
+                        status=ProfileStatus.STAGING,
+                        embedding_space_id=job.current_embedding_space,
+                        provider="cohere" if use_fallback else "gemini",
+                        model=active_provider.model,
+                        dimension=active_provider.dimensions,
+                        vector_index=self.settings.pinecone_index_name if not use_fallback else "socratia-d1024-cosine", # Cohere needs 1024 index
+                        vector_namespace="", # Will be set once we have profile ID
+                    )
+                    self.db.add(profile)
+                    self.db.flush()
+                    profile.vector_namespace = f"d-{document.id}-p-{profile.id}"
+                    document.embedding_profiles.append(profile)
+                    self.db.commit()
+
+                # Skip already embedded chunks
+                chunks_to_embed = chunks[job.chunks_embedded:]
+                embedding_documents = [
+                    EmbeddingDocument(title=document.original_name, text=chunk.content) for chunk in chunks_to_embed
+                ]
+                
+                namespace = profile.vector_namespace
+                batch_offset = 0
+                advanced_to_indexing = False
+                
+                try:
+                    for batch_embeddings in self.embeddings.embed_documents_with_fallback(embedding_documents, use_fallback=use_fallback):
+                        if not advanced_to_indexing:
+                            current_event = self._advance(
+                                document, current_event, "VECTOR_STORE", DocumentStatus.INDEXING
+                            )
+                            advanced_to_indexing = True
+                            
+                        batch_chunks = chunks_to_embed[batch_offset : batch_offset + len(batch_embeddings)]
+                        
+                        records = [
+                            VectorRecord(
+                                id=f"{document.id}:{active_provider.model}:{chunk.chunk_index}",
+                                values=embedding,
+                                metadata={
+                                    "user_id": user.id,
+                                    "document_id": document.id,
+                                    "document_name": document.original_name,
+                                    "chunk_index": chunk.chunk_index,
+                                    "text": chunk.content,
+                                },
+                            )
+                            for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True)
+                        ]
+                        
+                        # Use correct index name based on dimensions
+                        self.vectors.upsert(namespace=namespace, records=records, index_name=profile.vector_index)
+                        
+                        batch_offset += len(batch_embeddings)
+                        job.chunks_embedded = job.chunks_embedded + len(batch_embeddings)
+                        self.db.commit()
+                        
+                    # Successfully embedded all chunks! Break the fallback loop
+                    
+                    # Atomic promotion
+                    profile.status = ProfileStatus.READY
+                    profile.completed_at = datetime.now(UTC)
+                    document.active_embedding_profile_id = profile.id
+                    
+                    # Retire old active profiles if any
+                    for p in document.embedding_profiles:
+                        if p.id != profile.id and p.status in (ProfileStatus.READY, ProfileStatus.ACTIVE):
+                            p.status = ProfileStatus.RETIRED
+                    
+                    self.db.commit()
+                    break
+
+                except FallbackTriggered:
+                    logger.warning("Fallback triggered! Creating Cohere profile and resetting chunks_embedded to 0.")
+                    
+                    # Mark current profile as failed
+                    profile.status = ProfileStatus.FAILED
+                    
+                    # Update job to use fallback space
+                    job.current_embedding_space = self.embeddings.get_space_id_for_fallback()
+                    job.chunks_embedded = 0
+                    job.attempt += 1
+                    self.db.commit()
+                    
+                    # Loop restarts, will create Cohere profile and embed from 0.
+
+            self._finish(document, current_event, job)
             return DocumentProcessingResponse(
                 document_id=document.id,
                 status=document.status,
                 chunk_count=len(chunks),
-                embedding_model=self.embeddings.model,
-                embedding_dimensions=self.embeddings.dimensions,
+                embedding_model=active_provider.model,
+                embedding_dimensions=active_provider.dimensions,
             )
         except TextExtractionError:
             self._fail(document.id, current_event.id, "Document text could not be extracted")
@@ -153,11 +250,11 @@ class DocumentProcessingService:
             self._fail(document.id, current_event.id, "Processing persistence failed")
             raise DocumentProcessingUnavailableError from None
 
-    def _start(self, document: Document, stage: str) -> DocumentProcessing:
-        document.status = DocumentStatus.PROCESSING
+    def _start(self, document: Document, stage: str, status: DocumentStatus) -> DocumentProcessing:
+        document.status = status
         event = self.processing.add_event(
             document=document,
-            status=DocumentStatus.PROCESSING,
+            status=status,
             stage=stage,
             started_at=datetime.now(UTC),
         )
@@ -169,21 +266,26 @@ class DocumentProcessingService:
         document: Document,
         event: DocumentProcessing,
         next_stage: str,
+        status: DocumentStatus,
     ) -> DocumentProcessing:
         event.finished_at = datetime.now(UTC)
+        document.status = status
         next_event = self.processing.add_event(
             document=document,
-            status=DocumentStatus.PROCESSING,
+            status=status,
             stage=next_stage,
             started_at=datetime.now(UTC),
         )
         self.db.commit()
         return next_event
 
-    def _finish(self, document: Document, event: DocumentProcessing) -> None:
+    def _finish(
+        self, document: Document, event: DocumentProcessing, job: DocumentProcessingJob
+    ) -> None:
         now = datetime.now(UTC)
         event.finished_at = now
         document.status = DocumentStatus.PROCESSED
+        job.status = DocumentStatus.PROCESSED
         self.processing.add_event(
             document=document,
             status=DocumentStatus.PROCESSED,
@@ -197,11 +299,15 @@ class DocumentProcessingService:
         self.db.rollback()
         document = self.documents.get_by_id(document_id)
         event = self.db.get(DocumentProcessing, event_id)
+        job = self.processing.get_job(document_id)
         if document is None or event is None:
             logger.error("Could not persist processing failure for document %s", document_id)
             return
         now = datetime.now(UTC)
         document.status = DocumentStatus.ERROR
+        if job:
+            job.status = DocumentStatus.ERROR
+            job.error_message = message
         event.status = DocumentStatus.ERROR
         event.finished_at = now
         event.error_message = message

@@ -34,14 +34,18 @@ class PineconeVectorStoreProvider:
         self.cloud = cloud
         self.region = region
         self.timeout_seconds = timeout_seconds
-        self._host: str | None = None
+        self._hosts: dict[str, str] = {}
 
-    def upsert(self, *, namespace: str, records: list[VectorRecord]) -> None:
+    def upsert(self, *, namespace: str, records: list[VectorRecord], index_name: str | None = None, dimensions: int | None = None) -> None:
         if not records:
             return
-        if any(len(record.values) != self.dimensions for record in records):
-            raise VectorStoreError("Vector dimensions do not match the Pinecone index")
-        host = self._ensure_index()
+            
+        target_index = index_name or self.index_name
+        target_dims = dimensions or self.dimensions
+        
+        if any(len(record.values) != target_dims for record in records):
+            raise VectorStoreError(f"Vector dimensions do not match the Pinecone index ({target_dims})")
+        host = self._ensure_index(target_index, target_dims)
         with self._client() as client:
             for batch in self._batches(records, 100):
                 payload = {
@@ -57,10 +61,11 @@ class PineconeVectorStoreProvider:
                 }
                 self._request(client, "POST", f"https://{host}/vectors/upsert", json=payload)
 
-    def delete(self, *, namespace: str, ids: list[str]) -> None:
+    def delete(self, *, namespace: str, ids: list[str], index_name: str | None = None) -> None:
         if not ids:
             return
-        host = self._ensure_index()
+        target_index = index_name or self.index_name
+        host = self._ensure_index(target_index, self.dimensions) # We don't care about dimensions for delete
         with self._client() as client:
             for batch in self._batches(ids, 1000):
                 self._request(
@@ -77,12 +82,17 @@ class PineconeVectorStoreProvider:
         vector: list[float],
         top_k: int,
         filters: VectorFilter,
+        index_name: str | None = None,
+        dimensions: int | None = None,
     ) -> list[VectorMatch]:
-        if len(vector) != self.dimensions:
-            raise VectorStoreError("Query dimensions do not match the Pinecone index")
+        target_index = index_name or self.index_name
+        target_dims = dimensions or self.dimensions
+        
+        if len(vector) != target_dims:
+            raise VectorStoreError(f"Query dimensions do not match the Pinecone index ({target_dims})")
         if not filters:
             raise VectorStoreError("Pinecone queries require metadata filters")
-        host = self._ensure_index()
+        host = self._ensure_index(target_index, target_dims)
         with self._client() as client:
             response = self._request(
                 client,
@@ -122,9 +132,9 @@ class PineconeVectorStoreProvider:
             )
         return matches
 
-    def _ensure_index(self) -> str:
-        if self._host:
-            return self._host
+    def _ensure_index(self, index_name: str, dimensions: int) -> str:
+        if index_name in self._hosts:
+            return self._hosts[index_name]
         if not self.api_key:
             raise VectorStoreError("Pinecone is not configured")
 
@@ -132,7 +142,7 @@ class PineconeVectorStoreProvider:
             response = self._request(
                 client,
                 "GET",
-                f"{PINECONE_CONTROL_URL}/indexes/{self.index_name}",
+                f"{PINECONE_CONTROL_URL}/indexes/{index_name}",
                 allowed_status_codes={404},
             )
             if response.status_code == 404:
@@ -141,9 +151,9 @@ class PineconeVectorStoreProvider:
                     "POST",
                     f"{PINECONE_CONTROL_URL}/indexes",
                     json={
-                        "name": self.index_name,
+                        "name": index_name,
                         "vector_type": "dense",
-                        "dimension": self.dimensions,
+                        "dimension": dimensions,
                         "metric": "cosine",
                         "spec": {"serverless": {"cloud": self.cloud, "region": self.region}},
                         "deletion_protection": "disabled",
@@ -152,7 +162,7 @@ class PineconeVectorStoreProvider:
                 )
 
             description = self._json_object(response)
-            self._validate_index(description)
+            self._validate_index(description, dimensions)
             deadline = time.monotonic() + self.timeout_seconds
             while not self._is_ready(description):
                 if time.monotonic() >= deadline:
@@ -161,22 +171,22 @@ class PineconeVectorStoreProvider:
                 response = self._request(
                     client,
                     "GET",
-                    f"{PINECONE_CONTROL_URL}/indexes/{self.index_name}",
+                    f"{PINECONE_CONTROL_URL}/indexes/{index_name}",
                 )
                 description = self._json_object(response)
 
         host = description.get("host")
         if not isinstance(host, str) or not host:
             raise VectorStoreError("Pinecone did not return an index host")
-        self._host = host
+        self._hosts[index_name] = host
         return host
 
-    def _validate_index(self, description: dict[str, object]) -> None:
+    def _validate_index(self, description: dict[str, object], dimensions: int) -> None:
         dimension = description.get("dimension")
         metric = description.get("metric")
-        if dimension != self.dimensions or metric != "cosine":
+        if dimension != dimensions or metric != "cosine":
             raise VectorStoreError(
-                "Existing Pinecone index does not match configured dimensions and metric"
+                f"Existing Pinecone index does not match configured dimensions ({dimensions}) and metric"
             )
 
     @staticmethod

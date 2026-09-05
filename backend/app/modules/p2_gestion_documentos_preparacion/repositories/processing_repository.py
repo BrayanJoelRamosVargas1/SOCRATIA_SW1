@@ -8,6 +8,7 @@ from app.modules.p2_gestion_documentos_preparacion.models.document import (
     Document,
     DocumentChunk,
     DocumentProcessing,
+    DocumentProcessingJob,
     DocumentStatus,
 )
 
@@ -46,13 +47,27 @@ class ProcessingRepository:
         self.db.flush()
         return event
 
+    def get_job(self, document_id: str) -> DocumentProcessingJob | None:
+        statement = select(DocumentProcessingJob).where(
+            DocumentProcessingJob.document_id == document_id
+        )
+        return self.db.scalar(statement)
+
+    def create_job(self, document: Document) -> DocumentProcessingJob:
+        job = DocumentProcessingJob(document=document, status=DocumentStatus.QUEUED)
+        self.db.add(job)
+        self.db.flush()
+        return job
+
+    def update_job_status(self, job: DocumentProcessingJob, status: DocumentStatus) -> None:
+        job.status = status
+        self.db.flush()
+
     def replace_chunks(
         self,
         *,
         document: Document,
         chunks: list[ChunkInput],
-        model: str,
-        dimensions: int,
     ) -> list[DocumentChunk]:
         self.db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
         persisted: list[DocumentChunk] = []
@@ -63,20 +78,21 @@ class ProcessingRepository:
                 content=chunk.text,
                 start_char=chunk.start_char,
                 end_char=chunk.end_char,
-                vector_id=f"{document.id}:{chunk.index}",
-                embedding_model=model,
-                embedding_dimensions=dimensions,
             )
             self.db.add(persisted_chunk)
             persisted.append(persisted_chunk)
         self.db.flush()
         return persisted
 
-    def vector_ids(self, document_id: str) -> list[str]:
-        statement = (
-            select(DocumentChunk.vector_id)
-            .where(DocumentChunk.document_id == document_id)
-            .order_by(DocumentChunk.chunk_index)
+    def get_chunks(self, document_id: str) -> list[DocumentChunk]:
+        statement = select(DocumentChunk).where(
+            DocumentChunk.document_id == document_id
+        ).order_by(DocumentChunk.chunk_index)
+        return list(self.db.scalars(statement))
+
+    def get_chunk_indices(self, document_id: str) -> list[int]:
+        statement = select(DocumentChunk.chunk_index).where(
+            DocumentChunk.document_id == document_id
         )
         return list(self.db.scalars(statement))
 

@@ -99,7 +99,7 @@ class PresentationMaterialService:
         try:
             chunks = self.retrieval.retrieve(
                 user_id=user.id,
-                document_id=document.id,
+                document=document,
                 intents=PRESENTATION_RETRIEVAL_INTENTS,
             )
             result = self.generation_router.generate(

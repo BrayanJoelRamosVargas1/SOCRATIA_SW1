@@ -71,7 +71,7 @@ class QuestionBankService:
             raise QuestionGenerationFailedError from None
 
         try:
-            chunks = self.retrieval.retrieve(user_id=user.id, document_id=document.id)
+            chunks = self.retrieval.retrieve(user_id=user.id, document=document)
             result = self.generation_router.generate(
                 QuestionGenerationRequest(
                     document_name=document.original_name,

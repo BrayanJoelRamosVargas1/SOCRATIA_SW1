@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -21,7 +22,7 @@ class EmbeddingProvider(Protocol):
     def dimensions(self) -> int:
         """Return the number of values in each generated vector."""
 
-    def embed_documents(self, documents: list[EmbeddingDocument]) -> list[list[float]]:
+    def embed_documents(self, documents: list[EmbeddingDocument]) -> Iterable[list[list[float]]]:
         """Generate one retrieval embedding per document, preserving input order."""
 
     def embed_queries(self, queries: list[str]) -> list[list[float]]:

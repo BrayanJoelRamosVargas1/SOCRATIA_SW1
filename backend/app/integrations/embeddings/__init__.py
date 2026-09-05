@@ -5,6 +5,8 @@ from app.integrations.embeddings.base import (
     EmbeddingError,
     EmbeddingProvider,
 )
+from app.integrations.embeddings.cohere import CohereEmbeddingProvider
+from app.integrations.embeddings.coordinator import EmbeddingCoordinator, FallbackTriggered
 from app.integrations.embeddings.gemini import GeminiEmbeddingProvider
 
 __all__ = [
@@ -12,4 +14,7 @@ __all__ = [
     "EmbeddingError",
     "EmbeddingProvider",
     "GeminiEmbeddingProvider",
+    "CohereEmbeddingProvider",
+    "EmbeddingCoordinator",
+    "FallbackTriggered",
 ]

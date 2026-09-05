@@ -1,8 +1,9 @@
 from collections.abc import Sequence
 
-from app.integrations.embeddings import EmbeddingError, EmbeddingProvider
+from app.integrations.embeddings import EmbeddingError, EmbeddingCoordinator
 from app.integrations.llm.base import DocumentContextChunk
 from app.integrations.vector_db import VectorStoreProvider
+from app.modules.p2_gestion_documentos_preparacion.models.document import Document
 
 
 class DocumentContextUnavailableError(Exception):
@@ -13,7 +14,7 @@ class DocumentRetrievalService:
     def __init__(
         self,
         *,
-        embeddings: EmbeddingProvider,
+        embeddings: EmbeddingCoordinator,
         vectors: VectorStoreProvider,
         namespace_prefix: str,
         top_k: int,
@@ -29,18 +30,29 @@ class DocumentRetrievalService:
         self,
         *,
         user_id: str,
-        document_id: str,
+        document: Document,
         intents: Sequence[str],
     ) -> tuple[DocumentContextChunk, ...]:
-        query_vectors = self.embeddings.embed_queries(list(intents))
+        query_vectors = self.embeddings.embed_queries_for_document(document, list(intents))
         if len(query_vectors) != len(intents):
             raise EmbeddingError("Embedding count does not match retrieval intent count")
-
-        namespace = f"{self.namespace_prefix}-{user_id}"
+            
+        active_profile = next(
+            (p for p in document.embedding_profiles if p.id == document.active_embedding_profile_id), None
+        )
+        if not active_profile:
+            # Fallback for old tests/mock data without profiles
+            namespace = f"{self.namespace_prefix}-{user_id}"
+            index_name = None
+            dimension = None
+        else:
+            namespace = active_profile.vector_namespace
+            index_name = active_profile.vector_index
+            dimension = active_profile.dimension
         filters = {
             "$and": [
                 {"user_id": {"$eq": user_id}},
-                {"document_id": {"$eq": document_id}},
+                {"document_id": {"$eq": document.id}},
             ]
         }
         deduplicated: dict[str, DocumentContextChunk] = {}
@@ -50,10 +62,12 @@ class DocumentRetrievalService:
                 vector=query_vector,
                 top_k=self.top_k,
                 filters=filters,
+                index_name=index_name,
+                dimensions=dimension,
             )
             for match in matches:
                 metadata = match.metadata
-                if metadata.get("user_id") != user_id or metadata.get("document_id") != document_id:
+                if metadata.get("user_id") != user_id or metadata.get("document_id") != document.id:
                     continue
                 text = metadata.get("text")
                 if not isinstance(text, str) or not text.strip():
