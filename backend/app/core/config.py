@@ -85,9 +85,13 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     groq_live_model: str | None = None
     groq_stt_model: str = "whisper-large-v3-turbo"
+    gemini_stt_model: str = "gemini-3.5-transcribe"
 
     elevenlabs_api_key: SecretStr | None = None
     elevenlabs_voice_id: str | None = None
+
+    voice_max_utterance_bytes: int = Field(default=5242880, ge=1024, le=52428800)
+    voice_max_utterance_seconds: int = Field(default=180, ge=10, le=600)
 
     @field_validator("mail_from_email", mode="before")
     @classmethod

@@ -1,10 +1,17 @@
+import base64
+import json
+import logging
+import time
 from collections.abc import AsyncIterator
 
-import httpx
+import websockets
+from websockets.exceptions import WebSocketException
 
 from app.integrations.tts.base import TTSProvider, TTSProviderError, TTSRequest
 
-ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+logger = logging.getLogger(__name__)
+
+ELEVENLABS_WS_URL = "wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id=eleven_flash_v2_5"
 
 
 class ElevenLabsTTSProvider(TTSProvider):
@@ -29,51 +36,55 @@ class ElevenLabsTTSProvider(TTSProvider):
         if not voice_id:
             raise TTSProviderError("ElevenLabs voice ID is not configured", provider=self.name)
 
-        url = ELEVENLABS_TTS_URL.format(voice_id=voice_id)
+        url = ELEVENLABS_WS_URL.format(voice_id=voice_id)
 
-        headers = {
-            "Accept": "audio/mpeg",
-            "Content-Type": "application/json",
-            "xi-api-key": self.api_key,
-        }
+        try:
+            # We use a context manager for the websocket connection
+            async with websockets.connect(url, ping_interval=None) as ws:
+                # 1. Send initialization with API key and settings
+                init_msg = {
+                    "text": " ",
+                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                    "xi_api_key": self.api_key,
+                }
+                await ws.send(json.dumps(init_msg))
 
-        payload = {
-            "text": request.text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-            },
-        }
+                # 2. Send the full text
+                text_msg = {
+                    "text": request.text,
+                    "try_trigger_generation": True,
+                }
+                await ws.send(json.dumps(text_msg))
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            try:
-                async with client.stream("POST", url, headers=headers, json=payload) as response:
-                    if response.status_code in {401, 403}:
-                        raise TTSProviderError(
-                            "ElevenLabs authentication failed", provider=self.name
-                        )
-                    if response.status_code == 429:
-                        raise TTSProviderError(
-                            "ElevenLabs rate limit exceeded", provider=self.name, retryable=True
-                        )
-                    if response.is_error:
-                        try:
-                            # Attempt to read error detail if small enough
-                            await response.aread()
-                            detail = response.json()
-                        except (ValueError, httpx.StreamError):
-                            detail = response.text
-                        raise TTSProviderError(
-                            f"ElevenLabs rejected the request: {response.status_code} {detail}",
-                            provider=self.name,
-                        )
+                # 3. Close the input stream
+                eos_msg = {"text": ""}
+                await ws.send(json.dumps(eos_msg))
 
-                    async for chunk in response.aiter_bytes():
-                        if chunk:
-                            yield chunk
+                first_chunk = True
+                start_time = time.monotonic()
 
-            except httpx.HTTPError as exc:
-                raise TTSProviderError(
-                    "ElevenLabs could not be reached", provider=self.name, retryable=True
-                ) from exc
+                # 4. Receive audio chunks
+                while True:
+                    try:
+                        response = await ws.recv()
+                        data = json.loads(response)
+
+                        if data.get("audio"):
+                            if first_chunk:
+                                ttfa = int((time.monotonic() - start_time) * 1000)
+                                logger.info("TTS_TTFA provider=%s ms=%d", self.name, ttfa)
+                                first_chunk = False
+                            
+                            chunk = base64.b64decode(data["audio"])
+                            if chunk:
+                                yield chunk
+                        
+                        if data.get("isFinal"):
+                            break
+                    except websockets.exceptions.ConnectionClosed:
+                        break
+
+        except WebSocketException as exc:
+            raise TTSProviderError(f"ElevenLabs WebSocket error: {str(exc)}", provider=self.name) from exc
+        except Exception as exc:
+            raise TTSProviderError(f"ElevenLabs unexpected error: {str(exc)}", provider=self.name) from exc

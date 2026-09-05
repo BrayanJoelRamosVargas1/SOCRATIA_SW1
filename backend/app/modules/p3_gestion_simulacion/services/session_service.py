@@ -235,6 +235,9 @@ class SessionService:
         if not parent:
             raise InvalidTurnError
 
+        if parent.follow_up_depth >= 2:
+            raise InvalidTurnError("Se ha alcanzado el límite máximo de preguntas de seguimiento.")
+
         now = datetime.now(UTC)
         new_q = SimulationQuestion(
             simulation_id=simulation.id,

@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -54,6 +55,8 @@ class VoiceUtterance(Base):
     stt_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     stt_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     stt_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stt_fallback_used: Mapped[bool] = mapped_column(default=False, server_default="false", nullable=False)
+    raw_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

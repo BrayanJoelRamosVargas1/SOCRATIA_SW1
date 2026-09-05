@@ -31,7 +31,7 @@ def get_stt_router() -> STTRouter:
     )
     fallback = GeminiSTTProvider(
         api_key=settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None,
-        model="gemini-1.5-flash",  # Audio support model
+        model=settings.gemini_stt_model,
         timeout_seconds=30,
         max_attempts=2,
     )

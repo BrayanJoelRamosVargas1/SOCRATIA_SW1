@@ -12,8 +12,9 @@ type ConnectionState = "connecting" | "connected" | "reconnecting" | "offline";
 type PendingAnswer = { type: "answer.submit"; message_id: string; payload: { question_id: string; content: string } };
 type VoiceStartMessage = { type: "voice.utterance.start"; message_id: string; payload: { mime_type: string } };
 type VoiceEndMessage = { type: "voice.utterance.end"; message_id: string };
-type ServerEvent = { type: string; payload?: SessionSnapshot | { message_id?: string }; code?: string; message?: string; text?: string };
+type ServerEvent = { type: string; payload?: SessionSnapshot | { message_id?: string; text?: string; provider?: string }; code?: string; message?: string; text?: string };
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 10000];
+const VAD_SILENCE_TIMEOUT_MS = 1800;
 
 function elapsedLabel(startedAt: string, now: number) {
   const seconds = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
@@ -38,6 +39,7 @@ export function SimulationLivePage() {
   
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceMessageIdRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -76,6 +78,22 @@ export function SimulationLivePage() {
         pendingRef.current = null;
         setSending(false);
         setError(event.message ?? `Error de sesión: ${event.code ?? "desconocido"}`);
+      } else if (event.type === "stt.degraded") {
+        pendingRef.current = null;
+        setSending(false);
+        setError("⚠️ El reconocimiento de voz no está disponible en este momento. Por favor, usa el modo texto.");
+        stopRecording();
+      } else if (event.type === "tts.fallback") {
+        const payload = event.payload as { text?: string };
+        const textToSpeak = payload?.text;
+        if (textToSpeak) {
+           window.speechSynthesis.cancel();
+           const utterance = new SpeechSynthesisUtterance(textToSpeak);
+           utterance.lang = "es-ES"; // es-419
+           window.speechSynthesis.speak(utterance);
+        }
+      } else if (event.type === "tts.started") {
+        window.speechSynthesis.cancel();
       } else if (event.type === "jury.speaking") {
         setServerState("jury.speaking");
         ttsChunksRef.current = [];
@@ -86,14 +104,6 @@ export function SimulationLivePage() {
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
           audio.play().catch(console.error);
-        } else {
-          // Fallback to speechSynthesis if no audio bytes were received
-          const textToSpeak = snapshot?.current_question?.text;
-          if (textToSpeak) {
-             const utterance = new SpeechSynthesisUtterance(textToSpeak);
-             utterance.lang = "es-ES";
-             window.speechSynthesis.speak(utterance);
-          }
         }
       } else {
         setServerState(event.type);
@@ -101,6 +111,20 @@ export function SimulationLivePage() {
     };
     socket.onclose = () => {
       if (stoppedRef.current) return;
+      
+      // Clean up recording if connection dies
+      if (isRecordingRef.current && mediaRecorderRef.current) {
+         isRecordingRef.current = false;
+         // Stop without sending utterance.end since socket is closed
+         mediaRecorderRef.current.onstop = null;
+         mediaRecorderRef.current.stop();
+         setIsRecording(false);
+         if (audioContextRef.current) {
+            audioContextRef.current.close().catch(console.error);
+            audioContextRef.current = null;
+         }
+      }
+
       setConnection("reconnecting");
       const delay = RETRY_DELAYS[Math.min(retryRef.current, RETRY_DELAYS.length - 1)];
       retryRef.current += 1;
@@ -121,6 +145,7 @@ export function SimulationLivePage() {
     return () => {
       stoppedRef.current = true;
       setConnection("offline");
+      window.speechSynthesis.cancel();
       clearInterval(heartbeat); clearInterval(clock);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       socketRef.current?.close();
@@ -141,7 +166,8 @@ export function SimulationLivePage() {
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : 
+                       MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       const messageId = crypto.randomUUID();
@@ -150,7 +176,7 @@ export function SimulationLivePage() {
       const startMsg: VoiceStartMessage = {
         type: "voice.utterance.start",
         message_id: messageId,
-        payload: { mime_type: mimeType }
+        payload: { mime_type: mediaRecorder.mimeType || mimeType }
       };
       
       if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -165,6 +191,10 @@ export function SimulationLivePage() {
       
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(track => track.stop());
+        if (audioContextRef.current) {
+          audioContextRef.current.close().catch(console.error);
+          audioContextRef.current = null;
+        }
         if (socketRef.current?.readyState === WebSocket.OPEN && voiceMessageIdRef.current) {
           const endMsg: VoiceEndMessage = { type: "voice.utterance.end", message_id: voiceMessageIdRef.current };
           socketRef.current.send(JSON.stringify(endMsg));
@@ -172,9 +202,49 @@ export function SimulationLivePage() {
         }
       };
       
+      // Basic VAD with AudioContext
+      const audioCtx = new window.AudioContext();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.minDecibels = -60;
+      analyser.maxDecibels = -10;
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let silenceStart = 0;
+      let hasSpoken = false;
+      
+      const checkSilence = () => {
+        if (!isRecordingRef.current) return;
+        analyser.getByteFrequencyData(dataArray);
+        let maxVol = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          if (dataArray[i] > maxVol) maxVol = dataArray[i];
+        }
+        
+        if (maxVol > 20) {
+          silenceStart = 0;
+          hasSpoken = true;
+        } else if (hasSpoken) {
+          if (silenceStart === 0) {
+            silenceStart = Date.now();
+          } else if (Date.now() - silenceStart > VAD_SILENCE_TIMEOUT_MS) {
+            // Silence detected, auto-stop
+            stopRecording();
+            return;
+          }
+        }
+        requestAnimationFrame(checkSilence);
+      };
+      
+      isRecordingRef.current = true;
+      setIsRecording(true);
+      requestAnimationFrame(checkSilence);
+      
       // Request data every 500ms to send chunks
       mediaRecorder.start(500);
-      setIsRecording(true);
       setError("");
     } catch (err) {
       console.error(err);
@@ -184,6 +254,7 @@ export function SimulationLivePage() {
 
   function stopRecording() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      isRecordingRef.current = false;
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }

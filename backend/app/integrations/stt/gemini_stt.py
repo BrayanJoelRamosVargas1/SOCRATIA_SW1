@@ -1,12 +1,9 @@
-import base64
 import time
 
-import httpx
+from google import genai
+from google.genai.errors import APIError
 
 from app.integrations.stt.base import STTProvider, STTProviderError, STTRequest, STTResult
-
-GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 
 class GeminiSTTProvider(STTProvider):
@@ -24,9 +21,10 @@ class GeminiSTTProvider(STTProvider):
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.max_attempts = max_attempts
+        self.client = genai.Client(api_key=api_key) if api_key else None
 
     async def transcribe(self, request: STTRequest) -> STTResult:
-        if not self.api_key:
+        if not self.client:
             raise STTProviderError("Gemini STT is not configured", provider=self.name)
 
         start_time = time.monotonic()
@@ -50,67 +48,32 @@ class GeminiSTTProvider(STTProvider):
         raise last_error
 
     async def _request(self, request: STTRequest) -> str:
-        prompt_text = (
-            "Please provide a verbatim transcription of this audio, with no additional commentary."
-        )
-        if request.prompt:
-            prompt_text += f"\nContext/Prompt: {request.prompt}"
-
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {"text": prompt_text},
-                        {
-                            "inlineData": {
-                                "mimeType": request.mime_type,
-                                "data": base64.b64encode(request.audio_bytes).decode("ascii"),
-                            }
-                        },
-                    ],
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.0,
-            },
-        }
-
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            try:
-                response = await client.post(
-                    f"{GEMINI_API_BASE_URL}/models/{self.model}:generateContent",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": self.api_key,
-                    },
-                    json=payload,
-                )
-            except httpx.HTTPError as exc:
-                raise STTProviderError(
-                    "Gemini could not be reached", provider=self.name, retryable=True
-                ) from exc
-
-        if response.status_code in {401, 403}:
-            raise STTProviderError("Gemini authentication failed", provider=self.name)
-        if response.status_code in RETRYABLE_STATUS_CODES:
-            raise STTProviderError(
-                "Gemini is temporarily unavailable", provider=self.name, retryable=True
-            )
-        if response.is_error:
-            raise STTProviderError(
-                f"Gemini rejected the request: {response.status_code}", provider=self.name
-            )
-
         try:
-            body = response.json()
-            parts = body["candidates"][0]["content"]["parts"]
-            text = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
-        except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise STTProviderError(
-                "Gemini returned an invalid response", provider=self.name
-            ) from exc
-
+            # We use a config dict natively to avoid import issues or exact type names
+            # since google-genai accepts dictionaries for config objects
+            interaction = await self.client.aio.interactions.create(
+                model=self.model,
+                input=[
+                    {
+                        "type": "audio",
+                        "mime_type": request.mime_type,
+                        "data": request.audio_bytes,
+                    }
+                ],
+                config={
+                    "transcription_config": {
+                        "language_codes": ["es-419"],
+                        "mode": "VERBATIM"
+                    }
+                }
+            )
+        except APIError as exc:
+            retryable = exc.code in {408, 429, 500, 502, 503, 504}
+            raise STTProviderError(f"Gemini API error: {str(exc)}", provider=self.name, retryable=retryable) from exc
+        except Exception as exc:
+            raise STTProviderError(f"Gemini request failed: {str(exc)}", provider=self.name, retryable=False) from exc
+        
+        text = interaction.text
         if not text:
             raise STTProviderError("Gemini returned an empty response", provider=self.name)
 

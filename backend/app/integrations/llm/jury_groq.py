@@ -65,6 +65,8 @@ class GroqJuryRoutingProvider(JuryRoutingProvider):
         raise last_error
 
     async def _request(self, request: JuryRoutingRequest) -> str:
+        # Limitación de Groq: Structured Outputs con strict=True no soporta streaming ni tool use.
+        # Para P3-C esperaremos el JSON completo y enviaremos el spoken_text a ElevenLabs tras finalizar.
         payload = {
             "model": self.model,
             "messages": [
