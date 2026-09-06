@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Iterable
 
+from app.core.config import get_settings
 from app.integrations.embeddings.base import EmbeddingDocument, EmbeddingError
 from app.modules.p2_gestion_documentos_preparacion.models.document import Document
 
@@ -36,6 +37,12 @@ class EmbeddingCoordinator:
         active_provider = self.secondary_provider if use_fallback else self.primary_provider
         
         try:
+            settings = get_settings()
+            if not use_fallback and settings.embedding_force_provider_failure in ("gemini", "both") and settings.app_env != "production":
+                raise EmbeddingError("Simulated Gemini failure triggered by configuration")
+            elif use_fallback and settings.embedding_force_provider_failure in ("cohere", "both") and settings.app_env != "production":
+                raise EmbeddingError("Simulated Cohere failure triggered by configuration")
+
             # Yield from the underlying provider
             # Note: Since it's a generator, the error might happen during iteration.
             for batch in active_provider.embed_documents(documents):

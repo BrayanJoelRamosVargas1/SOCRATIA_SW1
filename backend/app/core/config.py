@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     embedding_dimensions: int = Field(default=768, ge=128, le=3072)
     embedding_batch_size: int = Field(default=20, ge=1, le=100)
     embedding_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    embedding_force_provider_failure: str | None = None
 
     cohere_api_key: SecretStr | None = None
     cohere_embedding_model: str = "embed-v4.0"

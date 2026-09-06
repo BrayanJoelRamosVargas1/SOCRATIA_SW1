@@ -201,7 +201,7 @@ class DocumentProcessingService:
                     # Successfully embedded all chunks! Break the fallback loop
                     
                     # Atomic promotion
-                    profile.status = ProfileStatus.READY
+                    profile.status = ProfileStatus.ACTIVE
                     profile.completed_at = datetime.now(UTC)
                     document.active_embedding_profile_id = profile.id
                     
