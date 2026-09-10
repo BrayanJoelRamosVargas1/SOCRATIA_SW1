@@ -88,16 +88,22 @@ class DocumentProcessingService:
         job = self.processing.get_job(document.id)
         if not job:
             job = self.processing.create_job(document)
-            
+
         if not job.current_embedding_space:
-            job.current_embedding_space = self.embeddings.get_space_id_for_primary()
+            initial_provider = self.embeddings.get_initial_provider()
+            job.current_embedding_space = initial_provider.embedding_space_id
             self.db.commit()
 
         current_event = self._start(document, "EXTRACTION", DocumentStatus.EXTRACTING)
         try:
             if job.chunks_total > 0:
                 # Resume from checkpoint
-                logger.info("Resuming processing for %s from chunk %s/%s", document.id, job.chunks_embedded, job.chunks_total)
+                logger.info(
+                    "Resuming processing for %s from chunk %s/%s",
+                    document.id,
+                    job.chunks_embedded,
+                    job.chunks_total,
+                )
                 chunks = self.processing.get_chunks(document.id)
             else:
                 content = self.storage.read(document.storage_key)
@@ -123,7 +129,7 @@ class DocumentProcessingService:
                     document=document,
                     chunks=chunk_inputs,
                 )
-                
+
                 job.chunks_total = len(chunks)
                 job.chunks_embedded = 0
                 self.db.commit()
@@ -133,22 +139,43 @@ class DocumentProcessingService:
             )
 
             # --- EMBEDDING LOOP WITH FALLBACK ---
+            # We determine the initial active provider based on current_embedding_space
+            active_provider = next(
+                (
+                    p
+                    for p in self.embeddings.providers
+                    if p.embedding_space_id == job.current_embedding_space and p.is_available
+                ),
+                self.embeddings.get_initial_provider(),
+            )
+
             while True:
                 # Ensure staging profile exists for current space
-                use_fallback = (job.current_embedding_space == self.embeddings.get_space_id_for_fallback())
-                active_provider = self.embeddings.secondary_provider if use_fallback else self.embeddings.primary_provider
-                
-                profile = next((p for p in document.embedding_profiles if p.embedding_space_id == job.current_embedding_space), None)
+                profile = next(
+                    (
+                        p
+                        for p in document.embedding_profiles
+                        if p.embedding_space_id == job.current_embedding_space
+                    ),
+                    None,
+                )
                 if not profile:
+                    # Depending on provider dimension, choose Pinecone index.
+                    vector_index = (
+                        self.settings.pinecone_index_name
+                        if active_provider.dimensions == 768
+                        else "socratia-d1024-cosine"
+                    )
+
                     profile = EmbeddingProfile(
                         document_id=document.id,
                         status=ProfileStatus.STAGING,
                         embedding_space_id=job.current_embedding_space,
-                        provider="cohere" if use_fallback else "gemini",
+                        provider=active_provider.provider_id,
                         model=active_provider.model,
                         dimension=active_provider.dimensions,
-                        vector_index=self.settings.pinecone_index_name if not use_fallback else "socratia-d1024-cosine", # Cohere needs 1024 index
-                        vector_namespace="", # Will be set once we have profile ID
+                        vector_index=vector_index,
+                        vector_namespace="",  # Will be set once we have profile ID
                     )
                     self.db.add(profile)
                     self.db.flush()
@@ -157,25 +184,31 @@ class DocumentProcessingService:
                     self.db.commit()
 
                 # Skip already embedded chunks
-                chunks_to_embed = chunks[job.chunks_embedded:]
+                chunks_to_embed = chunks[job.chunks_embedded :]
                 embedding_documents = [
-                    EmbeddingDocument(title=document.original_name, text=chunk.content) for chunk in chunks_to_embed
+                    EmbeddingDocument(title=document.original_name, text=chunk.content)
+                    for chunk in chunks_to_embed
                 ]
-                
+
                 namespace = profile.vector_namespace
                 batch_offset = 0
                 advanced_to_indexing = False
-                
+
                 try:
-                    for batch_embeddings in self.embeddings.embed_documents_with_fallback(embedding_documents, use_fallback=use_fallback):
+                    # Provide the active_provider to the coordinator
+                    for batch_embeddings in self.embeddings.embed_documents_with_fallback(
+                        embedding_documents, active_provider
+                    ):
                         if not advanced_to_indexing:
                             current_event = self._advance(
                                 document, current_event, "VECTOR_STORE", DocumentStatus.INDEXING
                             )
                             advanced_to_indexing = True
-                            
-                        batch_chunks = chunks_to_embed[batch_offset : batch_offset + len(batch_embeddings)]
-                        
+
+                        batch_chunks = chunks_to_embed[
+                            batch_offset : batch_offset + len(batch_embeddings)
+                        ]
+
                         records = [
                             VectorRecord(
                                 id=f"{document.id}:{active_provider.model}:{chunk.chunk_index}",
@@ -190,42 +223,57 @@ class DocumentProcessingService:
                             )
                             for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True)
                         ]
-                        
-                        # Use correct index name based on dimensions
-                        self.vectors.upsert(namespace=namespace, records=records, index_name=profile.vector_index)
-                        
+
+                        self.vectors.upsert(
+                            namespace=namespace, records=records, index_name=profile.vector_index
+                        )
+
                         batch_offset += len(batch_embeddings)
                         job.chunks_embedded = job.chunks_embedded + len(batch_embeddings)
                         self.db.commit()
-                        
+
                     # Successfully embedded all chunks! Break the fallback loop
-                    
+
                     # Atomic promotion
                     profile.status = ProfileStatus.ACTIVE
                     profile.completed_at = datetime.now(UTC)
                     document.active_embedding_profile_id = profile.id
-                    
+
                     # Retire old active profiles if any
                     for p in document.embedding_profiles:
-                        if p.id != profile.id and p.status in (ProfileStatus.READY, ProfileStatus.ACTIVE):
+                        if p.id != profile.id and p.status in (
+                            ProfileStatus.READY,
+                            ProfileStatus.ACTIVE,
+                        ):
                             p.status = ProfileStatus.RETIRED
-                    
+
                     self.db.commit()
                     break
 
-                except FallbackTriggered:
-                    logger.warning("Fallback triggered! Creating Cohere profile and resetting chunks_embedded to 0.")
-                    
-                    # Mark current profile as failed
-                    profile.status = ProfileStatus.FAILED
-                    
-                    # Update job to use fallback space
-                    job.current_embedding_space = self.embeddings.get_space_id_for_fallback()
-                    job.chunks_embedded = 0
+                except FallbackTriggered as exc:
+                    logger.warning(
+                        "Fallback triggered! Type: %s, Next Provider: %s",
+                        exc.fallback_type,
+                        exc.next_provider.provider_id,
+                    )
+                    active_provider = exc.next_provider
+
+                    if exc.fallback_type == "SPACE_CHANGE":
+                        # Mark current profile as failed because we need a new space
+                        profile.status = ProfileStatus.FAILED
+                        job.current_embedding_space = active_provider.embedding_space_id
+                        job.chunks_embedded = 0  # Restart chunk progress
+                    else:
+                        # EXECUTOR_CHANGE: Same space, just a different provider.
+                        # Do not overwrite profile.provider here. The profile defines the embedding space,
+                        # while telemetry tracks which executor processed each chunk.
+                        pass
+
                     job.attempt += 1
                     self.db.commit()
-                    
-                    # Loop restarts, will create Cohere profile and embed from 0.
+
+                    # Loop restarts, will either create a new profile (if SPACE_CHANGE) and restart from chunk 0,
+                    # or reuse the existing STAGING profile (if EXECUTOR_CHANGE) and resume chunks.
 
             self._finish(document, current_event, job)
             return DocumentProcessingResponse(

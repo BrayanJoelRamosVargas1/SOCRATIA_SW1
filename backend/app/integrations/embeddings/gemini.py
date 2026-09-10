@@ -31,7 +31,7 @@ class GeminiEmbeddingProvider:
         self._dimensions = dimensions
         self.batch_size = batch_size
         self.timeout_seconds = timeout_seconds
-        
+
         # RPM 1500 and TPM 30k for Gemini Embedding 2 is the free tier. We use a safe ratio of 0.5.
         self.rate_limiter = TokenRateLimiter(max_rpm=1500, max_tpm=30000, safe_tpm_ratio=0.5)
 
@@ -42,6 +42,22 @@ class GeminiEmbeddingProvider:
     @property
     def dimensions(self) -> int:
         return self._dimensions
+
+    @property
+    def provider_id(self) -> str:
+        return "gemini"
+
+    @property
+    def embedding_space_id(self) -> str:
+        return "GEMINI_EMBEDDING_2_768_V1"
+
+    @property
+    def is_available(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def execution_location(self) -> str:
+        return "remote"
 
     def embed_documents(self, documents: list[EmbeddingDocument]) -> Iterable[list[list[float]]]:
         yield from self._embed_documents(documents)
@@ -75,13 +91,11 @@ class GeminiEmbeddingProvider:
             # We process documents. But we adaptive-batch them to fit rate limits.
             remaining = documents.copy()
             while remaining:
-                batch = remaining[:self.batch_size]
-                
+                batch = remaining[: self.batch_size]
+
                 # Estimate tokens for the maximum allowed batch
-                estimated_tokens = sum(
-                    self.rate_limiter.estimate_tokens(doc.text) for doc in batch
-                )
-                
+                estimated_tokens = sum(self.rate_limiter.estimate_tokens(doc.text) for doc in batch)
+
                 # If even a single document is larger than safe TPM, we must fail or force it
                 if len(batch) == 1 and estimated_tokens > self.rate_limiter.safe_tpm:
                     logger.warning("Single chunk exceeds safe TPM budget: %s", estimated_tokens)
@@ -107,20 +121,24 @@ class GeminiEmbeddingProvider:
 
                 budget = self.rate_limiter.calculate_budget(estimated_tokens)
                 if not budget.is_allowed:
-                    logger.info("Rate limiter active. Waiting %.2f ms for %s tokens", budget.wait_ms, estimated_tokens)
+                    logger.info(
+                        "Rate limiter active. Waiting %.2f ms for %s tokens",
+                        budget.wait_ms,
+                        estimated_tokens,
+                    )
                     time.sleep(budget.wait_ms / 1000.0)
-                    continue # Re-evaluate budget
+                    continue  # Re-evaluate budget
 
                 # Try sending
                 batch_embeddings = self._embed_batch(
                     client, batch, estimated_tokens=estimated_tokens, is_query=is_query
                 )
                 self.rate_limiter.consume(estimated_tokens)
-                
+
                 yield batch_embeddings
-                
+
                 # Remove processed from remaining
-                remaining = remaining[len(batch):]
+                remaining = remaining[len(batch) :]
 
     def _embed_batch(
         self,
@@ -188,7 +206,7 @@ class GeminiEmbeddingProvider:
             http_status = None
             retry_after_ms = 0.0
             wait_ms = 0.0
-            
+
             try:
                 response = client.post(url, json=payload)
                 http_status = response.status_code
@@ -196,7 +214,12 @@ class GeminiEmbeddingProvider:
                 latency_ms = (time.monotonic() - start_time) * 1000.0
                 logger.error(
                     "Telemetry: provider=gemini model=%s batch_chunks=%s est_tokens=%s attempt=%s latency_ms=%.2f error=%s",
-                    model_name, batch_chunks, estimated_tokens, attempt, latency_ms, str(exc)
+                    model_name,
+                    batch_chunks,
+                    estimated_tokens,
+                    attempt,
+                    latency_ms,
+                    str(exc),
                 )
                 if attempt == 5:
                     raise EmbeddingError("Gemini could not be reached") from exc
@@ -213,22 +236,34 @@ class GeminiEmbeddingProvider:
                     retry_after_ms = delay * 1000.0
                 else:
                     # Exponential backoff: 10s, 20s, 40s, 80s
-                    base_delay = 10.0 * (2 ** attempt)
+                    base_delay = 10.0 * (2**attempt)
                     delay = random.uniform(base_delay * 0.5, base_delay)
-                    
+
                 wait_ms = delay * 1000.0
                 logger.warning(
                     "Telemetry: provider=gemini model=%s batch_chunks=%s est_tokens=%s attempt=%s http_status=%s latency_ms=%.2f retry_after_ms=%.2f wait_ms=%.2f",
-                    model_name, batch_chunks, estimated_tokens, attempt, http_status, latency_ms, retry_after_ms, wait_ms
+                    model_name,
+                    batch_chunks,
+                    estimated_tokens,
+                    attempt,
+                    http_status,
+                    latency_ms,
+                    retry_after_ms,
+                    wait_ms,
                 )
                 time.sleep(delay)
                 continue
-                
+
             logger.info(
                 "Telemetry: provider=gemini model=%s batch_chunks=%s est_tokens=%s attempt=%s http_status=%s latency_ms=%.2f wait_ms=0.0",
-                model_name, batch_chunks, estimated_tokens, attempt, http_status, latency_ms
+                model_name,
+                batch_chunks,
+                estimated_tokens,
+                attempt,
+                http_status,
+                latency_ms,
             )
-            
+
             if response.is_error:
                 # E.g. 401/403 or 400 Bad Request fail immediately
                 raise EmbeddingError(f"Gemini rejected the request ({response.status_code})")
@@ -239,7 +274,7 @@ class GeminiEmbeddingProvider:
             if not isinstance(body, dict):
                 raise EmbeddingError("Gemini returned an invalid response")
             return body
-            
+
         raise EmbeddingError("Gemini could not complete the request")
 
     def _batches(

@@ -24,7 +24,14 @@ class VectorMatch:
 
 
 class VectorStoreProvider(Protocol):
-    def upsert(self, *, namespace: str, records: list[VectorRecord], index_name: str | None = None, dimensions: int | None = None) -> None:
+    def upsert(
+        self,
+        *,
+        namespace: str,
+        records: list[VectorRecord],
+        index_name: str | None = None,
+        dimensions: int | None = None,
+    ) -> None:
         """Insert or replace vector records in a namespace."""
 
     def delete(self, *, namespace: str, ids: list[str], index_name: str | None = None) -> None:

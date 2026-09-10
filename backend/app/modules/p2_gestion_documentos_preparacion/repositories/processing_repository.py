@@ -85,9 +85,11 @@ class ProcessingRepository:
         return persisted
 
     def get_chunks(self, document_id: str) -> list[DocumentChunk]:
-        statement = select(DocumentChunk).where(
-            DocumentChunk.document_id == document_id
-        ).order_by(DocumentChunk.chunk_index)
+        statement = (
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
+            .order_by(DocumentChunk.chunk_index)
+        )
         return list(self.db.scalars(statement))
 
     def get_chunk_indices(self, document_id: str) -> list[int]:

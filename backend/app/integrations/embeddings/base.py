@@ -9,11 +9,31 @@ class EmbeddingError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class EmbeddingDocument:
-    title: str
+    title: str | None
     text: str
 
 
 class EmbeddingProvider(Protocol):
+    @property
+    def provider_id(self) -> str:
+        """Return the unique provider identifier."""
+
+    @property
+    def embedding_space_id(self) -> str:
+        """Return the mathematical embedding space ID this provider operates in."""
+
+    @property
+    def compatibility_fingerprint(self) -> str:
+        """Return the strict mathematical fingerprint required for safe EXECUTOR_CHANGE."""
+
+    @property
+    def is_available(self) -> bool:
+        """Return True if the provider is configured and available for use."""
+
+    @property
+    def execution_location(self) -> str:
+        """Return 'remote' or 'local'."""
+
     @property
     def model(self) -> str:
         """Return the provider model identifier."""

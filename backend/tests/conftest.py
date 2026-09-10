@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
-from collections.abc import Iterable
 
 from app.core.database import Base, get_db
 from app.integrations.email.base import OutboundEmail
@@ -68,6 +68,8 @@ class FakeEmailProvider:
 class FakeEmbeddingProvider:
     model = "fake-embedding"
     dimensions = 3
+    embedding_space_id = "FAKE_SPACE"
+    provider_id = "fake-provider"
 
     def __init__(self) -> None:
         self.documents: list[EmbeddingDocument] = []
@@ -75,10 +77,20 @@ class FakeEmbeddingProvider:
         self.fail = False
         self.primary_provider = self
         self.secondary_provider = self
+        self.providers = [self]
+
+    @property
+    def is_available(self) -> bool:
+        return not self.fail
+
+    def get_fallback_provider(
+        self, current_provider: object, allow_space_change: bool = True
+    ) -> object | None:
+        return None
 
     def get_space_id_for_primary(self) -> str:
         return "FAKE_PRIMARY_SPACE"
-        
+
     def get_space_id_for_fallback(self) -> str:
         return "FAKE_FALLBACK_SPACE"
 
@@ -87,8 +99,10 @@ class FakeEmbeddingProvider:
             raise EmbeddingError("simulated embedding failure")
         self.documents.extend(documents)
         yield [[float(index + 1), 0.5, 0.25] for index, _ in enumerate(documents)]
-        
-    def embed_documents_with_fallback(self, documents: list[EmbeddingDocument], use_fallback: bool = False) -> Iterable[list[list[float]]]:
+
+    def embed_documents_with_fallback(
+        self, documents: list[EmbeddingDocument], use_fallback: bool = False
+    ) -> Iterable[list[list[float]]]:
         return self.embed_documents(documents)
 
     def embed_queries(self, queries: list[str]) -> list[list[float]]:
@@ -96,9 +110,12 @@ class FakeEmbeddingProvider:
             raise EmbeddingError("simulated embedding failure")
         self.queries.extend(queries)
         return [[float(index + 1), 0.25, 0.5] for index, _ in enumerate(queries)]
-        
+
     def embed_queries_for_document(self, document: object, texts: list[str]) -> list[list[float]]:
         return self.embed_queries(texts)
+
+    def get_initial_provider(self) -> "FakeEmbeddingProvider":
+        return self
 
 
 class FakeVectorStoreProvider:
@@ -109,7 +126,14 @@ class FakeVectorStoreProvider:
         self.fail_query = False
         self.query_calls: list[dict[str, object]] = []
 
-    def upsert(self, *, namespace: str, records: list[VectorRecord], index_name: str | None = None, dimensions: int | None = None) -> None:
+    def upsert(
+        self,
+        *,
+        namespace: str,
+        records: list[VectorRecord],
+        index_name: str | None = None,
+        dimensions: int | None = None,
+    ) -> None:
         if self.fail_upsert:
             raise VectorStoreError("simulated vector failure")
         target = self.namespaces.setdefault(namespace, {})

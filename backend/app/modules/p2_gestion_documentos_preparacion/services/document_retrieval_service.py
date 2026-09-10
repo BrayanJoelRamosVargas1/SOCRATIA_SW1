@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from app.integrations.embeddings import EmbeddingError, EmbeddingCoordinator
+from app.integrations.embeddings import EmbeddingCoordinator, EmbeddingError
 from app.integrations.llm.base import DocumentContextChunk
 from app.integrations.vector_db import VectorStoreProvider
 from app.modules.p2_gestion_documentos_preparacion.models.document import Document
@@ -36,9 +36,14 @@ class DocumentRetrievalService:
         query_vectors = self.embeddings.embed_queries_for_document(document, list(intents))
         if len(query_vectors) != len(intents):
             raise EmbeddingError("Embedding count does not match retrieval intent count")
-            
+
         active_profile = next(
-            (p for p in document.embedding_profiles if p.id == document.active_embedding_profile_id), None
+            (
+                p
+                for p in document.embedding_profiles
+                if p.id == document.active_embedding_profile_id
+            ),
+            None,
         )
         if not active_profile:
             # Fallback for old tests/mock data without profiles

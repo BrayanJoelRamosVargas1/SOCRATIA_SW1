@@ -20,7 +20,8 @@ services:
   backend:
     build:
       context: ./backend
-    environment:
+      target: backend
+    environment: &backend-env
       APP_ENV: ${APP_ENV:-development}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia}
       JWT_SECRET: ${JWT_SECRET:-change-this-development-secret-before-production}
@@ -80,6 +81,28 @@ services:
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - document_files:/data/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend-ml:
+    build:
+      context: ./backend
+      target: backend-ml
+    profiles:
+      - local-embeddings
+    environment:
+      <<: *backend-env
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "8001:8000" # Expose on different port to not conflict if both run
     depends_on:
       db:
         condition: service_healthy

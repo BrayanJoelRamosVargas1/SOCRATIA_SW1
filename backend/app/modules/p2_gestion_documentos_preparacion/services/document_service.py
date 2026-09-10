@@ -132,7 +132,11 @@ class DocumentService:
             try:
                 if not document.embedding_profiles:
                     job = self.processing.get_job(document.id)
-                    model = job.current_embedding_space if job and job.current_embedding_space else "fake-embedding"
+                    model = (
+                        job.current_embedding_space
+                        if job and job.current_embedding_space
+                        else "fake-embedding"
+                    )
                     vector_ids = [f"{document.id}:{model}:{index}" for index in chunk_indices]
                     self.vectors.delete(
                         namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
@@ -140,7 +144,9 @@ class DocumentService:
                     )
                 else:
                     for profile in document.embedding_profiles:
-                        vector_ids = [f"{document.id}:{profile.model}:{index}" for index in chunk_indices]
+                        vector_ids = [
+                            f"{document.id}:{profile.model}:{index}" for index in chunk_indices
+                        ]
                         self.vectors.delete(
                             namespace=profile.vector_namespace,
                             ids=vector_ids,

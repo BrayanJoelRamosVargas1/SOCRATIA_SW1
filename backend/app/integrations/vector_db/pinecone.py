@@ -36,15 +36,24 @@ class PineconeVectorStoreProvider:
         self.timeout_seconds = timeout_seconds
         self._hosts: dict[str, str] = {}
 
-    def upsert(self, *, namespace: str, records: list[VectorRecord], index_name: str | None = None, dimensions: int | None = None) -> None:
+    def upsert(
+        self,
+        *,
+        namespace: str,
+        records: list[VectorRecord],
+        index_name: str | None = None,
+        dimensions: int | None = None,
+    ) -> None:
         if not records:
             return
-            
+
         target_index = index_name or self.index_name
         target_dims = dimensions or self.dimensions
-        
+
         if any(len(record.values) != target_dims for record in records):
-            raise VectorStoreError(f"Vector dimensions do not match the Pinecone index ({target_dims})")
+            raise VectorStoreError(
+                f"Vector dimensions do not match the Pinecone index ({target_dims})"
+            )
         host = self._ensure_index(target_index, target_dims)
         with self._client() as client:
             for batch in self._batches(records, 100):
@@ -65,7 +74,9 @@ class PineconeVectorStoreProvider:
         if not ids:
             return
         target_index = index_name or self.index_name
-        host = self._ensure_index(target_index, self.dimensions) # We don't care about dimensions for delete
+        host = self._ensure_index(
+            target_index, self.dimensions
+        )  # We don't care about dimensions for delete
         with self._client() as client:
             for batch in self._batches(ids, 1000):
                 self._request(
@@ -74,6 +85,17 @@ class PineconeVectorStoreProvider:
                     f"https://{host}/vectors/delete",
                     json={"ids": batch, "namespace": namespace},
                 )
+
+    def delete_namespace(self, namespace: str, index_name: str | None = None) -> None:
+        target_index = index_name or self.index_name
+        host = self._ensure_index(target_index, self.dimensions)
+        with self._client() as client:
+            self._request(
+                client,
+                "POST",
+                f"https://{host}/vectors/delete",
+                json={"deleteAll": True, "namespace": namespace},
+            )
 
     def query(
         self,
@@ -87,9 +109,11 @@ class PineconeVectorStoreProvider:
     ) -> list[VectorMatch]:
         target_index = index_name or self.index_name
         target_dims = dimensions or self.dimensions
-        
+
         if len(vector) != target_dims:
-            raise VectorStoreError(f"Query dimensions do not match the Pinecone index ({target_dims})")
+            raise VectorStoreError(
+                f"Query dimensions do not match the Pinecone index ({target_dims})"
+            )
         if not filters:
             raise VectorStoreError("Pinecone queries require metadata filters")
         host = self._ensure_index(target_index, target_dims)

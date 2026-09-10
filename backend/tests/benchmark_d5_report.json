@@ -1,0 +1,15 @@
+{
+  "model": "intfloat/multilingual-e5-base",
+  "device": "cpu",
+  "pdf_size_mb": 15.93,
+  "chunk_size_chars": 3000,
+  "chunk_overlap": 400,
+  "extracted_chars": 574490,
+  "chunks": 239,
+  "model_load_seconds": 12.82,
+  "embedding_seconds": 151.929,
+  "avg_chunk_ms": 635.69,
+  "query_latency_ms": 0.0,
+  "peak_rss_mb": 0.0,
+  "cpu_percent_peak": 0.0
+}
