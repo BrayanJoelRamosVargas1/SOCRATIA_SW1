@@ -5,15 +5,19 @@ from enum import StrEnum
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Column,
+    Computed,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -56,6 +60,7 @@ class Document(Base):
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_type: Mapped[str] = mapped_column(String(10), nullable=False)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(700), unique=True, nullable=False)
     status: Mapped[DocumentStatus] = mapped_column(
         document_status_type, default=DocumentStatus.UPLOADED, nullable=False
@@ -78,12 +83,13 @@ class Document(Base):
         order_by="DocumentProcessing.created_at",
         lazy="selectin",
     )
-    chunks: Mapped[list["DocumentChunk"]] = relationship(
+    chunks = relationship(
+        "DocumentChunk",
         back_populates="document",
         cascade="all, delete-orphan",
         order_by="DocumentChunk.chunk_index",
-        lazy="selectin",
     )
+    chunk_sets = relationship("ChunkSet", back_populates="document", cascade="all, delete-orphan")
     question_bank: Mapped["QuestionBank | None"] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",
@@ -164,6 +170,9 @@ class EmbeddingProfile(Base):
     document_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("documents.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    chunk_set_id: Mapped[str | None] = mapped_column(
+        ForeignKey("chunk_sets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     status: Mapped[ProfileStatus] = mapped_column(
         profile_status_type, default=ProfileStatus.STAGING, nullable=False
     )
@@ -184,6 +193,7 @@ class EmbeddingProfile(Base):
     document: Mapped[Document] = relationship(
         back_populates="embedding_profiles", foreign_keys=[document_id]
     )
+    chunk_set = relationship("ChunkSet", back_populates="embedding_profiles")
 
 
 class DocumentProcessingJob(Base):
@@ -197,6 +207,15 @@ class DocumentProcessingJob(Base):
     status: Mapped[DocumentStatus] = mapped_column(document_status_type, nullable=False)
     current_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     current_embedding_space: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    chunk_set_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("chunk_sets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    profile_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("embedding_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     chunks_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     chunks_embedded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     attempt: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
@@ -213,32 +232,54 @@ class DocumentProcessingJob(Base):
     document: Mapped[Document] = relationship(back_populates="processing_jobs")
 
 
+class ChunkSet(Base):
+    __tablename__ = "chunk_sets"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(
+        String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    fingerprint = Column(String(64), nullable=False)
+    chunk_size_chars = Column(Integer, nullable=False)
+    chunk_overlap_chars = Column(Integer, nullable=False)
+    extractor_version = Column(String(32), nullable=False, default="1.0")
+    normalization_version = Column(String(32), nullable=False, default="1.0")
+    chunker_version = Column(String(32), nullable=False, default="1.0")
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    document = relationship("Document", back_populates="chunk_sets")
+    chunks = relationship("DocumentChunk", back_populates="chunk_set", cascade="all, delete-orphan")
+    embedding_profiles = relationship(
+        "EmbeddingProfile", back_populates="chunk_set", cascade="all, delete-orphan"
+    )
+
+
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(
+        String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    chunk_set_id = Column(
+        String(36), ForeignKey("chunk_sets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    start_char = Column(Integer, nullable=False)
+    end_char = Column(Integer, nullable=False)
+    search_vector = Column(
+        TSVECTOR, Computed("to_tsvector('spanish', coalesce(content, ''))", persisted=True)
+    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
     __table_args__ = (
-        UniqueConstraint(
-            "document_id",
-            "chunk_index",
-            name="uq_document_chunks_document_chunk_position",
-        ),
+        UniqueConstraint("chunk_set_id", "chunk_index", name="uq_chunk_set_index"),
+        Index("ix_document_chunks_search_vector", "search_vector", postgresql_using="gin"),
     )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    document_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("documents.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    start_char: Mapped[int] = mapped_column(Integer, nullable=False)
-    end_char: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-    document: Mapped[Document] = relationship(back_populates="chunks")
+    document = relationship("Document", back_populates="chunks")
+    chunk_set = relationship("ChunkSet", back_populates="chunks")
 
 
 from app.modules.p2_gestion_documentos_preparacion.models.presentation_material import (  # noqa: E402

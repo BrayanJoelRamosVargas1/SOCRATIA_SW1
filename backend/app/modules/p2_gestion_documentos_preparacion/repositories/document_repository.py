@@ -19,6 +19,7 @@ class DocumentRepository:
         original_name: str,
         file_type: str,
         file_size: int,
+        content_hash: str,
         storage_key: str,
     ) -> Document:
         document = Document(
@@ -27,6 +28,7 @@ class DocumentRepository:
             original_name=original_name,
             file_type=file_type,
             file_size=file_size,
+            content_hash=content_hash,
             storage_key=storage_key,
             status=DocumentStatus.UPLOADED,
         )

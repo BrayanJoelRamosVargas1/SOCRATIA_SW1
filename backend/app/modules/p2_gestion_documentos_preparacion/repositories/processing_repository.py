@@ -5,6 +5,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.modules.p2_gestion_documentos_preparacion.models.document import (
+    ChunkSet,
     Document,
     DocumentChunk,
     DocumentProcessing,
@@ -63,17 +64,52 @@ class ProcessingRepository:
         job.status = status
         self.db.flush()
 
+    def get_or_create_chunk_set(
+        self,
+        *,
+        document: Document,
+        fingerprint: str,
+        chunk_size_chars: int,
+        chunk_overlap_chars: int,
+        extractor_version: str = "1.0",
+        normalization_version: str = "1.0",
+        chunker_version: str = "1.0",
+    ) -> ChunkSet:
+        statement = select(ChunkSet).where(
+            ChunkSet.document_id == document.id,
+            ChunkSet.fingerprint == fingerprint,
+        )
+        existing = self.db.scalar(statement)
+        if existing:
+            return existing
+
+        new_chunk_set = ChunkSet(
+            document_id=document.id,
+            fingerprint=fingerprint,
+            chunk_size_chars=chunk_size_chars,
+            chunk_overlap_chars=chunk_overlap_chars,
+            extractor_version=extractor_version,
+            normalization_version=normalization_version,
+            chunker_version=chunker_version,
+        )
+        self.db.add(new_chunk_set)
+        self.db.flush()
+        return new_chunk_set
+
     def replace_chunks(
         self,
         *,
         document: Document,
+        chunk_set: ChunkSet,
         chunks: list[ChunkInput],
     ) -> list[DocumentChunk]:
-        self.db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+        # We no longer delete all document chunks. We only delete chunks for THIS chunk set if any (should be 0)
+        self.db.execute(delete(DocumentChunk).where(DocumentChunk.chunk_set_id == chunk_set.id))
         persisted: list[DocumentChunk] = []
         for chunk in chunks:
             persisted_chunk = DocumentChunk(
                 document=document,
+                chunk_set_id=chunk_set.id,
                 chunk_index=chunk.index,
                 content=chunk.text,
                 start_char=chunk.start_char,
@@ -84,10 +120,10 @@ class ProcessingRepository:
         self.db.flush()
         return persisted
 
-    def get_chunks(self, document_id: str) -> list[DocumentChunk]:
+    def get_chunks(self, chunk_set_id: str) -> list[DocumentChunk]:
         statement = (
             select(DocumentChunk)
-            .where(DocumentChunk.document_id == document_id)
+            .where(DocumentChunk.chunk_set_id == chunk_set_id)
             .order_by(DocumentChunk.chunk_index)
         )
         return list(self.db.scalars(statement))

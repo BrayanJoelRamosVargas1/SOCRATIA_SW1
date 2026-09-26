@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from datetime import UTC, datetime
 
@@ -96,7 +97,33 @@ class DocumentProcessingService:
 
         current_event = self._start(document, "EXTRACTION", DocumentStatus.EXTRACTING)
         try:
-            if job.chunks_total > 0:
+            # Generate fingerprint using content_hash and config versions
+            fingerprint_str = f"{document.content_hash}|{self.settings.document_chunk_size_chars}|{self.settings.document_chunk_overlap_chars}|{self.settings.document_extractor_version}|{self.settings.document_normalization_version}|{self.settings.document_chunker_version}"
+            fingerprint = hashlib.sha256(fingerprint_str.encode("utf-8")).hexdigest()
+
+            chunk_set = self.processing.get_or_create_chunk_set(
+                document=document,
+                fingerprint=fingerprint,
+                chunk_size_chars=self.settings.document_chunk_size_chars,
+                chunk_overlap_chars=self.settings.document_chunk_overlap_chars,
+                extractor_version=self.settings.document_extractor_version,
+                normalization_version=self.settings.document_normalization_version,
+                chunker_version=self.settings.document_chunker_version,
+            )
+
+            # Do we need to chunk?
+            existing_chunks_count = self.processing.count_chunks(
+                document.id
+            )  # This currently counts ALL chunks of document, wait we should just check if we have any chunks for this chunk set.
+            # Let's see if job is tracking the same chunk_set.
+            # If the fingerprint changed, we effectively reset the job tracking for chunks.
+            # Resume condition: job tracks this exact chunk_set and profile belongs to it
+            # Resume condition: job tracks this exact chunk_set
+            if (
+                job.chunk_set_id == chunk_set.id
+                and job.chunks_total > 0
+                and len(chunk_set.chunks) == job.chunks_total
+            ):
                 # Resume from checkpoint
                 logger.info(
                     "Resuming processing for %s from chunk %s/%s",
@@ -104,8 +131,13 @@ class DocumentProcessingService:
                     job.chunks_embedded,
                     job.chunks_total,
                 )
-                chunks = self.processing.get_chunks(document.id)
+                chunks = self.processing.get_chunks(chunk_set.id)
             else:
+                logger.info(
+                    "Extracting and chunking document %s (fingerprint: %s)",
+                    document.id,
+                    fingerprint,
+                )
                 content = self.storage.read(document.storage_key)
                 text = self.extractor.extract(file_type=document.file_type, content=content)
 
@@ -127,11 +159,14 @@ class DocumentProcessingService:
                 ]
                 chunks = self.processing.replace_chunks(
                     document=document,
+                    chunk_set=chunk_set,
                     chunks=chunk_inputs,
                 )
 
+                job.chunk_set_id = chunk_set.id
                 job.chunks_total = len(chunks)
                 job.chunks_embedded = 0
+                job.profile_id = None
                 self.db.commit()
 
             current_event = self._advance(
@@ -150,12 +185,13 @@ class DocumentProcessingService:
             )
 
             while True:
-                # Ensure staging profile exists for current space
+                # Ensure staging profile exists for current space AND current chunk_set
                 profile = next(
                     (
                         p
                         for p in document.embedding_profiles
                         if p.embedding_space_id == job.current_embedding_space
+                        and p.chunk_set_id == chunk_set.id
                     ),
                     None,
                 )
@@ -169,6 +205,7 @@ class DocumentProcessingService:
 
                     profile = EmbeddingProfile(
                         document_id=document.id,
+                        chunk_set_id=chunk_set.id,
                         status=ProfileStatus.STAGING,
                         embedding_space_id=job.current_embedding_space,
                         provider=active_provider.provider_id,
@@ -181,6 +218,11 @@ class DocumentProcessingService:
                     self.db.flush()
                     profile.vector_namespace = f"d-{document.id}-p-{profile.id}"
                     document.embedding_profiles.append(profile)
+                    self.db.commit()
+
+                if job.profile_id != profile.id:
+                    job.profile_id = profile.id
+                    job.chunks_embedded = 0  # reset embedding progress if profile changed
                     self.db.commit()
 
                 # Skip already embedded chunks
@@ -209,24 +251,60 @@ class DocumentProcessingService:
                             batch_offset : batch_offset + len(batch_embeddings)
                         ]
 
-                        records = [
-                            VectorRecord(
-                                id=f"{document.id}:{active_provider.model}:{chunk.chunk_index}",
-                                values=embedding,
-                                metadata={
-                                    "user_id": user.id,
-                                    "document_id": document.id,
-                                    "document_name": document.original_name,
-                                    "chunk_index": chunk.chunk_index,
-                                    "text": chunk.content,
-                                },
+                        from app.modules.p2_gestion_documentos_preparacion.models.vector_store import EmbeddingProfileStoreSync, VectorEmbedding768, VectorEmbedding1024, VectorSyncOutbox
+                        import json
+                        
+                        # Ensure sync trackers exist
+                        for store_name in ["pinecone", "pgvector"]:
+                            sync = self.db.query(EmbeddingProfileStoreSync).filter_by(profile_id=profile.id, store_name=store_name).first()
+                            if not sync:
+                                sync = EmbeddingProfileStoreSync(
+                                    profile_id=profile.id,
+                                    store_name=store_name,
+                                    status="SYNCING",
+                                    vectors_expected=job.chunks_total
+                                )
+                                self.db.add(sync)
+                        self.db.flush()
+                        
+                        for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True):
+                            outbox = VectorSyncOutbox(
+                                profile_id=profile.id,
+                                chunk_id=chunk.id,
+                                dimension=active_provider.dimensions,
+                                operation="UPSERT"
                             )
-                            for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True)
-                        ]
+                            self.db.add(outbox)
 
-                        self.vectors.upsert(
-                            namespace=namespace, records=records, index_name=profile.vector_index
-                        )
+                        # Insert vectors using raw SQL to cast correctly
+                        table_name = "vector_embeddings_768" if active_provider.dimensions == 768 else "vector_embeddings_1024"
+                        from sqlalchemy import text
+                        import uuid
+                        sql = text(f"""
+                            INSERT INTO {table_name} 
+                            (id, profile_id, chunk_id, document_id, user_id, embedding_space_id, embedding)
+                            VALUES (:id, :profile_id, :chunk_id, :doc_id, :user_id, :space_id, CAST(:embedding AS vector))
+                        """)
+                        
+                        insert_params = []
+                        for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True):
+                            insert_params.append({
+                                "id": str(uuid.uuid4()),
+                                "profile_id": profile.id,
+                                "chunk_id": chunk.id,
+                                "doc_id": document.id,
+                                "user_id": user.id,
+                                "space_id": job.current_embedding_space,
+                                "embedding": "[" + ",".join(map(str, embedding)) + "]"
+                            })
+                        
+                        self.db.execute(sql, insert_params)
+
+                        pg_sync = self.db.query(EmbeddingProfileStoreSync).filter_by(profile_id=profile.id, store_name="pgvector").first()
+                        if pg_sync:
+                            pg_sync.vectors_synced = job.chunks_embedded + len(batch_embeddings)
+                            if pg_sync.vectors_synced >= pg_sync.vectors_expected:
+                                pg_sync.status = "SYNCED"
 
                         batch_offset += len(batch_embeddings)
                         job.chunks_embedded = job.chunks_embedded + len(batch_embeddings)

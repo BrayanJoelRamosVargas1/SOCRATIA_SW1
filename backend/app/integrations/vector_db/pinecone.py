@@ -5,8 +5,8 @@ import httpx
 
 from app.integrations.vector_db.base import (
     VectorFilter,
-    VectorMatch,
     VectorRecord,
+    VectorSearchResult,
     VectorStoreError,
 )
 
@@ -28,6 +28,8 @@ class PineconeVectorStoreProvider:
         region: str,
         timeout_seconds: int,
     ) -> None:
+        if hasattr(api_key, "get_secret_value"):
+            api_key = api_key.get_secret_value()
         self.api_key = api_key
         self.index_name = index_name
         self.dimensions = dimensions
@@ -100,13 +102,14 @@ class PineconeVectorStoreProvider:
     def query(
         self,
         *,
+        profile_id: str,
         namespace: str,
         vector: list[float],
         top_k: int,
         filters: VectorFilter,
         index_name: str | None = None,
         dimensions: int | None = None,
-    ) -> list[VectorMatch]:
+    ) -> list[VectorSearchResult]:
         target_index = index_name or self.index_name
         target_dims = dimensions or self.dimensions
 
@@ -136,7 +139,7 @@ class PineconeVectorStoreProvider:
         if not isinstance(raw_matches, list):
             raise VectorStoreError("Pinecone returned invalid query matches")
 
-        matches: list[VectorMatch] = []
+        matches: list[VectorSearchResult] = []
         for raw_match in raw_matches:
             if not isinstance(raw_match, dict):
                 raise VectorStoreError("Pinecone returned an invalid query match")
@@ -147,11 +150,18 @@ class PineconeVectorStoreProvider:
                 raise VectorStoreError("Pinecone returned an invalid query match")
             if not isinstance(metadata, dict):
                 raise VectorStoreError("Pinecone returned invalid match metadata")
+
+            content = metadata.get("text", "")
+            if not isinstance(content, str):
+                content = str(content)
+
             matches.append(
-                VectorMatch(
-                    id=match_id,
+                VectorSearchResult(
+                    chunk_id=match_id,
+                    content=content,
                     score=float(score),
                     metadata={str(key): value for key, value in metadata.items()},
+                    source_store="pinecone",
                 )
             )
         return matches

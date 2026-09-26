@@ -4,13 +4,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.integrations.embeddings import EmbeddingError, EmbeddingProvider
 from app.integrations.llm import (
     QuestionGenerationFailed,
     QuestionGenerationRequest,
     QuestionGenerationRouter,
 )
-from app.integrations.vector_db import VectorStoreError, VectorStoreProvider
+from app.integrations.retrieval.router import RetrievalRouter
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p2_gestion_documentos_preparacion.exceptions import (
     DocumentNotProcessedError,
@@ -28,7 +27,6 @@ from app.modules.p2_gestion_documentos_preparacion.repositories.question_bank_re
     QuestionBankRepository,
 )
 from app.modules.p2_gestion_documentos_preparacion.services.question_retrieval_service import (
-    QuestionContextUnavailableError,
     QuestionRetrievalService,
 )
 
@@ -40,8 +38,7 @@ class QuestionBankService:
         self,
         *,
         db: Session,
-        embeddings: EmbeddingProvider,
-        vectors: VectorStoreProvider,
+        retrieval_router: RetrievalRouter,
         generation_router: QuestionGenerationRouter,
     ) -> None:
         self.db = db
@@ -49,10 +46,9 @@ class QuestionBankService:
         self.banks = QuestionBankRepository(db)
         self.generation_router = generation_router
         settings = get_settings()
+
         self.retrieval = QuestionRetrievalService(
-            embeddings=embeddings,
-            vectors=vectors,
-            namespace_prefix=settings.pinecone_namespace_prefix,
+            router=retrieval_router,
             top_k=settings.question_retrieval_top_k,
             max_context_chars=settings.question_context_max_chars,
         )
@@ -71,18 +67,26 @@ class QuestionBankService:
             raise QuestionGenerationFailedError from None
 
         try:
-            chunks = self.retrieval.retrieve(user_id=user.id, document=document)
+            chunks, retrieval_mode, fallback_reason = self.retrieval.retrieve(
+                user_id=user.id, document=document
+            )
             result = self.generation_router.generate(
                 QuestionGenerationRequest(
                     document_name=document.original_name,
                     chunks=chunks,
                 )
             )
+            # Add telemetry manually for mode
+            logger.info(
+                "Question generation used retrieval_mode=%s, fallback_reason=%s",
+                retrieval_mode,
+                fallback_reason,
+            )
         except QuestionGenerationFailed as exc:
             reason = f"{exc.primary_failure_reason};{exc.fallback_failure_reason}"
             self._mark_failed(state, reason=reason, latency_ms=exc.latency_ms)
             raise QuestionGenerationFailedError from None
-        except (EmbeddingError, VectorStoreError, QuestionContextUnavailableError):
+        except Exception:  # Was EmbeddingError, VectorStoreError, QuestionContextUnavailableError
             logger.exception("Question retrieval failed for document %s", document.id)
             self._mark_failed(state, reason="retrieval:unavailable", latency_ms=None)
             raise QuestionGenerationFailedError from None

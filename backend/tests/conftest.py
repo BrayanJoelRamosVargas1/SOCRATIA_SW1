@@ -33,8 +33,8 @@ from app.integrations.storage.dependencies import get_storage_provider
 from app.integrations.storage.local import LocalStorageProvider
 from app.integrations.vector_db.base import (
     VectorFilter,
-    VectorMatch,
     VectorRecord,
+    VectorSearchResult,
     VectorStoreError,
 )
 from app.integrations.vector_db.dependencies import get_vector_store_provider
@@ -155,7 +155,7 @@ class FakeVectorStoreProvider:
         filters: VectorFilter,
         index_name: str | None = None,
         dimensions: int | None = None,
-    ) -> list[VectorMatch]:
+    ) -> list[VectorSearchResult]:
         if self.fail_query:
             raise VectorStoreError("simulated vector query failure")
         self.query_calls.append(
@@ -174,7 +174,7 @@ class FakeVectorStoreProvider:
             if all(record.metadata.get(key) == value for key, value in expected.items())
         ]
         return [
-            VectorMatch(id=record.id, score=1 - index * 0.01, metadata=record.metadata)
+            VectorSearchResult(chunk_id=record.id, score=1 - index * 0.01, metadata=record.metadata, content="", source_store="fake")
             for index, record in enumerate(filtered[:top_k])
         ]
 

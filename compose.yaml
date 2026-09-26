@@ -2,7 +2,7 @@ name: socratia
 
 services:
   db:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-socratia}
       POSTGRES_USER: ${POSTGRES_USER:-socratia}
@@ -85,12 +85,29 @@ services:
       db:
         condition: service_healthy
     volumes:
+      - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
       - document_files:/data/uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 10
+
+  vector-sync-worker:
+    build:
+      context: ./backend
+      target: backend
+    environment:
+      <<: *backend-env
+    command: ["python", "-m", "app.workers.vector_sync"]
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ./backend/app:/app/app
 
   backend-ml:
     build:

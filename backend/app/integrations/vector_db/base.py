@@ -17,10 +17,12 @@ class VectorRecord:
 
 
 @dataclass(frozen=True, slots=True)
-class VectorMatch:
-    id: str
+class VectorSearchResult:
+    chunk_id: str
+    content: str
     score: float
     metadata: dict[str, VectorMetadataValue]
+    source_store: str
 
 
 class VectorStoreProvider(Protocol):
@@ -40,11 +42,12 @@ class VectorStoreProvider(Protocol):
     def query(
         self,
         *,
+        profile_id: str,
         namespace: str,
         vector: list[float],
         top_k: int,
         filters: VectorFilter,
         index_name: str | None = None,
         dimensions: int | None = None,
-    ) -> list[VectorMatch]:
+    ) -> list[VectorSearchResult]:
         """Return the closest records constrained by mandatory metadata filters."""

@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     embedding_provider: str = "gemini"
     gemini_api_key: SecretStr | None = None
-    gemini_embedding_model: str = "gemini-embedding-2"
+    gemini_embedding_model: str = "text-embedding-004"
     embedding_dimensions: int = Field(default=768, ge=128, le=3072)
     embedding_batch_size: int = Field(default=20, ge=1, le=100)
     embedding_timeout_seconds: int = Field(default=60, ge=5, le=300)
@@ -82,13 +82,17 @@ class Settings(BaseSettings):
     groq_question_max_output_tokens: int = Field(default=4096, ge=2048, le=8192)
     question_circuit_breaker_threshold: int = Field(default=3, ge=1, le=20)
     question_circuit_breaker_recovery_seconds: int = Field(default=60, ge=5, le=3600)
-    gemini_question_model: str = "gemini-2.5-flash"
+    gemini_question_model: str = "gemini-1.5-flash"
     groq_question_model: str = "openai/gpt-oss-20b"
     groq_question_max_context_chars: int = Field(default=10000, ge=3000, le=60000)
 
     document_chunk_size_chars: int = Field(default=3000, ge=500, le=12000)
     document_chunk_overlap_chars: int = Field(default=400, ge=0, le=3000)
     document_max_chunks: int = Field(default=500, ge=1, le=5000)
+    document_extractor_version: str = "1.0"
+    document_normalization_version: str = "1.0"
+    document_chunker_version: str = "1.0"
+    fts_default_config: str = "spanish"
 
     groq_api_key: SecretStr | None = None
     groq_live_model: str | None = None

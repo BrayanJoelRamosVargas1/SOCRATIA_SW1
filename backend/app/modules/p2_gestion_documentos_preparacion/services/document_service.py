@@ -67,6 +67,11 @@ class DocumentService:
         storage_key = f"users/{user.id}/documents/{document_id}/{document_id}{extension}"
 
         try:
+            content = file.file.read()
+            import hashlib
+
+            content_hash = hashlib.sha256(content).hexdigest()
+            file.file.seek(0)
             persisted_size = self.storage.save(storage_key, file.file)
         except StorageError as exc:
             raise DocumentStorageError from exc
@@ -81,6 +86,7 @@ class DocumentService:
                 original_name=original_name,
                 file_type=file_type,
                 file_size=size,
+                content_hash=content_hash,
                 storage_key=storage_key,
             )
             now = datetime.now(UTC)

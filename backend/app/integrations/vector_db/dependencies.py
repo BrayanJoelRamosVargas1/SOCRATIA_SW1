@@ -1,22 +1,35 @@
-from functools import lru_cache
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.core.config import get_settings
 from app.integrations.vector_db.base import VectorStoreProvider
+from app.integrations.vector_db.pgvector_provider import PgVectorStoreProvider
 from app.integrations.vector_db.pinecone import PineconeVectorStoreProvider
+from app.integrations.vector_db.router import VectorStoreRouter
 
 
-@lru_cache
-def get_vector_store_provider() -> VectorStoreProvider:
+def get_vector_store_provider(db: Session = Depends(get_db)) -> VectorStoreProvider:
     settings = get_settings()
-    if settings.vector_primary_provider.lower() != "pinecone":
-        raise RuntimeError(f"Unsupported vector store provider: {settings.vector_primary_provider}")
-    return PineconeVectorStoreProvider(
-        api_key=(
-            settings.pinecone_api_key.get_secret_value() if settings.pinecone_api_key else None
-        ),
+
+    # We use get_secret_value() if it's a SecretStr, else the raw string
+    api_key = (
+        settings.pinecone_api_key.get_secret_value()
+        if hasattr(settings.pinecone_api_key, "get_secret_value")
+        else settings.pinecone_api_key
+    )
+
+    pinecone = PineconeVectorStoreProvider(
+        api_key=api_key,
         index_name=settings.pinecone_index_name,
         dimensions=settings.embedding_dimensions,
         cloud=settings.pinecone_cloud,
         region=settings.pinecone_region,
         timeout_seconds=settings.pinecone_timeout_seconds,
+    )
+
+    pgvector = PgVectorStoreProvider(db=db)
+
+    return VectorStoreRouter(
+        primary=pinecone, secondary=pgvector, db=db, circuit_breaker_timeout_sec=30
     )
