@@ -2,13 +2,13 @@ name: socratia
 
 services:
   db:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-socratia}
       POSTGRES_USER: ${POSTGRES_USER:-socratia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-socratia_dev_password}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,9 +20,10 @@ services:
   backend:
     build:
       context: ./backend
-    environment:
+      target: backend
+    environment: &backend-env
       APP_ENV: ${APP_ENV:-development}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia}
+      DATABASE_URL: postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia
       JWT_SECRET: ${JWT_SECRET:-change-this-development-secret-before-production}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
@@ -58,6 +59,8 @@ services:
       DOCUMENT_MAX_CHUNKS: ${DOCUMENT_MAX_CHUNKS:-500}
       VECTOR_PRIMARY_PROVIDER: ${VECTOR_PRIMARY_PROVIDER:-pinecone}
       PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
       PINECONE_INDEX_NAME: ${PINECONE_INDEX_NAME:-socratia-documents}
       PINECONE_NAMESPACE_PREFIX: ${PINECONE_NAMESPACE_PREFIX:-socratia}
       PINECONE_CLOUD: ${PINECONE_CLOUD:-aws}
@@ -80,6 +83,45 @@ services:
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
+      - document_files:/data/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  vector-sync-worker:
+    build:
+      context: ./backend
+      target: backend
+    environment:
+      <<: *backend-env
+    command: ["python", "-m", "app.workers.vector_sync"]
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ./backend/app:/app/app
+
+  backend-ml:
+    build:
+      context: ./backend
+      target: backend-ml
+    profiles:
+      - local-embeddings
+    environment:
+      <<: *backend-env
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "8001:8000" # Expose on different port to not conflict if both run
     depends_on:
       db:
         condition: service_healthy

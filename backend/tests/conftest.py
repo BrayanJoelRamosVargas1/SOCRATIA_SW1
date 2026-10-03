@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -32,8 +33,8 @@ from app.integrations.storage.dependencies import get_storage_provider
 from app.integrations.storage.local import LocalStorageProvider
 from app.integrations.vector_db.base import (
     VectorFilter,
-    VectorMatch,
     VectorRecord,
+    VectorSearchResult,
     VectorStoreError,
 )
 from app.integrations.vector_db.dependencies import get_vector_store_provider
@@ -66,41 +67,122 @@ class FakeEmailProvider:
 
 class FakeEmbeddingProvider:
     model = "fake-embedding"
-    dimensions = 3
+    dimensions = 768
+    embedding_space_id = "FAKE_SPACE"
+    provider_id = "fake-provider"
 
     def __init__(self) -> None:
         self.documents: list[EmbeddingDocument] = []
         self.queries: list[str] = []
         self.fail = False
+        self.primary_provider = self
+        self.secondary_provider = self
+        self.providers = [self]
 
-    def embed_documents(self, documents: list[EmbeddingDocument]) -> list[list[float]]:
+    @property
+    def is_available(self) -> bool:
+        return not self.fail
+
+    def get_fallback_provider(
+        self, current_provider: object, allow_space_change: bool = True
+    ) -> object | None:
+        return None
+
+    def get_space_id_for_primary(self) -> str:
+        return "FAKE_PRIMARY_SPACE"
+
+    def get_space_id_for_fallback(self) -> str:
+        return "FAKE_FALLBACK_SPACE"
+
+    def embed_documents(self, documents: list[EmbeddingDocument]) -> Iterable[list[list[float]]]:
         if self.fail:
             raise EmbeddingError("simulated embedding failure")
         self.documents.extend(documents)
-        return [[float(index + 1), 0.5, 0.25] for index, _ in enumerate(documents)]
+        yield [[0.1] * 768 for _ in documents]
+
+    def embed_documents_with_fallback(
+        self, documents: list[EmbeddingDocument], active_provider: object = None
+    ) -> Iterable[list[list[float]]]:
+        return self.embed_documents(documents)
 
     def embed_queries(self, queries: list[str]) -> list[list[float]]:
         if self.fail:
             raise EmbeddingError("simulated embedding failure")
         self.queries.extend(queries)
-        return [[float(index + 1), 0.25, 0.5] for index, _ in enumerate(queries)]
+        return [[0.1] * 768 for _ in queries]
+
+    def embed_queries_for_document(self, document: object, texts: list[str]) -> list[list[float]]:
+        return self.embed_queries(texts)
+
+    def get_initial_provider(self) -> "FakeEmbeddingProvider":
+        return self
 
 
 class FakeVectorStoreProvider:
-    def __init__(self) -> None:
-        self.namespaces: dict[str, dict[str, VectorRecord]] = {}
+    def __init__(self, db=None) -> None:
+        self.db = db
+        self._namespaces: dict[str, dict[str, VectorRecord]] = {}
         self.fail_upsert = False
         self.fail_delete = False
         self.fail_query = False
         self.query_calls: list[dict[str, object]] = []
+        self.provider_name = "fake_pinecone"
+        self.primary = self
+        self.fallback = self
 
-    def upsert(self, *, namespace: str, records: list[VectorRecord]) -> None:
+    @property
+    def namespaces(self) -> dict[str, dict[str, VectorRecord]]:
+        if self.db:
+            from app.modules.p2_gestion_documentos_preparacion.models.vector_store import (
+                VectorEmbedding768,
+                VectorEmbedding1024,
+                VectorSyncOutbox,
+            )
+            outboxes = self.db.query(VectorSyncOutbox).filter_by(status="PENDING").all()
+            for ob in outboxes:
+                if ob.operation == "DELETE":
+                    if ob.target_namespace in self._namespaces:
+                        if ob.chunk_id == "*":
+                            del self._namespaces[ob.target_namespace]
+                        else:
+                            self._namespaces[ob.target_namespace].pop(ob.chunk_id, None)
+                else:
+                    ve = self.db.query(VectorEmbedding768).filter_by(chunk_id=ob.chunk_id).first()
+                    if not ve:
+                        ve = self.db.query(VectorEmbedding1024).filter_by(chunk_id=ob.chunk_id).first()
+                    
+                    if ve:
+                        # Construct namespace manually: "d-{doc_id}-p-{profile_id}"
+                        namespace = f"d-{ve.document_id}-p-{ob.profile_id}"
+                        target = self._namespaces.setdefault(namespace, {})
+                        target[ob.chunk_id] = VectorRecord(
+                            id=ob.chunk_id, 
+                            values=[0.1]*ob.dimension, 
+                            metadata={
+                                "document_id": str(ve.document_id),
+                                "user_id": str(ve.user_id),
+                                "text": "Texto academico de prueba para recuperacion de contexto.",
+                            },
+                        )
+                ob.status = "SYNCED"
+            if outboxes:
+                self.db.commit()
+        return self._namespaces
+
+    def upsert(
+        self,
+        *,
+        namespace: str,
+        records: list[VectorRecord],
+        index_name: str | None = None,
+        dimensions: int | None = None,
+    ) -> None:
         if self.fail_upsert:
             raise VectorStoreError("simulated vector failure")
         target = self.namespaces.setdefault(namespace, {})
         target.update({record.id: record for record in records})
 
-    def delete(self, *, namespace: str, ids: list[str]) -> None:
+    def delete(self, *, namespace: str, ids: list[str], index_name: str | None = None) -> None:
         if self.fail_delete:
             raise VectorStoreError("simulated vector failure")
         target = self.namespaces.setdefault(namespace, {})
@@ -114,15 +196,20 @@ class FakeVectorStoreProvider:
         vector: list[float],
         top_k: int,
         filters: VectorFilter,
-    ) -> list[VectorMatch]:
+        index_name: str | None = None,
+        dimensions: int | None = None,
+        profile_id: str | None = None,
+    ) -> list[VectorSearchResult]:
         if self.fail_query:
             raise VectorStoreError("simulated vector query failure")
+
         self.query_calls.append(
             {
                 "namespace": namespace,
                 "vector": vector,
                 "top_k": top_k,
                 "filters": filters,
+                "profile_id": profile_id,
             }
         )
         records = list(self.namespaces.get(namespace, {}).values())
@@ -133,7 +220,13 @@ class FakeVectorStoreProvider:
             if all(record.metadata.get(key) == value for key, value in expected.items())
         ]
         return [
-            VectorMatch(id=record.id, score=1 - index * 0.01, metadata=record.metadata)
+            VectorSearchResult(
+                chunk_id=record.id,
+                score=1 - index * 0.01,
+                metadata=record.metadata,
+                content=record.metadata.get("text", "Texto academico"),
+                source_store="fake",
+            )
             for index, record in enumerate(filtered[:top_k])
         ]
 
@@ -229,13 +322,14 @@ class FakePresentationGenerationProvider:
 
 @pytest.fixture
 def db_session() -> Session:
+    import os
+    db_url = os.environ.get("TEST_DATABASE_URL", "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test")
     engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
+        db_url,
         poolclass=StaticPool,
     )
     with engine.connect() as connection:
-        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        pass # no pragma foreign_keys needed for postgres
     TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(engine)
     session = TestingSession()
@@ -262,8 +356,8 @@ def embedding_provider() -> FakeEmbeddingProvider:
 
 
 @pytest.fixture
-def vector_store() -> FakeVectorStoreProvider:
-    return FakeVectorStoreProvider()
+def vector_store(db_session: Session) -> FakeVectorStoreProvider:
+    return FakeVectorStoreProvider(db_session)
 
 
 @pytest.fixture

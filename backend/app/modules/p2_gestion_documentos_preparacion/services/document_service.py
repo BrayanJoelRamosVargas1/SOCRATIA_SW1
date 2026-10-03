@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.integrations.storage import StorageError, StorageProvider
-from app.integrations.vector_db import VectorStoreError, VectorStoreProvider
+from app.integrations.vector_db import VectorStoreProvider
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p2_gestion_documentos_preparacion.exceptions import (
     DocumentAlreadyProcessingError,
@@ -19,6 +19,7 @@ from app.modules.p2_gestion_documentos_preparacion.exceptions import (
 )
 from app.modules.p2_gestion_documentos_preparacion.models.document import (
     Document,
+    DocumentChunk,
     DocumentStatus,
 )
 from app.modules.p2_gestion_documentos_preparacion.policies.document_policy import DocumentPolicy
@@ -67,6 +68,11 @@ class DocumentService:
         storage_key = f"users/{user.id}/documents/{document_id}/{document_id}{extension}"
 
         try:
+            content = file.file.read()
+            import hashlib
+
+            content_hash = hashlib.sha256(content).hexdigest()
+            file.file.seek(0)
             persisted_size = self.storage.save(storage_key, file.file)
         except StorageError as exc:
             raise DocumentStorageError from exc
@@ -81,6 +87,7 @@ class DocumentService:
                 original_name=original_name,
                 file_type=file_type,
                 file_size=size,
+                content_hash=content_hash,
                 storage_key=storage_key,
             )
             now = datetime.now(UTC)
@@ -119,19 +126,41 @@ class DocumentService:
 
     def delete_for(self, user: User, document_id: str) -> None:
         document = DocumentPolicy.can_delete(user, self.documents.get_by_id(document_id))
-        if document.status == DocumentStatus.PROCESSING:
+        if document.status not in (
+            DocumentStatus.UPLOADED,
+            DocumentStatus.PROCESSED,
+            DocumentStatus.ERROR,
+        ):
             raise DocumentAlreadyProcessingError
-        vector_ids = self.processing.vector_ids(document.id)
-        if vector_ids:
+        chunk_ids = [str(c.id) for c in self.db.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()]
+        if chunk_ids:
             if self.vectors is None:
                 raise DocumentProcessingUnavailableError
-            try:
-                self.vectors.delete(
-                    namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
-                    ids=vector_ids,
+            # Insert DELETE outbox records instead of deleting synchronously
+            from app.modules.p2_gestion_documentos_preparacion.models.vector_store import (
+                VectorSyncOutbox,
+            )
+            
+            if not document.embedding_profiles:
+                outbox = VectorSyncOutbox(
+                    profile_id="default",
+                    chunk_id="*",
+                    dimension=0,
+                    operation="DELETE",
+                    target_namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
                 )
-            except VectorStoreError as exc:
-                raise DocumentProcessingUnavailableError from exc
+                self.db.add(outbox)
+            else:
+                for profile in document.embedding_profiles:
+                    outbox = VectorSyncOutbox(
+                        profile_id=profile.id,
+                        chunk_id="*",
+                        dimension=profile.dimension,
+                        operation="DELETE",
+                        target_namespace=profile.vector_namespace,
+                        target_index=profile.vector_index,
+                    )
+                    self.db.add(outbox)
         try:
             self.storage.delete(document.storage_key)
         except StorageError as exc:

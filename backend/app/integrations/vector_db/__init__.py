@@ -2,8 +2,8 @@
 
 from app.integrations.vector_db.base import (
     VectorFilter,
-    VectorMatch,
     VectorRecord,
+    VectorSearchResult,
     VectorStoreError,
     VectorStoreProvider,
 )
@@ -12,7 +12,7 @@ from app.integrations.vector_db.pinecone import PineconeVectorStoreProvider
 __all__ = [
     "PineconeVectorStoreProvider",
     "VectorFilter",
-    "VectorMatch",
+    "VectorSearchResult",
     "VectorRecord",
     "VectorStoreError",
     "VectorStoreProvider",

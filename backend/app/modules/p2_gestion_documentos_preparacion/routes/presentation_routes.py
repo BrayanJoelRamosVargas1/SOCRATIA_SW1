@@ -4,12 +4,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.integrations.embeddings.base import EmbeddingProvider
-from app.integrations.embeddings.dependencies import get_embedding_provider
 from app.integrations.llm.dependencies import get_presentation_generation_router
 from app.integrations.llm.presentation_router import PresentationGenerationRouter
-from app.integrations.vector_db.base import VectorStoreProvider
-from app.integrations.vector_db.dependencies import get_vector_store_provider
+from app.integrations.retrieval.dependencies import get_retrieval_router
+from app.integrations.retrieval.router import RetrievalRouter
 from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
 from app.modules.p2_gestion_documentos_preparacion.schemas.presentation_material import (
     PresentationGenerationInput,
@@ -21,20 +19,16 @@ from app.modules.p2_gestion_documentos_preparacion.services.presentation_materia
 
 router = APIRouter()
 Database = Annotated[Session, Depends(get_db)]
-Embeddings = Annotated[EmbeddingProvider, Depends(get_embedding_provider)]
-Vectors = Annotated[VectorStoreProvider, Depends(get_vector_store_provider)]
+Retrieval = Annotated[RetrievalRouter, Depends(get_retrieval_router)]
 GenerationRouter = Annotated[
     PresentationGenerationRouter, Depends(get_presentation_generation_router)
 ]
 
 
-def _generate(
-    document_id, body, current_user, db, embeddings, vectors, generation_router, regenerate
-):
+def _generate(document_id, body, current_user, db, retrieval_router, generation_router, regenerate):
     material = PresentationMaterialService(
         db=db,
-        embeddings=embeddings,
-        vectors=vectors,
+        retrieval_router=retrieval_router,
         generation_router=generation_router,
     ).generate(
         current_user,
@@ -51,12 +45,11 @@ def generate_presentation(
     body: PresentationGenerationInput,
     current_user: CurrentUser,
     db: Database,
-    embeddings: Embeddings,
-    vectors: Vectors,
+    retrieval_router: Retrieval,
     generation_router: GenerationRouter,
 ) -> PresentationMaterialResponse:
     return _generate(
-        document_id, body, current_user, db, embeddings, vectors, generation_router, False
+        document_id, body, current_user, db, retrieval_router, generation_router, False
     )
 
 
@@ -66,13 +59,10 @@ def regenerate_presentation(
     body: PresentationGenerationInput,
     current_user: CurrentUser,
     db: Database,
-    embeddings: Embeddings,
-    vectors: Vectors,
+    retrieval_router: Retrieval,
     generation_router: GenerationRouter,
 ) -> PresentationMaterialResponse:
-    return _generate(
-        document_id, body, current_user, db, embeddings, vectors, generation_router, True
-    )
+    return _generate(document_id, body, current_user, db, retrieval_router, generation_router, True)
 
 
 @router.get("/{document_id}/presentation", response_model=PresentationMaterialResponse)

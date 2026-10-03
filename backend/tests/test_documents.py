@@ -230,7 +230,7 @@ def test_process_docx_with_embeddings_and_vectors(
     assert payload["status"] == "PROCESSED"
     assert payload["chunk_count"] >= 2
     assert payload["embedding_model"] == "fake-embedding"
-    assert payload["embedding_dimensions"] == 3
+    assert payload["embedding_dimensions"] == 768
     assert len(embedding_provider.documents) == payload["chunk_count"]
     assert all(isinstance(item, EmbeddingDocument) for item in embedding_provider.documents)
     records = next(iter(vector_store.namespaces.values()))
@@ -349,7 +349,7 @@ def test_cannot_delete_document_while_processing(
     document = upload_pdf(client)
     stored_document = db_session.get(StoredDocument, document["id"])
     assert stored_document is not None
-    stored_document.status = DocumentStatus.PROCESSING
+    stored_document.status = DocumentStatus.EXTRACTING
     db_session.commit()
 
     response = client.delete(f"/api/v1/documents/{document['id']}")
@@ -383,6 +383,8 @@ def test_reprocess_document_reuses_deterministic_vector_ids(
     second_ids = set(next(iter(vector_store.namespaces.values())))
 
     assert first.status_code == 200
+    if second.status_code != 200:
+        print("SECOND RESPONSE:", second.json())
     assert second.status_code == 200
     assert second.json()["chunk_count"] == first.json()["chunk_count"]
     assert second_ids == first_ids
@@ -419,7 +421,7 @@ def test_reject_second_processing_while_active(
     document = upload_pdf(client)
     stored_document = db_session.get(StoredDocument, document["id"])
     assert stored_document is not None
-    stored_document.status = DocumentStatus.PROCESSING
+    stored_document.status = DocumentStatus.EXTRACTING
     db_session.commit()
 
     response = client.post(f"/api/v1/documents/{document['id']}/process")

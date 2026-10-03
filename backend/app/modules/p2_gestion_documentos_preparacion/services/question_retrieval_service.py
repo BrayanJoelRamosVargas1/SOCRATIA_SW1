@@ -17,9 +17,9 @@ QuestionContextUnavailableError = DocumentContextUnavailableError
 
 
 class QuestionRetrievalService(DocumentRetrievalService):
-    def retrieve(self, *, user_id: str, document_id: str):
+    def retrieve(self, *, user_id: str, document: object):
         return super().retrieve(
             user_id=user_id,
-            document_id=document_id,
+            document=document,
             intents=RETRIEVAL_INTENTS,
         )

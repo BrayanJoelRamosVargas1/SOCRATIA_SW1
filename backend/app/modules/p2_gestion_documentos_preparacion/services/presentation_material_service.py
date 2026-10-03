@@ -4,13 +4,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.integrations.embeddings import EmbeddingError, EmbeddingProvider
 from app.integrations.llm.presentation import (
     PresentationGenerationFailed,
     PresentationGenerationRequest,
 )
 from app.integrations.llm.presentation_router import PresentationGenerationRouter
-from app.integrations.vector_db import VectorStoreError, VectorStoreProvider
+from app.integrations.retrieval.router import RetrievalRouter
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p2_gestion_documentos_preparacion.exceptions import (
     DocumentNotProcessedError,
@@ -30,7 +29,6 @@ from app.modules.p2_gestion_documentos_preparacion.repositories.document_reposit
     DocumentRepository,
 )
 from app.modules.p2_gestion_documentos_preparacion.services.document_retrieval_service import (
-    DocumentContextUnavailableError,
     DocumentRetrievalService,
 )
 
@@ -51,8 +49,7 @@ class PresentationMaterialService:
         self,
         *,
         db: Session,
-        embeddings: EmbeddingProvider | None = None,
-        vectors: VectorStoreProvider | None = None,
+        retrieval_router: RetrievalRouter | None = None,
         generation_router: PresentationGenerationRouter | None = None,
     ) -> None:
         self.db = db
@@ -60,12 +57,11 @@ class PresentationMaterialService:
         self.materials = presentation_repository.PresentationMaterialRepository(db)
         self.generation_router = generation_router
         self.retrieval: DocumentRetrievalService | None = None
-        if embeddings is not None and vectors is not None:
+        if retrieval_router is not None:
             settings = get_settings()
+
             self.retrieval = DocumentRetrievalService(
-                embeddings=embeddings,
-                vectors=vectors,
-                namespace_prefix=settings.pinecone_namespace_prefix,
+                router=retrieval_router,
                 top_k=settings.question_retrieval_top_k,
                 max_context_chars=settings.question_context_max_chars,
             )
@@ -97,9 +93,9 @@ class PresentationMaterialService:
             raise PresentationGenerationFailedError from None
 
         try:
-            chunks = self.retrieval.retrieve(
+            chunks, retrieval_mode, fallback_reason = self.retrieval.retrieve(
                 user_id=user.id,
-                document_id=document.id,
+                document=document,
                 intents=PRESENTATION_RETRIEVAL_INTENTS,
             )
             result = self.generation_router.generate(
@@ -109,11 +105,16 @@ class PresentationMaterialService:
                     chunks=chunks,
                 )
             )
+            logger.info(
+                "Presentation generation used retrieval_mode=%s, fallback_reason=%s",
+                retrieval_mode,
+                fallback_reason,
+            )
         except PresentationGenerationFailed as exc:
             reason = f"{exc.primary_failure_reason};{exc.fallback_failure_reason}"
             self._mark_failed(state, reason=reason, latency_ms=exc.latency_ms)
             raise PresentationGenerationFailedError from None
-        except (EmbeddingError, VectorStoreError, DocumentContextUnavailableError):
+        except Exception:
             logger.exception("Presentation retrieval failed for %s", document.id)
             self._mark_failed(state, reason="retrieval:unavailable", latency_ms=None)
             raise PresentationGenerationFailedError from None

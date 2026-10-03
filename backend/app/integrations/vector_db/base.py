@@ -17,25 +17,37 @@ class VectorRecord:
 
 
 @dataclass(frozen=True, slots=True)
-class VectorMatch:
-    id: str
+class VectorSearchResult:
+    chunk_id: str
+    content: str
     score: float
     metadata: dict[str, VectorMetadataValue]
+    source_store: str
 
 
 class VectorStoreProvider(Protocol):
-    def upsert(self, *, namespace: str, records: list[VectorRecord]) -> None:
+    def upsert(
+        self,
+        *,
+        namespace: str,
+        records: list[VectorRecord],
+        index_name: str | None = None,
+        dimensions: int | None = None,
+    ) -> None:
         """Insert or replace vector records in a namespace."""
 
-    def delete(self, *, namespace: str, ids: list[str]) -> None:
+    def delete(self, *, namespace: str, ids: list[str], index_name: str | None = None) -> None:
         """Delete the specified vector records from a namespace."""
 
     def query(
         self,
         *,
+        profile_id: str,
         namespace: str,
         vector: list[float],
         top_k: int,
         filters: VectorFilter,
-    ) -> list[VectorMatch]:
+        index_name: str | None = None,
+        dimensions: int | None = None,
+    ) -> list[VectorSearchResult]:
         """Return the closest records constrained by mandatory metadata filters."""
