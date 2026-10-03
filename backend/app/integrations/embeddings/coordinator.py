@@ -47,11 +47,19 @@ class EmbeddingCoordinator:
         If the provider throws an EmbeddingError, it finds the next provider in the chain
         and raises FallbackTriggered so the service can adapt.
         """
-        # Simulated failure for testing
+        # Simulated failure for testing.
+        # EMBEDDING_FORCE_PROVIDER_FAILURE accepts a CSV of provider IDs to forcibly fail,
+        # e.g. "gemini,cohere,huggingface" or "all" to fail every remote provider.
         settings = get_settings()
         if settings.app_env != "production" and settings.embedding_force_provider_failure:
+            forced_failures = {
+                p.strip().lower()
+                for p in settings.embedding_force_provider_failure.split(",")
+            }
             if (
-                active_provider.provider_id in settings.embedding_force_provider_failure
+                active_provider.provider_id.lower() in forced_failures
+                or "all" in forced_failures
+                # Legacy single-string alias kept for backwards compatibility
                 or settings.embedding_force_provider_failure == "both"
             ):
                 self._trigger_fallback(

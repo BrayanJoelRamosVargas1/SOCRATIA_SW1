@@ -230,7 +230,7 @@ def test_process_docx_with_embeddings_and_vectors(
     assert payload["status"] == "PROCESSED"
     assert payload["chunk_count"] >= 2
     assert payload["embedding_model"] == "fake-embedding"
-    assert payload["embedding_dimensions"] == 3
+    assert payload["embedding_dimensions"] == 768
     assert len(embedding_provider.documents) == payload["chunk_count"]
     assert all(isinstance(item, EmbeddingDocument) for item in embedding_provider.documents)
     records = next(iter(vector_store.namespaces.values()))

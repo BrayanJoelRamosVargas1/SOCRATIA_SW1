@@ -1,7 +1,7 @@
-from app.core.database import get_db
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.integrations.embeddings.base import EmbeddingProvider
 from app.integrations.embeddings.dependencies import get_embedding_provider
 from app.integrations.retrieval.lexical import PostgresLexicalFallbackRetriever

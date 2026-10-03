@@ -33,6 +33,10 @@ class RetrievalRouter:
         self, document: Document, user_id: str, query_text: str, top_k: int
     ) -> tuple[list[RetrievalResult], FallbackReason]:
 
+        if str(document.user_id) != str(user_id):
+            # Enforce tenant isolation at the retrieval core
+            return [], FallbackReason.NONE
+
         active_profile = next(
             (
                 p
@@ -62,7 +66,7 @@ class RetrievalRouter:
 
                     filters = {
                         "$and": [
-                            {"user_id": {"$eq": user_id}},
+                            {"user_id": {"$eq": str(user_id)}},
                             {"document_id": {"$eq": document.id}},
                         ]
                     }

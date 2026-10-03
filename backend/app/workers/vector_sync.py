@@ -88,6 +88,22 @@ def process_batch(db: Session, store: PineconeVectorStoreProvider, records: list
     upsert_groups = {}
 
     for item in records:
+        if item.operation == "DELETE":
+            if item.target_namespace:
+                try:
+                    store.delete_namespace(namespace=item.target_namespace, index_name=item.target_index)
+                    item.status = "COMPLETED"
+                except Exception:
+                    item.attempts += 1
+                    if item.attempts >= 5:
+                        item.status = "ERROR"
+                    else:
+                        item.status = "RETRYING"
+                        item.next_retry_at = now + timedelta(seconds=(2 ** item.attempts) * 5)
+            else:
+                item.status = "ERROR"
+            continue
+
         if item.operation != "UPSERT":
             continue
 

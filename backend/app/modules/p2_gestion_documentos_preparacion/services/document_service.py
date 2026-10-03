@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.integrations.storage import StorageError, StorageProvider
-from app.integrations.vector_db import VectorStoreError, VectorStoreProvider
+from app.integrations.vector_db import VectorStoreProvider
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p2_gestion_documentos_preparacion.exceptions import (
     DocumentAlreadyProcessingError,
@@ -19,6 +19,7 @@ from app.modules.p2_gestion_documentos_preparacion.exceptions import (
 )
 from app.modules.p2_gestion_documentos_preparacion.models.document import (
     Document,
+    DocumentChunk,
     DocumentStatus,
 )
 from app.modules.p2_gestion_documentos_preparacion.policies.document_policy import DocumentPolicy
@@ -131,35 +132,35 @@ class DocumentService:
             DocumentStatus.ERROR,
         ):
             raise DocumentAlreadyProcessingError
-        chunk_indices = self.processing.get_chunk_indices(document.id)
-        if chunk_indices:
+        chunk_ids = [str(c.id) for c in self.db.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()]
+        if chunk_ids:
             if self.vectors is None:
                 raise DocumentProcessingUnavailableError
-            try:
-                if not document.embedding_profiles:
-                    job = self.processing.get_job(document.id)
-                    model = (
-                        job.current_embedding_space
-                        if job and job.current_embedding_space
-                        else "fake-embedding"
+            # Insert DELETE outbox records instead of deleting synchronously
+            from app.modules.p2_gestion_documentos_preparacion.models.vector_store import (
+                VectorSyncOutbox,
+            )
+            
+            if not document.embedding_profiles:
+                outbox = VectorSyncOutbox(
+                    profile_id="default",
+                    chunk_id="*",
+                    dimension=0,
+                    operation="DELETE",
+                    target_namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
+                )
+                self.db.add(outbox)
+            else:
+                for profile in document.embedding_profiles:
+                    outbox = VectorSyncOutbox(
+                        profile_id=profile.id,
+                        chunk_id="*",
+                        dimension=profile.dimension,
+                        operation="DELETE",
+                        target_namespace=profile.vector_namespace,
+                        target_index=profile.vector_index,
                     )
-                    vector_ids = [f"{document.id}:{model}:{index}" for index in chunk_indices]
-                    self.vectors.delete(
-                        namespace=f"{self.settings.pinecone_namespace_prefix}-{user.id}",
-                        ids=vector_ids,
-                    )
-                else:
-                    for profile in document.embedding_profiles:
-                        vector_ids = [
-                            f"{document.id}:{profile.model}:{index}" for index in chunk_indices
-                        ]
-                        self.vectors.delete(
-                            namespace=profile.vector_namespace,
-                            ids=vector_ids,
-                            index_name=profile.vector_index,
-                        )
-            except VectorStoreError as exc:
-                raise DocumentProcessingUnavailableError from exc
+                    self.db.add(outbox)
         try:
             self.storage.delete(document.storage_key)
         except StorageError as exc:

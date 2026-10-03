@@ -14,7 +14,6 @@ from app.integrations.embeddings import (
 )
 from app.integrations.storage import StorageError, StorageProvider
 from app.integrations.vector_db import (
-    VectorRecord,
     VectorStoreError,
     VectorStoreProvider,
 )
@@ -251,8 +250,11 @@ class DocumentProcessingService:
                             batch_offset : batch_offset + len(batch_embeddings)
                         ]
 
-                        from app.modules.p2_gestion_documentos_preparacion.models.vector_store import EmbeddingProfileStoreSync, VectorEmbedding768, VectorEmbedding1024, VectorSyncOutbox
-                        import json
+
+                        from app.modules.p2_gestion_documentos_preparacion.models.vector_store import (
+                            EmbeddingProfileStoreSync,
+                            VectorSyncOutbox,
+                        )
                         
                         # Ensure sync trackers exist
                         for store_name in ["pinecone", "pgvector"]:
@@ -278,8 +280,9 @@ class DocumentProcessingService:
 
                         # Insert vectors using raw SQL to cast correctly
                         table_name = "vector_embeddings_768" if active_provider.dimensions == 768 else "vector_embeddings_1024"
-                        from sqlalchemy import text
                         import uuid
+
+                        from sqlalchemy import text
                         sql = text(f"""
                             INSERT INTO {table_name} 
                             (id, profile_id, chunk_id, document_id, user_id, embedding_space_id, embedding)
@@ -298,7 +301,8 @@ class DocumentProcessingService:
                                 "embedding": "[" + ",".join(map(str, embedding)) + "]"
                             })
                         
-                        self.db.execute(sql, insert_params)
+                        if insert_params:
+                            self.db.execute(sql, insert_params)
 
                         pg_sync = self.db.query(EmbeddingProfileStoreSync).filter_by(profile_id=profile.id, store_name="pgvector").first()
                         if pg_sync:

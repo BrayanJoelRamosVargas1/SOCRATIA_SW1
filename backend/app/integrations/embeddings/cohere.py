@@ -23,9 +23,9 @@ class CohereEmbeddingProvider:
         batch_size: int = 20,
         timeout_seconds: int = 60,
     ) -> None:
-        if not api_key:
-            raise ValueError("Cohere API key is required")
-        self.api_key = api_key
+        # api_key is optional — if None/empty, is_available returns False and the provider
+        # is gracefully skipped during fallback chain traversal.
+        self.api_key = api_key or ""
         self._model = model
         self._dimensions = dimensions
         self.batch_size = batch_size

@@ -45,6 +45,8 @@ def test_smtp_provider_uses_starttls_authentication_and_multipart_email(monkeypa
         _env_file=None,
         smtp_username="relay-user",
         smtp_password="relay-secret",
+        smtp_use_ssl=False,
+        smtp_starttls=True,
         mail_from_email="verified@example.com",
     )
     message = OutboundEmail(

@@ -29,9 +29,10 @@ class VectorEmbedding768(Base):
     # The true type is vector(768), but we map it as Text or a custom type in SQLAlchemy. We'll use Text for now and cast.
     embedding = Column(Text, nullable=False)
 
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    from sqlalchemy import func
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
     updated_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, server_default=func.now(), nullable=False
     )
 
     __table_args__ = (UniqueConstraint("profile_id", "chunk_id", name="uq_profile_chunk_768"),)
@@ -55,9 +56,10 @@ class VectorEmbedding1024(Base):
     embedding_space_id = Column(String(64), nullable=False)
     embedding = Column(Text, nullable=False)
 
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    from sqlalchemy import func
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
     updated_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, server_default=func.now(), nullable=False
     )
 
     __table_args__ = (UniqueConstraint("profile_id", "chunk_id", name="uq_profile_chunk_1024"),)
@@ -103,6 +105,8 @@ class VectorSyncOutbox(Base):
     chunk_id = Column(String(36), nullable=False)
     dimension = Column(Integer, nullable=False)
     operation = Column(String(16), nullable=False, default="UPSERT")  # UPSERT, DELETE
+    target_namespace = Column(String(200), nullable=True)
+    target_index = Column(String(100), nullable=True)
 
     attempts = Column(Integer, nullable=False, default=0)
     next_retry_at = Column(DateTime(timezone=True), nullable=True, index=True)

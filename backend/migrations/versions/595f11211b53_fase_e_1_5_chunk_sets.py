@@ -4,19 +4,20 @@ Revision ID: 595f11211b53
 Revises: c5996487352c
 Create Date: 2026-09-10 10:18:16.308348
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision: str = '595f11211b53'
-down_revision: Union[str, None] = 'c5996487352c'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'c5996487352c'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 import uuid
+
+
 def upgrade() -> None:
     # 0. Update DocumentStatus constraints
     op.drop_constraint("document_status", "documents", type_="check")

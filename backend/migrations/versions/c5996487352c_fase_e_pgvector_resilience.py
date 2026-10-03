@@ -4,16 +4,15 @@ Revision ID: c5996487352c
 Revises: a6ad5f18a9f3
 Create Date: 2026-09-10 10:13:42.249940
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision: str = 'c5996487352c'
-down_revision: Union[str, None] = 'a6ad5f18a9f3'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'a6ad5f18a9f3'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

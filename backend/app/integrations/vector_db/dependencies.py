@@ -1,8 +1,8 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.core.config import get_settings
+from app.core.database import get_db
 from app.integrations.vector_db.base import VectorStoreProvider
 from app.integrations.vector_db.pgvector_provider import PgVectorStoreProvider
 from app.integrations.vector_db.pinecone import PineconeVectorStoreProvider
