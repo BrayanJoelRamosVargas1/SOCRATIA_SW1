@@ -56,5 +56,6 @@ export type SessionSnapshot = {
   last_sequence: number;
   questions_exhausted: boolean;
   started_at: string;
+  finished_at: string | null;
   transcript: SessionTurn[];
 };

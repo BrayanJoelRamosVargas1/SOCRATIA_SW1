@@ -16,8 +16,9 @@ type ServerEvent = { type: string; payload?: SessionSnapshot | { message_id?: st
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 10000];
 const VAD_SILENCE_TIMEOUT_MS = 1800;
 
-function elapsedLabel(startedAt: string, now: number) {
-  const seconds = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
+function elapsedLabel(startedAt: string, now: number, finishedAt?: string | null) {
+  const end = finishedAt ? new Date(finishedAt).getTime() : now;
+  const seconds = Math.max(0, Math.floor((end - new Date(startedAt).getTime()) / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
@@ -158,6 +159,12 @@ export function SimulationLivePage() {
     };
   }, [connect, id, router]);
 
+  function closeSimulation() {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "session.close" }));
+    }
+  }
+
   function submit() {
     const content = answer.trim();
     if (!content || !snapshot?.current_question || pendingRef.current) return;
@@ -267,7 +274,7 @@ export function SimulationLivePage() {
   }
 
   if (!snapshot) return <main className="loading-screen"><div className="loading-orbit" /><p>Recuperando la sesión…</p></main>;
-  const canAnswer = connection === "connected" && snapshot.turn_state === "WAITING_STUDENT" && !!snapshot.current_question && !sending;
+  const canAnswer = connection === "connected" && snapshot.status !== "COMPLETED" && snapshot.turn_state === "WAITING_STUDENT" && !!snapshot.current_question && !sending;
   
   let statusText = "";
   if (sending || serverState === "voice.transcribing") statusText = "Transcribiendo/Enviando...";
@@ -275,14 +282,30 @@ export function SimulationLivePage() {
   else if (serverState === "jury.thinking") statusText = "Jurado pensando...";
   else if (serverState === "jury.speaking") statusText = "Jurado hablando...";
   
-  return <main className="live-shell"><header className="live-header"><Link href={`/simulations/${id}`}>SR · Socratia</Link><div><span className={`connection-dot connection-${connection}`} />{connection === "connected" ? "Conectado" : connection === "offline" ? "Sin conexión" : "Reconectando…"}</div><time>{elapsedLabel(snapshot.started_at, now)}</time></header><section className="live-workspace"><div className="live-main"><div className="live-progress"><span>Pregunta {snapshot.current_question?.position ?? snapshot.total_questions} de {snapshot.total_questions}</span><div><i style={{ width: `${(snapshot.answered_questions / snapshot.total_questions) * 100}%` }} /></div></div><article className="live-question"><span>Jurado</span><h1>{snapshot.current_question?.text ?? "Has respondido las 12 preguntas del banco."}</h1>{snapshot.questions_exhausted && <p>La sesión sigue activa. El cierre y las preguntas de seguimiento se incorporarán en CU19.</p>}</article>{error && <p className="form-error" role="alert">{error}</p>}
+  return <main className="live-shell"><header className="live-header"><Link href={`/simulations/${id}`}>SR · Socratia</Link><div><span className={`connection-dot connection-${connection}`} />{connection === "connected" ? "Conectado" : connection === "offline" ? "Sin conexión" : "Reconectando…"}</div><time>{elapsedLabel(snapshot.started_at, now, snapshot.finished_at)}</time></header><section className="live-workspace"><div className="live-main"><div className="live-progress" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ flex: 1 }}>
+        <span>Pregunta {snapshot.current_question?.position ?? snapshot.total_questions} de {snapshot.total_questions}</span>
+        <div><i style={{ width: `${(snapshot.answered_questions / snapshot.total_questions) * 100}%` }} /></div>
+      </div>
+      {snapshot.status === "ACTIVE" && (
+        <button className="button button-secondary" style={{ marginLeft: '1rem', whiteSpace: 'nowrap' }} onClick={closeSimulation}>
+          Terminar simulación
+        </button>
+      )}
+    </div><article className="live-question">
+      <span>{snapshot.status === "COMPLETED" ? "Sistema" : "Jurado"}</span>
+      <h1>{snapshot.status === "COMPLETED" ? "Simulación Finalizada" : (snapshot.current_question?.text ?? "Has respondido todas las preguntas.")}</h1>
+      {snapshot.status === "COMPLETED" && <p>La simulación ha concluido. El reporte de evaluación estará disponible próximamente en P4.</p>}
+    </article>{error && <p className="form-error" role="alert">{error}</p>}
   
+  {snapshot.status !== "COMPLETED" && (
   <section className="voice-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', padding: '1rem', background: 'var(--surface-color)', borderRadius: '12px' }}>
     <button className={`button ${isRecording ? 'button-danger' : 'button-primary'}`} type="button" disabled={!canAnswer && !isRecording} onClick={isRecording ? stopRecording : startRecording}>
       {isRecording ? "⏹️ Detener Grabación" : "🎤 Hablar al Jurado"}
     </button>
     <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{statusText}</span>
   </section>
+)}
 
-  <section className="answer-panel"><label htmlFor="simulation-answer">Tu respuesta escrita</label><textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={10000} disabled={snapshot.questions_exhausted || isRecording} placeholder="O usa el modo texto (siempre disponible)..." /><div><small>{answer.length}/10000 · El modo texto siempre permanece disponible</small><button className="button button-secondary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>{sending ? "Enviando…" : "Enviar texto"}</button></div></section></div><aside className="live-transcript"><h2>Transcript</h2><p>{snapshot.answered_questions} respuestas confirmadas</p><ol>{snapshot.transcript.map((turn) => <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}><span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span><p>{turn.content}</p></li>)}</ol></aside></section></main>;
+  <section className="answer-panel"><label htmlFor="simulation-answer">Tu respuesta escrita</label><textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={10000} disabled={snapshot.status === "COMPLETED" || snapshot.questions_exhausted || isRecording} placeholder="O usa el modo texto (siempre disponible)..." /><div><small>{answer.length}/10000 · El modo texto siempre permanece disponible</small><button className="button button-secondary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>{sending ? "Enviando…" : "Enviar texto"}</button></div></section></div><aside className="live-transcript"><h2>Transcript</h2><p>{snapshot.answered_questions} respuestas confirmadas</p><ol>{snapshot.transcript.map((turn) => <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}><span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span><p>{turn.content}</p></li>)}</ol></aside></section></main>;
 }

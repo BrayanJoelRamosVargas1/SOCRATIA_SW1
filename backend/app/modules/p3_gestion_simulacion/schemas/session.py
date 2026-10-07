@@ -45,6 +45,7 @@ class SessionSnapshot(BaseModel):
     last_sequence: int
     questions_exhausted: bool
     started_at: datetime
+    finished_at: datetime | None = None
     transcript: list[SessionTurnResponse]
 
 
@@ -98,3 +99,9 @@ class ServerEventState(BaseModel):
         "error",
     ]
     message: str | None = None
+
+
+class SessionCloseMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["session.close"]

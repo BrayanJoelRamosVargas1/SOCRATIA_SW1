@@ -166,11 +166,18 @@ class SessionService:
 
         simulation.turn_state = SimulationTurnState.JURY_TURN
 
-        if route_automatically:
+        # Check time limit
+        time_exceeded = simulation.started_at and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds() >= simulation.planned_duration_minutes * 60
+
+        if time_exceeded:
+            self._close_simulation(simulation, now)
+        elif route_automatically:
             next_question = self.turns.next_pending_question(simulation.id)
             if next_question is not None:
                 self._ask_question(simulation, next_question, now)
                 simulation.turn_state = SimulationTurnState.WAITING_STUDENT
+            else:
+                self._close_simulation(simulation, now)
         self.db.commit()
         logger.info(
             "ANSWER_ACCEPTED simulation_id=%s sequence=%s question_id=%s",
@@ -239,6 +246,12 @@ class SessionService:
             raise InvalidTurnError("Se ha alcanzado el límite máximo de preguntas de seguimiento.")
 
         now = datetime.now(UTC)
+        time_exceeded = simulation.started_at and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds() >= simulation.planned_duration_minutes * 60
+        if time_exceeded:
+            self._close_simulation(simulation, now)
+            self.db.commit()
+            return None, self._snapshot(simulation)
+
         new_q = SimulationQuestion(
             simulation_id=simulation.id,
             position=parent.position,  # Follow up shares same position or we handle it otherwise. Actually position has unique constraint! We'll just assign position as max + 1? No, position is ordered. Let's just give it a high position temporarily, or better: position=max_position + 1
@@ -284,15 +297,44 @@ class SessionService:
             raise InvalidTurnError
 
         now = datetime.now(UTC)
+        time_exceeded = simulation.started_at and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds() >= simulation.planned_duration_minutes * 60
+
         next_question = self.turns.next_pending_question(simulation.id)
         turn = None
-        if next_question is not None:
+        if time_exceeded:
+            self._close_simulation(simulation, now)
+        elif next_question is not None:
             turn = self._ask_question(simulation, next_question, now)
             simulation.turn_state = SimulationTurnState.WAITING_STUDENT
+        else:
+            self._close_simulation(simulation, now)
 
         self.db.commit()
         snapshot = self._snapshot(simulation)
         return turn, snapshot
+
+    
+    def _close_simulation(self, simulation: Simulation, now: datetime) -> None:
+        if simulation.status == SimulationStatus.COMPLETED:
+            return
+        simulation.status = SimulationStatus.COMPLETED
+        simulation.turn_state = None
+        simulation.finished_at = now
+
+    def close_simulation(self, user: User, simulation_id: str) -> SessionSnapshot:
+        simulation = SimulationPolicy.assert_owner(
+            user, self.simulations.get(simulation_id, for_update=True)
+        )
+        if simulation.status == SimulationStatus.COMPLETED:
+            return self._snapshot(simulation)
+            
+        if simulation.status != SimulationStatus.ACTIVE:
+            raise InvalidTurnError("Simulation is not active")
+
+        now = datetime.now(UTC)
+        self._close_simulation(simulation, now)
+        self.db.commit()
+        return self._snapshot(simulation)
 
     def _snapshot(self, simulation: Simulation) -> SessionSnapshot:
         current = self.turns.current_question(simulation.id)
@@ -319,6 +361,7 @@ class SessionService:
             last_sequence=transcript[-1].sequence if transcript else 0,
             questions_exhausted=answered >= total and current is None,
             started_at=_utc(simulation.started_at),
+            finished_at=_utc(simulation.finished_at) if simulation.finished_at else None,
             transcript=[
                 SessionTurnResponse.model_validate(turn).model_copy(
                     update={"created_at": _utc(turn.created_at)}

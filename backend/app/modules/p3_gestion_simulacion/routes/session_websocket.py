@@ -22,6 +22,7 @@ from app.modules.p3_gestion_simulacion.schemas.session import (
     SessionSnapshot,
     VoiceUtteranceEndMessage,
     VoiceUtteranceStartMessage,
+    SessionCloseMessage,
 )
 from app.modules.p3_gestion_simulacion.services.session_service import SessionService
 from app.modules.p3_gestion_simulacion.services.voice_service import VoiceService
@@ -292,6 +293,20 @@ async def simulation_session(
                         current_utterance_id = None
                         current_mime_type = None
                         audio_buffer.clear()
+                    continue
+                except ValidationError:
+                    pass
+
+                try:
+                    close_msg = SessionCloseMessage.model_validate(msg_data)
+                    svc = SessionService(db)
+                    snapshot = svc.close_simulation(user, simulation_id)
+                    await websocket.send_json(
+                        {
+                            "type": "session.state",
+                            "payload": snapshot.model_dump(mode="json"),
+                        }
+                    )
                     continue
                 except ValidationError:
                     pass
