@@ -30,6 +30,11 @@ class JuryRoutingProviderError(Exception):
     def retryable(self) -> bool:
         return self.kind in {LLMErrorKind.TRANSIENT, LLMErrorKind.INVALID_OUTPUT}
 
+    @property
+    def telemetry_reason(self) -> str:
+        suffix = f":{self.detail}" if self.detail else ""
+        return f"{self.provider}:{self.kind.value}{suffix}"
+
 
 class JuryRoutingFailed(Exception):
     pass

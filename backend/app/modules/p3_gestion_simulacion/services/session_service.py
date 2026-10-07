@@ -265,8 +265,8 @@ class SessionService:
         turn = self._ask_question(simulation, new_q, now)
         simulation.turn_state = SimulationTurnState.WAITING_STUDENT
 
-        snapshot = self._snapshot(simulation)
         self.db.commit()
+        snapshot = self._snapshot(simulation)
         return turn, snapshot
 
     def proceed_to_next_bank_question(
@@ -290,8 +290,8 @@ class SessionService:
             turn = self._ask_question(simulation, next_question, now)
             simulation.turn_state = SimulationTurnState.WAITING_STUDENT
 
-        snapshot = self._snapshot(simulation)
         self.db.commit()
+        snapshot = self._snapshot(simulation)
         return turn, snapshot
 
     def _snapshot(self, simulation: Simulation) -> SessionSnapshot:

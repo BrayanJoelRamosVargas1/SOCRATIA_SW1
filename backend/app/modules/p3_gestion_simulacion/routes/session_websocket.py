@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -121,8 +122,6 @@ async def simulation_session(
             if "text" not in message:
                 continue
 
-            import json
-
             try:
                 msg_data = json.loads(message["text"])
             except json.JSONDecodeError:
@@ -136,6 +135,18 @@ async def simulation_session(
                     }
                 )
                 continue
+
+            # Guard 12/12
+            if snapshot.questions_exhausted or snapshot.current_question is None:
+                await websocket.send_json({
+                    "type": "error",
+                    "code": "SESSION_QUESTIONS_EXHAUSTED",
+                    "message": "Has respondido todas las preguntas"
+                })
+                # Prevent any other text processing for answers / voice start
+                if msg_data.get("type") in ["answer.submit", "voice.utterance.start"]:
+                    continue
+
             try:
                 submitted = AnswerSubmitMessage.model_validate(msg_data)
                 accepted, snapshot = SessionService(db).accept_answer(

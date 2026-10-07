@@ -20,7 +20,9 @@ services:
   backend:
     build:
       context: ./backend
-      target: backend
+      target: backend-ml
+      args:
+        PRELOAD_MODEL: "true"
     environment: &backend-env
       APP_ENV: ${APP_ENV:-development}
       DATABASE_URL: postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia
@@ -74,7 +76,7 @@ services:
       GROQ_QUESTION_MAX_OUTPUT_TOKENS: ${GROQ_QUESTION_MAX_OUTPUT_TOKENS:-4096}
       QUESTION_CIRCUIT_BREAKER_THRESHOLD: ${QUESTION_CIRCUIT_BREAKER_THRESHOLD:-3}
       QUESTION_CIRCUIT_BREAKER_RECOVERY_SECONDS: ${QUESTION_CIRCUIT_BREAKER_RECOVERY_SECONDS:-60}
-      GEMINI_QUESTION_MODEL: ${GEMINI_QUESTION_MODEL:-gemini-2.5-flash}
+      GEMINI_QUESTION_MODEL: ${GEMINI_QUESTION_MODEL:-gemini-3.6-flash}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_QUESTION_MODEL: ${GROQ_QUESTION_MODEL:-openai/gpt-oss-20b}
       GROQ_QUESTION_MAX_CONTEXT_CHARS: ${GROQ_QUESTION_MAX_CONTEXT_CHARS:-10000}
@@ -101,7 +103,9 @@ services:
   vector-sync-worker:
     build:
       context: ./backend
-      target: backend
+      target: backend-ml
+      args:
+        PRELOAD_MODEL: "true"
     environment:
       <<: *backend-env
     command: ["python", "-m", "app.workers.vector_sync"]

@@ -59,17 +59,21 @@ class VoiceService:
             stt_fallback_used=fallback_used,
             raw_transcript=transcribed_text,
             stt_latency_ms=stt_latency,
-            stt_provider=stt.primary_provider.name if not fallback_used else "gemini"
+            stt_provider=stt.primary.name if not fallback_used else "gemini"
         )
         self.db.add(utterance_record)
 
-        # 2. Persist the answer
         try:
             snapshot = self.session_service.get_snapshot(self.user, self.simulation_id)
         except Exception:
             raise
 
-        accepted, snapshot = self.session_service.accept_answer(
+        if not transcribed_text.strip():
+            logger.warning("VOICE_PROCESSING: Empty audio/silence detected. Rejecting.")
+            return transcribed_text, fallback_used, None, None, snapshot
+
+        # 2. Persist the answer
+        accepted, snapshot_after = self.session_service.accept_answer(
             self.user,
             self.simulation_id,
             message_id=message_id,
@@ -79,15 +83,13 @@ class VoiceService:
             route_automatically=False,
         )
 
-        if not snapshot.current_question:
-            # We already answered the last question? Should not happen if route_automatically=False
-            return transcribed_text, fallback_used, None, None, snapshot
-
         # 3. Jury LLM Router
         logger.info("VOICE_PROCESSING: Starting LiveJuryRouter")
 
+        from app.modules.p3_gestion_simulacion.models import SimulationQuestion
+        
         simulation = self.session_service.simulations.get(self.simulation_id)
-        current_question_model = self.session_service.turns.current_question(simulation.id)
+        current_question_model = self.db.get(SimulationQuestion, snapshot.current_question.id) if snapshot.current_question else None
 
         if current_question_model and current_question_model.question:
             expected_points = current_question_model.question.expected_answer_points
@@ -139,9 +141,8 @@ class VoiceService:
         if turn and turn.content:
             tts_request = TTSRequest(text=turn.content)
             try:
-                tts_stream = await tts.synthesize(tts_request)
+                tts_stream = tts.synthesize(tts_request)
             except Exception as e:
-                logger.error("TTS Failed: %s", str(e))
-                # Continue without TTS (fallback to browser speech synthesis)
+                logger.error("TTS generation failed: %s", str(e))
 
         return transcribed_text, fallback_used, action, tts_stream, snapshot

@@ -68,6 +68,10 @@ class ElevenLabsTTSProvider(TTSProvider):
                     try:
                         response = await ws.recv()
                         data = json.loads(response)
+                        
+                        if data.get("error"):
+                            logger.error("ElevenLabs WS returned error: %s", data["error"])
+                            raise TTSProviderError(f"ElevenLabs error: {data['error']}", provider=self.name)
 
                         if data.get("audio"):
                             if first_chunk:

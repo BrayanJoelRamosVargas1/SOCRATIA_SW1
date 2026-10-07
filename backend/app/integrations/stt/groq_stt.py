@@ -62,6 +62,7 @@ class GroqSTTProvider(STTProvider):
             "model": self.model,
             "response_format": "verbose_json",
             "timestamp_granularities[]": "segment",
+            "language": "es",
         }
         if request.prompt:
             data["prompt"] = request.prompt

@@ -77,7 +77,13 @@ export function SimulationLivePage() {
       } else if (event.type === "error") {
         pendingRef.current = null;
         setSending(false);
-        setError(event.message ?? `Error de sesión: ${event.code ?? "desconocido"}`);
+        if (event.code === "SESSION_QUESTIONS_EXHAUSTED") {
+          stopRecording();
+          setServerState("");
+          setSnapshot(prev => prev ? { ...prev, questions_exhausted: true } : null);
+        } else {
+          setError(event.message ?? `Error de sesión: ${event.code ?? "desconocido"}`);
+        }
       } else if (event.type === "stt.degraded") {
         pendingRef.current = null;
         setSending(false);

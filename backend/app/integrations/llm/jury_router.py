@@ -30,7 +30,7 @@ class JuryRoutingRouter:
         start_time = time.monotonic()
         primary_failure_reason: str | None = None
 
-        if self.breaker.is_closed():
+        if self.breaker.allow_request():
             try:
                 decision = await self.primary.route(request)
                 self.breaker.record_success()
