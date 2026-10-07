@@ -47,6 +47,10 @@ except Exception:
 # Standard imports
 # ---------------------------------------------------------------------------
 from fastapi import UploadFile  # noqa: E402
+from tests.smoke_fase_e_final_certification import (  # noqa: E402
+    FakePresentationGenerationProvider,
+    FakeQuestionGenerationProvider,
+)
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
@@ -75,10 +79,6 @@ from app.modules.p2_gestion_documentos_preparacion.services.presentation_materia
 )
 from app.modules.p2_gestion_documentos_preparacion.services.question_bank_service import (  # noqa: E402
     QuestionBankService,
-)
-from tests.smoke_fase_e_final_certification import (  # noqa: E402
-    FakePresentationGenerationProvider,
-    FakeQuestionGenerationProvider,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

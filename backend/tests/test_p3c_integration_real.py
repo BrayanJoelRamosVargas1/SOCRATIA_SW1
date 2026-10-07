@@ -3,7 +3,6 @@ import os
 import uuid
 from pathlib import Path
 
-import pytest
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -34,8 +33,12 @@ def ready_simulation(client: TestClient, email: str, db: Session) -> str:
     
     client.post(f"/api/v1/documents/{document_id}/process").raise_for_status()
     
-    from app.modules.p2_gestion_documentos_preparacion.models.question_bank import Question, QuestionBank, QuestionBankStatus
     from app.modules.p1_gestion_identidad_seguridad.models.user import User
+    from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (
+        Question,
+        QuestionBank,
+        QuestionBankStatus,
+    )
     
     user_id = db.query(User).filter_by(email=email).first().id
     bank = QuestionBank(document_id=document_id, user_id=user_id, status=QuestionBankStatus.READY)

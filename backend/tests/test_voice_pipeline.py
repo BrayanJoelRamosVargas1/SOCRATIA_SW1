@@ -22,7 +22,8 @@ Casos cubiertos:
   WS-5   Transcript persistido (VoiceUtterance no contiene audio crudo)
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
+
 import pytest
 
 from app.integrations.llm.base import LLMErrorKind
@@ -32,14 +33,12 @@ from app.integrations.llm.jury_base import (
     JuryRoutingFailed,
     JuryRoutingProviderError,
     JuryRoutingRequest,
-    JuryRoutingResult,
 )
 from app.integrations.llm.jury_router import JuryRoutingRouter
 from app.integrations.stt.base import STTProviderError, STTRequest, STTResult
 from app.integrations.stt.dependencies import STTRouter
 from app.integrations.tts.base import TTSProviderError, TTSRequest
 from app.integrations.tts.elevenlabs_tts import ElevenLabsTTSProvider
-
 
 # ---------------------------------------------------------------------------
 # Helpers

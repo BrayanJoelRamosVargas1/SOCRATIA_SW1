@@ -19,10 +19,10 @@ from app.modules.p1_gestion_identidad_seguridad.repositories.user_repository imp
 from app.modules.p3_gestion_simulacion.schemas.session import (
     AnswerSubmitMessage,
     ServerEventState,
+    SessionCloseMessage,
     SessionSnapshot,
     VoiceUtteranceEndMessage,
     VoiceUtteranceStartMessage,
-    SessionCloseMessage,
 )
 from app.modules.p3_gestion_simulacion.services.session_service import SessionService
 from app.modules.p3_gestion_simulacion.services.voice_service import VoiceService

@@ -38,7 +38,7 @@ class SessionTurnResponse(BaseModel):
 class SessionSnapshot(BaseModel):
     simulation_id: str
     status: SimulationStatus
-    turn_state: SimulationTurnState
+    turn_state: SimulationTurnState | None
     current_question: SessionQuestionResponse | None
     answered_questions: int
     total_questions: int

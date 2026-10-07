@@ -92,6 +92,13 @@ class SessionService:
 
     def get_snapshot(self, user: User, simulation_id: str) -> SessionSnapshot:
         simulation = SimulationPolicy.assert_owner(user, self.simulations.get(simulation_id))
+        
+        if simulation.status == SimulationStatus.COMPLETED:
+            # For a completed simulation, we just return the snapshot (no turn_state required)
+            snapshot = self._snapshot(simulation)
+            self.db.commit()
+            return snapshot
+            
         if (
             simulation.status != SimulationStatus.ACTIVE
             or simulation.started_at is None
