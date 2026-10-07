@@ -65,7 +65,11 @@ def question_bank(db_session, user):
 @pytest.fixture
 def simulation(db_session, user, question_bank):
     def _simulation(**kwargs):
-        from app.modules.p3_gestion_simulacion.models.simulation import JuryProfile, FocusType, InterruptionLevel
+        from app.modules.p3_gestion_simulacion.models.simulation import (
+            FocusType,
+            InterruptionLevel,
+            JuryProfile,
+        )
         jp = JuryProfile(
             id=str(uuid4()), 
             name=f"Jury {uuid4()}", 

@@ -20,6 +20,30 @@ class JuryProfileResponse(BaseModel):
     interruption_level: InterruptionLevel
 
 
+class AdminJuryProfileResponse(JuryProfileResponse):
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class JuryProfileCreateInput(BaseModel):
+    name: str = Field(min_length=3, max_length=100)
+    description: str = Field(min_length=10, max_length=500)
+    focus_type: FocusType
+    strictness: int = Field(ge=1, le=5)
+    interruption_level: InterruptionLevel
+    is_active: bool = True
+
+
+class JuryProfileUpdateInput(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=100)
+    description: str | None = Field(default=None, min_length=10, max_length=500)
+    focus_type: FocusType | None = None
+    strictness: int | None = Field(default=None, ge=1, le=5)
+    interruption_level: InterruptionLevel | None = None
+    is_active: bool | None = None
+
+
 class SimulationDocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

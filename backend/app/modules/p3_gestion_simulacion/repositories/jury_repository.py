@@ -69,3 +69,16 @@ class JuryRepository:
                 JuryProfile.is_active.is_(True),
             )
         )
+
+    def list_all(self) -> list[JuryProfile]:
+        statement = select(JuryProfile).order_by(JuryProfile.created_at.desc())
+        return list(self.db.scalars(statement))
+
+    def get(self, profile_id: str) -> JuryProfile | None:
+        return self.db.get(JuryProfile, profile_id)
+
+    def add(self, profile: JuryProfile) -> None:
+        self.db.add(profile)
+
+    def delete(self, profile: JuryProfile) -> None:
+        self.db.delete(profile)
