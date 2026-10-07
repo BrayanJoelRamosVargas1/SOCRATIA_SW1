@@ -44,7 +44,10 @@ from app.integrations.tts.elevenlabs_tts import ElevenLabsTTSProvider
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _jury_error(provider: str = "groq", kind: LLMErrorKind = LLMErrorKind.TRANSIENT) -> JuryRoutingProviderError:
+
+def _jury_error(
+    provider: str = "groq", kind: LLMErrorKind = LLMErrorKind.TRANSIENT
+) -> JuryRoutingProviderError:
     return JuryRoutingProviderError("error", provider=provider, kind=kind)
 
 
@@ -66,6 +69,7 @@ def _stt_result(text: str = "Hola", provider: str = "groq") -> STTResult:
 # ---------------------------------------------------------------------------
 # STT Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_stt_router_success_path():
@@ -134,6 +138,7 @@ async def test_stt_router_total_failure():
 # Jury Router Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_jury_router_success():
     """JURY-1: Primary éxito → NEXT_BANK, fallback no llamado."""
@@ -148,7 +153,9 @@ async def test_jury_router_success():
 
     fallback = AsyncMock()
 
-    router = JuryRoutingRouter(primary=primary, fallback=fallback, failure_threshold=2, recovery_seconds=60)
+    router = JuryRoutingRouter(
+        primary=primary, fallback=fallback, failure_threshold=2, recovery_seconds=60
+    )
     req = _jury_request()
 
     res = await router.route(req)
@@ -175,7 +182,9 @@ async def test_jury_router_fallback():
     fallback.name = "gemini"
     fallback.model = "gemini-2.5-flash"
 
-    router = JuryRoutingRouter(primary=primary, fallback=fallback, failure_threshold=2, recovery_seconds=60)
+    router = JuryRoutingRouter(
+        primary=primary, fallback=fallback, failure_threshold=2, recovery_seconds=60
+    )
     req = _jury_request()
 
     res = await router.route(req)
@@ -201,7 +210,9 @@ async def test_jury_router_circuit_breaker_open():
     fallback.name = "gemini"
     fallback.model = "gemini-2.5-flash"
 
-    router = JuryRoutingRouter(primary=primary, fallback=fallback, failure_threshold=1, recovery_seconds=9999)
+    router = JuryRoutingRouter(
+        primary=primary, fallback=fallback, failure_threshold=1, recovery_seconds=9999
+    )
     # Forzar circuit breaker abierto disparando 1 fallo (threshold=1)
     router.breaker.record_failure()
 
@@ -225,7 +236,9 @@ async def test_jury_router_total_failure():
     fallback.route.side_effect = _jury_error("gemini", LLMErrorKind.PERMANENT)
     fallback.name = "gemini"
 
-    router = JuryRoutingRouter(primary=primary, fallback=fallback, failure_threshold=3, recovery_seconds=60)
+    router = JuryRoutingRouter(
+        primary=primary, fallback=fallback, failure_threshold=3, recovery_seconds=60
+    )
     req = _jury_request()
 
     with pytest.raises(JuryRoutingFailed):
@@ -252,6 +265,7 @@ def test_jury_routing_provider_error_telemetry():
 # FOLLOW_UP depth limit (voice_service logic, mocked)
 # ---------------------------------------------------------------------------
 
+
 def test_follow_up_depth_limit_forces_next_bank():
     """JURY-5-DEPTH: depth >= 2 con FOLLOW_UP → acción se fuerza a NEXT_BANK (lógica voice_service.py)."""
     from app.integrations.llm.jury_base import JuryAction
@@ -269,6 +283,7 @@ def test_follow_up_depth_limit_forces_next_bank():
 # ---------------------------------------------------------------------------
 # TTS Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tts_no_api_key_raises():
@@ -302,13 +317,21 @@ async def test_tts_no_voice_id_raises():
 # WebSocket Protocol Tests (unit, sin HTTP real)
 # ---------------------------------------------------------------------------
 
+
 def test_allowed_mime_types_validation():
     """WS-3: MIME type válidos e inválidos según la allowlist de session_websocket."""
-    allowed_mime_types = {"audio/webm", "audio/mp4", "audio/ogg", "audio/aac", "audio/mpeg", "audio/wav"}
+    allowed_mime_types = {
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg",
+        "audio/aac",
+        "audio/mpeg",
+        "audio/wav",
+    }
 
     valid_cases = [
         "audio/webm",
-        "audio/webm;codecs=opus",   # con params → strip al base
+        "audio/webm;codecs=opus",  # con params → strip al base
         "audio/mp4",
         "audio/ogg",
         "audio/wav",
@@ -368,7 +391,9 @@ def test_jury_routing_decision_requires_reason_code():
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        JuryRoutingDecision(action=JuryAction.NEXT_BANK, follow_up_question=None)  # falta reason_code
+        JuryRoutingDecision(
+            action=JuryAction.NEXT_BANK, follow_up_question=None
+        )  # falta reason_code
 
     with pytest.raises(ValidationError):
         JuryRoutingDecision(

@@ -34,3 +34,9 @@ api_router.include_router(presentations_router, prefix="/documents", tags=["pres
 api_router.include_router(admin_jury_router, prefix="/admin", tags=["admin-jury-profiles"])
 api_router.include_router(simulations_router, tags=["simulations"])
 api_router.include_router(simulation_websocket_router, tags=["simulation-session"])
+
+from app.modules.p4_gestion_evaluacion_resultados.routes.evaluation_routes import (
+    router as evaluation_router,
+)
+
+api_router.include_router(evaluation_router, tags=["evaluations"])

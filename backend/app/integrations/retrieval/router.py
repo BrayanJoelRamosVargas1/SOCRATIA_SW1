@@ -85,7 +85,9 @@ class RetrievalRouter:
                     # If we got here, vector search worked.
                     results = []
                     for i, match in enumerate(matches, start=1):
-                        primary_name = getattr(self.vector_router.primary, "provider_name", "pinecone")
+                        primary_name = getattr(
+                            self.vector_router.primary, "provider_name", "pinecone"
+                        )
                         mode = (
                             RetrievalMode.VECTOR_PRIMARY
                             if match.source_store == primary_name
@@ -106,7 +108,9 @@ class RetrievalRouter:
                     return results, FallbackReason.NONE
 
                 except ValueError as e:
-                    logger.error("Programming or validation error in vector retrieval. Aborting: %s", str(e))
+                    logger.error(
+                        "Programming or validation error in vector retrieval. Aborting: %s", str(e)
+                    )
                     raise
                 except EmbeddingError as e:
                     logger.warning(

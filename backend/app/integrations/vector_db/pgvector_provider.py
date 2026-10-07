@@ -44,13 +44,21 @@ class PgVectorStoreProvider(VectorStoreProvider):
             raise VectorStoreError("Dimensions must be provided for PgVectorStoreProvider")
         document_id = filters.get("document_id")
         user_id = filters.get("user_id")
-        
+
         if "$and" in filters:
             for f in filters["$and"]:
                 if "document_id" in f:
-                    document_id = f["document_id"].get("$eq", f["document_id"]) if isinstance(f["document_id"], dict) else f["document_id"]
+                    document_id = (
+                        f["document_id"].get("$eq", f["document_id"])
+                        if isinstance(f["document_id"], dict)
+                        else f["document_id"]
+                    )
                 if "user_id" in f:
-                    user_id = f["user_id"].get("$eq", f["user_id"]) if isinstance(f["user_id"], dict) else f["user_id"]
+                    user_id = (
+                        f["user_id"].get("$eq", f["user_id"])
+                        if isinstance(f["user_id"], dict)
+                        else f["user_id"]
+                    )
 
         if not document_id or not user_id:
             raise VectorStoreError("document_id and user_id are required in filters")

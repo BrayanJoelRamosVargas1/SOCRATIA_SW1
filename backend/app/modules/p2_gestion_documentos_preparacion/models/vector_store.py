@@ -30,9 +30,16 @@ class VectorEmbedding768(Base):
     embedding = Column(Text, nullable=False)
 
     from sqlalchemy import func
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False
+    )
     updated_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (UniqueConstraint("profile_id", "chunk_id", name="uq_profile_chunk_768"),)
@@ -57,9 +64,16 @@ class VectorEmbedding1024(Base):
     embedding = Column(Text, nullable=False)
 
     from sqlalchemy import func
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), nullable=False
+    )
     updated_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (UniqueConstraint("profile_id", "chunk_id", name="uq_profile_chunk_1024"),)

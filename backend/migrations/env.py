@@ -22,6 +22,9 @@ from app.modules.p2_gestion_documentos_preparacion.models import (
     vector_store,  # noqa: F401
 )
 from app.modules.p3_gestion_simulacion import models as simulation_models  # noqa: F401, E402
+from app.modules.p4_gestion_evaluacion_resultados import (
+    models as evaluation_models,  # noqa: F401, E402
+)
 
 config = context.config
 

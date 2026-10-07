@@ -17,6 +17,7 @@ Usage:
   python test_1_durable_delete_real.py step2   # Issue DELETE, kill worker, verify outbox
   python test_1_durable_delete_real.py step3   # Restart worker, verify remote delete
 """
+
 import logging
 import os
 import sys
@@ -258,7 +259,9 @@ def step2():
     settings, db, user, doc_service, processing_service = get_context()
     parts = _STATE_FILE.read_text().strip().split(",")
     doc_id, profile_id, namespace = parts[0], parts[1], parts[2]
-    logger.info("Reading state: doc_id=%s, profile_id=%s, namespace=%s", doc_id, profile_id, namespace)
+    logger.info(
+        "Reading state: doc_id=%s, profile_id=%s, namespace=%s", doc_id, profile_id, namespace
+    )
 
     doc = db.query(Document).filter_by(id=doc_id).first()
     if not doc:
@@ -274,7 +277,10 @@ def step2():
         .count()
     )
     assert pending_deletes > 0, "No pending DELETE operations in VectorSyncOutbox!"
-    logger.info("[PASS] %d PENDING DELETE operations in Outbox — outbox contract satisfied.", pending_deletes)
+    logger.info(
+        "[PASS] %d PENDING DELETE operations in Outbox — outbox contract satisfied.",
+        pending_deletes,
+    )
 
     # Verify vectors still exist in Pinecone (worker hasn't run yet)
     try:
@@ -306,13 +312,11 @@ def step3():
     settings, db, user, doc_service, processing_service = get_context()
     parts = _STATE_FILE.read_text().strip().split(",")
     doc_id, profile_id, namespace = parts[0], parts[1], parts[2]
-    logger.info("Reading state: doc_id=%s, profile_id=%s, namespace=%s", doc_id, profile_id, namespace)
-
-    outbox = (
-        db.query(VectorSyncOutbox)
-        .filter_by(profile_id=profile_id, operation="DELETE")
-        .first()
+    logger.info(
+        "Reading state: doc_id=%s, profile_id=%s, namespace=%s", doc_id, profile_id, namespace
     )
+
+    outbox = db.query(VectorSyncOutbox).filter_by(profile_id=profile_id, operation="DELETE").first()
     if not outbox:
         logger.error("No DELETE outbox entry found for profile %s", profile_id)
         sys.exit(1)
@@ -328,8 +332,7 @@ def step3():
         .count()
     )
     assert pending_deletes == 0, (
-        f"DELETE operations are still PENDING in Outbox! "
-        f"pending_count={pending_deletes}"
+        f"DELETE operations are still PENDING in Outbox! pending_count={pending_deletes}"
     )
     logger.info("[PASS] Outbox is clear (no PENDING DELETE entries).")
 
@@ -344,9 +347,7 @@ def step3():
         assert final_count == 0, (
             f"Vectors NOT deleted from Pinecone! Found {final_count} orphaned vectors."
         )
-        logger.info(
-            "[PASS] Pinecone namespace EMPTY. Durable Delete successfully certified."
-        )
+        logger.info("[PASS] Pinecone namespace EMPTY. Durable Delete successfully certified.")
     except Exception as e:
         logger.warning(
             "[BLOCKED] Pinecone final check skipped: %s. "

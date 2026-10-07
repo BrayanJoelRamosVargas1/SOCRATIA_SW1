@@ -92,13 +92,13 @@ class SessionService:
 
     def get_snapshot(self, user: User, simulation_id: str) -> SessionSnapshot:
         simulation = SimulationPolicy.assert_owner(user, self.simulations.get(simulation_id))
-        
+
         if simulation.status == SimulationStatus.COMPLETED:
             # For a completed simulation, we just return the snapshot (no turn_state required)
             snapshot = self._snapshot(simulation)
             self.db.commit()
             return snapshot
-            
+
         if (
             simulation.status != SimulationStatus.ACTIVE
             or simulation.started_at is None
@@ -174,7 +174,11 @@ class SessionService:
         simulation.turn_state = SimulationTurnState.JURY_TURN
 
         # Check time limit
-        time_exceeded = simulation.started_at and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds() >= simulation.planned_duration_minutes * 60
+        time_exceeded = (
+            simulation.started_at
+            and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds()
+            >= simulation.planned_duration_minutes * 60
+        )
 
         if time_exceeded:
             self._close_simulation(simulation, now)
@@ -253,7 +257,11 @@ class SessionService:
             raise InvalidTurnError("Se ha alcanzado el límite máximo de preguntas de seguimiento.")
 
         now = datetime.now(UTC)
-        time_exceeded = simulation.started_at and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds() >= simulation.planned_duration_minutes * 60
+        time_exceeded = (
+            simulation.started_at
+            and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds()
+            >= simulation.planned_duration_minutes * 60
+        )
         if time_exceeded:
             self._close_simulation(simulation, now)
             self.db.commit()
@@ -304,7 +312,11 @@ class SessionService:
             raise InvalidTurnError
 
         now = datetime.now(UTC)
-        time_exceeded = simulation.started_at and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds() >= simulation.planned_duration_minutes * 60
+        time_exceeded = (
+            simulation.started_at
+            and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds()
+            >= simulation.planned_duration_minutes * 60
+        )
 
         next_question = self.turns.next_pending_question(simulation.id)
         turn = None
@@ -320,7 +332,6 @@ class SessionService:
         snapshot = self._snapshot(simulation)
         return turn, snapshot
 
-    
     def _close_simulation(self, simulation: Simulation, now: datetime) -> None:
         if simulation.status == SimulationStatus.COMPLETED:
             return
@@ -334,7 +345,7 @@ class SessionService:
         )
         if simulation.status == SimulationStatus.COMPLETED:
             return self._snapshot(simulation)
-            
+
         if simulation.status != SimulationStatus.ACTIVE:
             raise InvalidTurnError("Simulation is not active")
 

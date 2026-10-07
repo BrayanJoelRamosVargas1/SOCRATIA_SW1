@@ -53,8 +53,7 @@ class EmbeddingCoordinator:
         settings = get_settings()
         if settings.app_env != "production" and settings.embedding_force_provider_failure:
             forced_failures = {
-                p.strip().lower()
-                for p in settings.embedding_force_provider_failure.split(",")
+                p.strip().lower() for p in settings.embedding_force_provider_failure.split(",")
             }
             if (
                 active_provider.provider_id.lower() in forced_failures

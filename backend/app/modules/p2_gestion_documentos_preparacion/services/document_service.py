@@ -132,7 +132,12 @@ class DocumentService:
             DocumentStatus.ERROR,
         ):
             raise DocumentAlreadyProcessingError
-        chunk_ids = [str(c.id) for c in self.db.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()]
+        chunk_ids = [
+            str(c.id)
+            for c in self.db.query(DocumentChunk)
+            .filter(DocumentChunk.document_id == document.id)
+            .all()
+        ]
         if chunk_ids:
             if self.vectors is None:
                 raise DocumentProcessingUnavailableError
@@ -140,7 +145,7 @@ class DocumentService:
             from app.modules.p2_gestion_documentos_preparacion.models.vector_store import (
                 VectorSyncOutbox,
             )
-            
+
             if not document.embedding_profiles:
                 outbox = VectorSyncOutbox(
                     profile_id="default",

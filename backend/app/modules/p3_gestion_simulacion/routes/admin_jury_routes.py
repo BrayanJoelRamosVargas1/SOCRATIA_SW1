@@ -17,6 +17,7 @@ from app.modules.p3_gestion_simulacion.services.admin_jury_service import (
 router = APIRouter()
 Database = Annotated[Session, Depends(get_db)]
 
+
 @router.get("/jury-profiles", response_model=list[AdminJuryProfileResponse])
 def list_admin_jury_profiles(
     admin_user: AdminUser,
@@ -26,7 +27,10 @@ def list_admin_jury_profiles(
     profiles = AdminJuryProfileService(db).list_all()
     return [AdminJuryProfileResponse.model_validate(p) for p in profiles]
 
-@router.post("/jury-profiles", response_model=AdminJuryProfileResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/jury-profiles", response_model=AdminJuryProfileResponse, status_code=status.HTTP_201_CREATED
+)
 def create_jury_profile(
     body: JuryProfileCreateInput,
     admin_user: AdminUser,
@@ -35,6 +39,7 @@ def create_jury_profile(
     del admin_user
     profile = AdminJuryProfileService(db).create(body)
     return AdminJuryProfileResponse.model_validate(profile)
+
 
 @router.get("/jury-profiles/{profile_id}", response_model=AdminJuryProfileResponse)
 def get_jury_profile(
@@ -45,6 +50,7 @@ def get_jury_profile(
     del admin_user
     profile = AdminJuryProfileService(db).get(profile_id)
     return AdminJuryProfileResponse.model_validate(profile)
+
 
 @router.patch("/jury-profiles/{profile_id}", response_model=AdminJuryProfileResponse)
 def update_jury_profile(
@@ -57,6 +63,7 @@ def update_jury_profile(
     profile = AdminJuryProfileService(db).update(profile_id, body)
     return AdminJuryProfileResponse.model_validate(profile)
 
+
 @router.put("/jury-profiles/{profile_id}", response_model=AdminJuryProfileResponse)
 def update_jury_profile_put(
     profile_id: str,
@@ -67,6 +74,7 @@ def update_jury_profile_put(
     del admin_user
     profile = AdminJuryProfileService(db).update(profile_id, body)
     return AdminJuryProfileResponse.model_validate(profile)
+
 
 @router.delete("/jury-profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_jury_profile(

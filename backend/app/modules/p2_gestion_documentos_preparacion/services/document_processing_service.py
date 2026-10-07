@@ -250,61 +250,75 @@ class DocumentProcessingService:
                             batch_offset : batch_offset + len(batch_embeddings)
                         ]
 
-
                         from app.modules.p2_gestion_documentos_preparacion.models.vector_store import (
                             EmbeddingProfileStoreSync,
                             VectorSyncOutbox,
                         )
-                        
+
                         # Ensure sync trackers exist
                         for store_name in ["pinecone", "pgvector"]:
-                            sync = self.db.query(EmbeddingProfileStoreSync).filter_by(profile_id=profile.id, store_name=store_name).first()
+                            sync = (
+                                self.db.query(EmbeddingProfileStoreSync)
+                                .filter_by(profile_id=profile.id, store_name=store_name)
+                                .first()
+                            )
                             if not sync:
                                 sync = EmbeddingProfileStoreSync(
                                     profile_id=profile.id,
                                     store_name=store_name,
                                     status="SYNCING",
-                                    vectors_expected=job.chunks_total
+                                    vectors_expected=job.chunks_total,
                                 )
                                 self.db.add(sync)
                         self.db.flush()
-                        
+
                         for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True):
                             outbox = VectorSyncOutbox(
                                 profile_id=profile.id,
                                 chunk_id=chunk.id,
                                 dimension=active_provider.dimensions,
-                                operation="UPSERT"
+                                operation="UPSERT",
                             )
                             self.db.add(outbox)
 
                         # Insert vectors using raw SQL to cast correctly
-                        table_name = "vector_embeddings_768" if active_provider.dimensions == 768 else "vector_embeddings_1024"
+                        table_name = (
+                            "vector_embeddings_768"
+                            if active_provider.dimensions == 768
+                            else "vector_embeddings_1024"
+                        )
                         import uuid
 
                         from sqlalchemy import text
+
                         sql = text(f"""
                             INSERT INTO {table_name} 
                             (id, profile_id, chunk_id, document_id, user_id, embedding_space_id, embedding)
                             VALUES (:id, :profile_id, :chunk_id, :doc_id, :user_id, :space_id, CAST(:embedding AS vector))
                         """)
-                        
+
                         insert_params = []
                         for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True):
-                            insert_params.append({
-                                "id": str(uuid.uuid4()),
-                                "profile_id": profile.id,
-                                "chunk_id": chunk.id,
-                                "doc_id": document.id,
-                                "user_id": user.id,
-                                "space_id": job.current_embedding_space,
-                                "embedding": "[" + ",".join(map(str, embedding)) + "]"
-                            })
-                        
+                            insert_params.append(
+                                {
+                                    "id": str(uuid.uuid4()),
+                                    "profile_id": profile.id,
+                                    "chunk_id": chunk.id,
+                                    "doc_id": document.id,
+                                    "user_id": user.id,
+                                    "space_id": job.current_embedding_space,
+                                    "embedding": "[" + ",".join(map(str, embedding)) + "]",
+                                }
+                            )
+
                         if insert_params:
                             self.db.execute(sql, insert_params)
 
-                        pg_sync = self.db.query(EmbeddingProfileStoreSync).filter_by(profile_id=profile.id, store_name="pgvector").first()
+                        pg_sync = (
+                            self.db.query(EmbeddingProfileStoreSync)
+                            .filter_by(profile_id=profile.id, store_name="pgvector")
+                            .first()
+                        )
                         if pg_sync:
                             pg_sync.vectors_synced = job.chunks_embedded + len(batch_embeddings)
                             if pg_sync.vectors_synced >= pg_sync.vectors_expected:

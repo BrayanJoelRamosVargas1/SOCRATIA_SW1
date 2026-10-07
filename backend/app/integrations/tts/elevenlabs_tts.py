@@ -11,7 +11,9 @@ from app.integrations.tts.base import TTSProvider, TTSProviderError, TTSRequest
 
 logger = logging.getLogger(__name__)
 
-ELEVENLABS_WS_URL = "wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id=eleven_flash_v2_5"
+ELEVENLABS_WS_URL = (
+    "wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id=eleven_flash_v2_5"
+)
 
 
 class ElevenLabsTTSProvider(TTSProvider):
@@ -68,27 +70,33 @@ class ElevenLabsTTSProvider(TTSProvider):
                     try:
                         response = await ws.recv()
                         data = json.loads(response)
-                        
+
                         if data.get("error"):
                             logger.error("ElevenLabs WS returned error: %s", data["error"])
-                            raise TTSProviderError(f"ElevenLabs error: {data['error']}", provider=self.name)
+                            raise TTSProviderError(
+                                f"ElevenLabs error: {data['error']}", provider=self.name
+                            )
 
                         if data.get("audio"):
                             if first_chunk:
                                 ttfa = int((time.monotonic() - start_time) * 1000)
                                 logger.info("TTS_TTFA provider=%s ms=%d", self.name, ttfa)
                                 first_chunk = False
-                            
+
                             chunk = base64.b64decode(data["audio"])
                             if chunk:
                                 yield chunk
-                        
+
                         if data.get("isFinal"):
                             break
                     except websockets.exceptions.ConnectionClosed:
                         break
 
         except WebSocketException as exc:
-            raise TTSProviderError(f"ElevenLabs WebSocket error: {str(exc)}", provider=self.name) from exc
+            raise TTSProviderError(
+                f"ElevenLabs WebSocket error: {str(exc)}", provider=self.name
+            ) from exc
         except Exception as exc:
-            raise TTSProviderError(f"ElevenLabs unexpected error: {str(exc)}", provider=self.name) from exc
+            raise TTSProviderError(
+                f"ElevenLabs unexpected error: {str(exc)}", provider=self.name
+            ) from exc

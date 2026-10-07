@@ -50,7 +50,7 @@ class VoiceService:
             VoiceUtterance,
             VoiceUtteranceStatus,
         )
-        
+
         utterance_record = VoiceUtterance(
             simulation_id=self.simulation_id,
             client_utterance_id=message_id,
@@ -59,7 +59,7 @@ class VoiceService:
             stt_fallback_used=fallback_used,
             raw_transcript=transcribed_text,
             stt_latency_ms=stt_latency,
-            stt_provider=stt.primary.name if not fallback_used else "gemini"
+            stt_provider=stt.primary.name if not fallback_used else "gemini",
         )
         self.db.add(utterance_record)
 
@@ -87,9 +87,13 @@ class VoiceService:
         logger.info("VOICE_PROCESSING: Starting LiveJuryRouter")
 
         from app.modules.p3_gestion_simulacion.models import SimulationQuestion
-        
+
         simulation = self.session_service.simulations.get(self.simulation_id)
-        current_question_model = self.db.get(SimulationQuestion, snapshot.current_question.id) if snapshot.current_question else None
+        current_question_model = (
+            self.db.get(SimulationQuestion, snapshot.current_question.id)
+            if snapshot.current_question
+            else None
+        )
 
         if current_question_model and current_question_model.question:
             expected_points = current_question_model.question.expected_answer_points
@@ -110,14 +114,14 @@ class VoiceService:
             decision = llm_result.decision
             action = decision.action.value
             logger.info("VOICE_PROCESSING: LiveJuryRouter decided: %s", action)
-            
+
             # Enforce Capa IA follow-up depth limit
             depth = current_question_model.follow_up_depth if current_question_model else 0
             if action == JuryAction.FOLLOW_UP.value and depth >= 2:
                 logger.info("VOICE_PROCESSING: Follow-up depth >= 2, forcing NEXT_BANK")
                 action = JuryAction.NEXT_BANK.value
                 decision = None
-                
+
         except Exception as e:
             logger.error("LiveJuryRouter failed, falling back to NEXT_BANK: %s", str(e))
             action = JuryAction.NEXT_BANK.value

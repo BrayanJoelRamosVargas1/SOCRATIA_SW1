@@ -60,19 +60,18 @@ class GeminiSTTProvider(STTProvider):
                         "data": request.audio_bytes,
                     }
                 ],
-                config={
-                    "transcription_config": {
-                        "language_codes": ["es-419"],
-                        "mode": "VERBATIM"
-                    }
-                }
+                config={"transcription_config": {"language_codes": ["es-419"], "mode": "VERBATIM"}},
             )
         except APIError as exc:
             retryable = exc.code in {408, 429, 500, 502, 503, 504}
-            raise STTProviderError(f"Gemini API error: {str(exc)}", provider=self.name, retryable=retryable) from exc
+            raise STTProviderError(
+                f"Gemini API error: {str(exc)}", provider=self.name, retryable=retryable
+            ) from exc
         except Exception as exc:
-            raise STTProviderError(f"Gemini request failed: {str(exc)}", provider=self.name, retryable=False) from exc
-        
+            raise STTProviderError(
+                f"Gemini request failed: {str(exc)}", provider=self.name, retryable=False
+            ) from exc
+
         text = interaction.text
         if not text:
             raise STTProviderError("Gemini returned an empty response", provider=self.name)

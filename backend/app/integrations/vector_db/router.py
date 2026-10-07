@@ -160,8 +160,10 @@ class VectorStoreRouter(VectorStoreProvider):
                 primary_latency = (time.monotonic() - t0) * 1000
 
                 if "400" in err_str or "422" in err_str:
-                    logger.error(f"Pinecone invalid request (400/422): {str(e)} - Not opening circuit")
-                    # Reraise as ValueError so it can bypass generic fallback if we want, or just let it be handled 
+                    logger.error(
+                        f"Pinecone invalid request (400/422): {str(e)} - Not opening circuit"
+                    )
+                    # Reraise as ValueError so it can bypass generic fallback if we want, or just let it be handled
                     # but importantly, we DO NOT call self._record_failure()
                     raise ValueError(f"Invalid request to vector store: {str(e)}") from e
                 elif "401" in err_str or "403" in err_str or "unauthorized" in err_str:

@@ -89,7 +89,14 @@ async def simulation_session(
 
     current_utterance_id: str | None = None
     current_mime_type: str | None = None
-    allowed_mime_types = {"audio/webm", "audio/mp4", "audio/ogg", "audio/aac", "audio/mpeg", "audio/wav"}
+    allowed_mime_types = {
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg",
+        "audio/aac",
+        "audio/mpeg",
+        "audio/wav",
+    }
     audio_buffer = bytearray()
 
     try:
@@ -98,19 +105,23 @@ async def simulation_session(
             message = await websocket.receive()
             if "bytes" in message:
                 if not current_utterance_id:
-                    await websocket.send_json({
-                        "type": "error",
-                        "code": "NO_ACTIVE_UTTERANCE",
-                        "message": "Binary frame received without active voice.utterance.start"
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "code": "NO_ACTIVE_UTTERANCE",
+                            "message": "Binary frame received without active voice.utterance.start",
+                        }
+                    )
                     continue
                 if len(audio_buffer) + len(message["bytes"]) > settings.voice_max_utterance_bytes:
                     logger.warning("Max utterance bytes exceeded for simulation %s", simulation_id)
-                    await websocket.send_json({
-                        "type": "error",
-                        "code": "UTTERANCE_TOO_LARGE",
-                        "message": "Maximum audio size exceeded"
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "code": "UTTERANCE_TOO_LARGE",
+                            "message": "Maximum audio size exceeded",
+                        }
+                    )
                     # We discard it
                     current_utterance_id = None
                     current_mime_type = None
@@ -139,11 +150,13 @@ async def simulation_session(
 
             # Guard 12/12
             if snapshot.questions_exhausted or snapshot.current_question is None:
-                await websocket.send_json({
-                    "type": "error",
-                    "code": "SESSION_QUESTIONS_EXHAUSTED",
-                    "message": "Has respondido todas las preguntas"
-                })
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "code": "SESSION_QUESTIONS_EXHAUSTED",
+                        "message": "Has respondido todas las preguntas",
+                    }
+                )
                 # Prevent any other text processing for answers / voice start
                 if msg_data.get("type") in ["answer.submit", "voice.utterance.start"]:
                     continue
@@ -179,13 +192,19 @@ async def simulation_session(
                 # Could be voice.utterance.start
                 try:
                     start_msg = VoiceUtteranceStartMessage.model_validate(msg_data)
-                    mime_base = start_msg.payload.mime_type.split(";")[0].strip() if start_msg.payload.mime_type else ""
+                    mime_base = (
+                        start_msg.payload.mime_type.split(";")[0].strip()
+                        if start_msg.payload.mime_type
+                        else ""
+                    )
                     if mime_base not in allowed_mime_types:
-                        await websocket.send_json({
-                            "type": "error",
-                            "code": "INVALID_MIME_TYPE",
-                            "message": f"Unsupported audio format: {start_msg.payload.mime_type}"
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "code": "INVALID_MIME_TYPE",
+                                "message": f"Unsupported audio format: {start_msg.payload.mime_type}",
+                            }
+                        )
                         continue
 
                     current_utterance_id = str(start_msg.message_id)
@@ -251,44 +270,57 @@ async def simulation_session(
                                 await websocket.send_json(
                                     ServerEventState(type="jury.speaking").model_dump(mode="json")
                                 )
-                                await websocket.send_json({
-                                    "type": "tts.started",
-                                    "payload": {
-                                        "turn_id": snapshot.last_sequence,
-                                        "mime_type": "audio/mpeg",
-                                        "provider": "elevenlabs"
+                                await websocket.send_json(
+                                    {
+                                        "type": "tts.started",
+                                        "payload": {
+                                            "turn_id": snapshot.last_sequence,
+                                            "mime_type": "audio/mpeg",
+                                            "provider": "elevenlabs",
+                                        },
                                     }
-                                })
+                                )
                                 try:
                                     async for chunk in tts_stream:
                                         await websocket.send_bytes(chunk)
-                                    await websocket.send_json({
-                                        "type": "tts.completed",
-                                        "payload": {"turn_id": snapshot.last_sequence}
-                                    })
+                                    await websocket.send_json(
+                                        {
+                                            "type": "tts.completed",
+                                            "payload": {"turn_id": snapshot.last_sequence},
+                                        }
+                                    )
                                 except Exception as e:
                                     logger.error("TTS streaming failed midway: %s", str(e))
                                     if snapshot.current_question:
-                                        await websocket.send_json({
-                                            "type": "tts.fallback",
-                                            "payload": {"provider": "browser", "text": snapshot.current_question.text}
-                                        })
+                                        await websocket.send_json(
+                                            {
+                                                "type": "tts.fallback",
+                                                "payload": {
+                                                    "provider": "browser",
+                                                    "text": snapshot.current_question.text,
+                                                },
+                                            }
+                                        )
                                 await websocket.send_json(
                                     ServerEventState(type="jury.finished").model_dump(mode="json")
                                 )
                             else:
                                 if snapshot.current_question:
-                                    await websocket.send_json({
-                                        "type": "tts.fallback",
-                                        "payload": {"provider": "browser", "text": snapshot.current_question.text}
-                                    })
+                                    await websocket.send_json(
+                                        {
+                                            "type": "tts.fallback",
+                                            "payload": {
+                                                "provider": "browser",
+                                                "text": snapshot.current_question.text,
+                                            },
+                                        }
+                                    )
 
                         except Exception as e:
                             logger.error("Voice processing error (STT dead): %s", str(e))
-                            await websocket.send_json({
-                                "type": "stt.degraded",
-                                "payload": {"fallback": "text"}
-                            })
+                            await websocket.send_json(
+                                {"type": "stt.degraded", "payload": {"fallback": "text"}}
+                            )
 
                         current_utterance_id = None
                         current_mime_type = None

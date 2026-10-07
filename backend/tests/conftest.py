@@ -138,6 +138,7 @@ class FakeVectorStoreProvider:
                 VectorEmbedding1024,
                 VectorSyncOutbox,
             )
+
             outboxes = self.db.query(VectorSyncOutbox).filter_by(status="PENDING").all()
             for ob in outboxes:
                 if ob.operation == "DELETE":
@@ -149,15 +150,19 @@ class FakeVectorStoreProvider:
                 else:
                     ve = self.db.query(VectorEmbedding768).filter_by(chunk_id=ob.chunk_id).first()
                     if not ve:
-                        ve = self.db.query(VectorEmbedding1024).filter_by(chunk_id=ob.chunk_id).first()
-                    
+                        ve = (
+                            self.db.query(VectorEmbedding1024)
+                            .filter_by(chunk_id=ob.chunk_id)
+                            .first()
+                        )
+
                     if ve:
                         # Construct namespace manually: "d-{doc_id}-p-{profile_id}"
                         namespace = f"d-{ve.document_id}-p-{ob.profile_id}"
                         target = self._namespaces.setdefault(namespace, {})
                         target[ob.chunk_id] = VectorRecord(
-                            id=ob.chunk_id, 
-                            values=[0.1]*ob.dimension, 
+                            id=ob.chunk_id,
+                            values=[0.1] * ob.dimension,
                             metadata={
                                 "document_id": str(ve.document_id),
                                 "user_id": str(ve.user_id),
@@ -323,13 +328,17 @@ class FakePresentationGenerationProvider:
 @pytest.fixture
 def db_session() -> Session:
     import os
-    db_url = os.environ.get("TEST_DATABASE_URL", "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test")
+
+    db_url = os.environ.get(
+        "TEST_DATABASE_URL",
+        "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test",
+    )
     engine = create_engine(
         db_url,
         poolclass=StaticPool,
     )
     with engine.connect() as connection:
-        pass # no pragma foreign_keys needed for postgres
+        pass  # no pragma foreign_keys needed for postgres
     TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(engine)
     session = TestingSession()
