@@ -38,5 +38,9 @@ api_router.include_router(simulation_websocket_router, tags=["simulation-session
 from app.modules.p4_gestion_evaluacion_resultados.routes.evaluation_routes import (
     router as evaluation_router,
 )
+from app.modules.p4_gestion_evaluacion_resultados.routes.history_routes import (
+    router as history_router,
+)
 
 api_router.include_router(evaluation_router, tags=["evaluations"])
+api_router.include_router(history_router, tags=["history"])

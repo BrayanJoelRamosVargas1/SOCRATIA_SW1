@@ -1,11 +1,12 @@
+
 import pytest
-from app.main import app
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-import uuid
 
+from app.main import app
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p3_gestion_simulacion.models.simulation import Simulation, SimulationStatus
+
 
 @pytest.fixture
 def test_user(db_session: Session) -> User:
