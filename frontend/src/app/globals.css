@@ -465,3 +465,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .camera-panel, .camera-panel video { min-height: 300px; }
   .live-header { padding: 0 16px; grid-template-columns: 1fr auto; }.live-header > div { display: none; }.live-workspace { width: calc(100% - 24px); padding-top: 24px; }.live-question { min-height: 230px; padding: 27px 21px; }.answer-panel { padding: 18px; }.answer-panel > div { align-items: stretch; flex-direction: column; }
 }
+
+@media print {
+  button { display: none !important; }
+  body { background-color: white !important; }
+}
+

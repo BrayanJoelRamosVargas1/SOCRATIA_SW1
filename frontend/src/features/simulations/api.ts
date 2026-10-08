@@ -45,3 +45,18 @@ export function startSimulation(id: string): Promise<SessionSnapshot> {
 export function getSimulationSession(id: string): Promise<SessionSnapshot> {
   return apiRequest<SessionSnapshot>(`/simulations/${id}/session`);
 }
+
+import { SimulationReportResponse } from "@/types/report";
+
+export function evaluateSimulation(id: string): Promise<unknown> {
+  return apiRequest<unknown>(`/simulations/${id}/evaluate`, { method: 'POST' });
+}
+
+export function getSimulationReport(id: string): Promise<SimulationReportResponse> {
+  return apiRequest<SimulationReportResponse>(`/simulations/${id}/report`);
+}
+
+export function getEvaluation(id: string): Promise<{status: string}> {
+  return apiRequest<{status: string}>(`/simulations/${id}/evaluation`);
+}
+
