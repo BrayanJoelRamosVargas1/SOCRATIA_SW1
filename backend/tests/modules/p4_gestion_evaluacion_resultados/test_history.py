@@ -94,7 +94,7 @@ def test_history_returns_correct_summary_totals(client: TestClient, db_session: 
     s2 = create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.COMPLETED, now - timedelta(days=1))
     create_evaluation(db_session, s2, EvaluationStatus.COMPLETED, 90.0)
     
-    s3 = create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.PENDING, now)
+    s3 = create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.DRAFT, now)
     
     response = client.get("/api/v1/performance-history", headers=auth_headers)
     data = response.json()
@@ -168,7 +168,8 @@ def test_history_filter_by_start_date(client, db_session, test_user, setup_data,
     create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.COMPLETED, now - timedelta(days=2))
     create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.COMPLETED, now)
     
-    d_str = (now - timedelta(days=1)).isoformat()
+    import urllib.parse
+    d_str = urllib.parse.quote((now - timedelta(days=1)).isoformat())
     response = client.get(f"/api/v1/performance-history?start_date={d_str}", headers=auth_headers)
     assert response.json()["total_items"] == 1
 
@@ -177,7 +178,8 @@ def test_history_filter_by_end_date(client, db_session, test_user, setup_data, a
     create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.COMPLETED, now - timedelta(days=2))
     create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.COMPLETED, now)
     
-    d_str = (now - timedelta(days=1)).isoformat()
+    import urllib.parse
+    d_str = urllib.parse.quote((now - timedelta(days=1)).isoformat())
     response = client.get(f"/api/v1/performance-history?end_date={d_str}", headers=auth_headers)
     assert response.json()["total_items"] == 1
 
@@ -187,8 +189,9 @@ def test_history_filter_by_date_range(client, db_session, test_user, setup_data,
     s2 = create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.COMPLETED, now - timedelta(days=2))
     create_simulation(db_session, test_user, setup_data["doc1"], setup_data["bank"], setup_data["jury"], SimulationStatus.COMPLETED, now)
     
-    start_str = (now - timedelta(days=2, hours=1)).isoformat()
-    end_str = (now - timedelta(days=1)).isoformat()
+    import urllib.parse
+    start_str = urllib.parse.quote((now - timedelta(days=2, hours=1)).isoformat())
+    end_str = urllib.parse.quote((now - timedelta(days=1)).isoformat())
     response = client.get(f"/api/v1/performance-history?start_date={start_str}&end_date={end_str}", headers=auth_headers)
     assert response.json()["total_items"] == 1
     assert response.json()["items"][0]["simulation_id"] == s2.id

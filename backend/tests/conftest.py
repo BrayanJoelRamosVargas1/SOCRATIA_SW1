@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -333,10 +333,8 @@ def db_session() -> Session:
         "TEST_DATABASE_URL",
         "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test",
     )
-    engine = create_engine(
-        db_url,
-        poolclass=StaticPool,
-    )
+    from sqlalchemy.pool import NullPool
+    engine = create_engine(db_url, poolclass=NullPool)
     with engine.connect() as connection:
         pass  # no pragma foreign_keys needed for postgres
     TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -345,8 +343,16 @@ def db_session() -> Session:
     try:
         yield session
     finally:
+        session.rollback()
         session.close()
-        Base.metadata.drop_all(engine)
+        with engine.connect() as conn:
+            conn.rollback()
+            # Truncate all tables to keep schema but remove data (faster and avoids dropped table issues)
+            tables = ", ".join([f'"{table.name}"' for table in Base.metadata.sorted_tables])
+            if tables:
+                conn.execute(text(f"TRUNCATE {tables} CASCADE;"))
+            conn.commit()
+        engine.dispose()
 
 
 @pytest.fixture
