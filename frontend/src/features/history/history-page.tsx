@@ -68,15 +68,18 @@ export function HistoryPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    setLoading(true);
+    let active = true;
     apiRequest<PerformanceHistoryResponse>(`/performance-history?page=${page}&page_size=10`)
       .then((res) => {
-        setData(res);
+        if (active) setData(res);
       })
       .catch((err) => {
         console.error("Error fetching history", err);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
   }, [page]);
 
   if (loading && !data) {
@@ -156,7 +159,7 @@ export function HistoryPage() {
           ) : (
             <div className="h-64 flex items-end gap-2 p-4 border rounded-md">
               {/* Very simple visual chart using DOM elements, no external libs needed per reqs */}
-              {evaluatedItems.map((item, i) => (
+              {evaluatedItems.map((item) => (
                 <div key={item.simulation_id} className="flex flex-col items-center flex-1 h-full justify-end group relative">
                    <div className="text-xs font-semibold mb-1 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6">
                       {item.overall_score?.toFixed(1)}

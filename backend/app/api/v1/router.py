@@ -41,6 +41,10 @@ from app.modules.p4_gestion_evaluacion_resultados.routes.evaluation_routes impor
 from app.modules.p4_gestion_evaluacion_resultados.routes.history_routes import (
     router as history_router,
 )
+from app.modules.p6_gestion_administracion.routes.dashboard_routes import (
+    router as dashboard_router,
+)
 
 api_router.include_router(evaluation_router, tags=["evaluations"])
 api_router.include_router(history_router, tags=["history"])
+api_router.include_router(dashboard_router, prefix="/admin", tags=["admin-dashboard"])
