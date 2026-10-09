@@ -11,6 +11,7 @@ class UserResponse(BaseModel):
     id: str
     email: EmailStr
     full_name: str
+    bio: str | None = None
     is_active: bool
     roles: list[str]
     created_at: datetime
@@ -21,6 +22,7 @@ class UserResponse(BaseModel):
             id=user.id,
             email=user.email,
             full_name=user.full_name,
+            bio=user.bio,
             is_active=user.is_active,
             roles=sorted(role.name for role in user.roles),
             created_at=user.created_at,
@@ -29,4 +31,5 @@ class UserResponse(BaseModel):
 
 class UserUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    bio: str | None = Field(default=None, max_length=500)
     email: EmailStr | None = None

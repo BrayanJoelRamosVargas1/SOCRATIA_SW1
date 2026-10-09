@@ -64,8 +64,15 @@ def test_dashboard_with_data(admin_client, db_session):
     user1 = User(id="test-u1", email="dash-u1@example.com", full_name="Dash U1", password_hash="hash")
     doc1 = Document(id="test-d1", user_id="test-u1", original_name="test.pdf", file_type="pdf", file_size=1024, content_hash="hash1", storage_key="key1", status=DocumentStatus.PROCESSED)
     doc2 = Document(id="test-d2", user_id="test-u1", original_name="test2.pdf", file_type="pdf", file_size=1024, content_hash="hash2", storage_key="key2", status=DocumentStatus.EXTRACTING)
-    from app.modules.p2_gestion_documentos_preparacion.models.question_bank import QuestionBank, QuestionBankStatus
-    from app.modules.p3_gestion_simulacion.models.simulation import JuryProfile, FocusType, InterruptionLevel
+    from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (
+        QuestionBank,
+        QuestionBankStatus,
+    )
+    from app.modules.p3_gestion_simulacion.models.simulation import (
+        FocusType,
+        InterruptionLevel,
+        JuryProfile,
+    )
     
     bank = QuestionBank(id="bank1", user_id="test-u1", document_id="test-d1", status=QuestionBankStatus.READY)
     jury = JuryProfile(id="jury1", name="Jury", description="desc", strictness=3, focus_type=FocusType.TECHNICAL, interruption_level=InterruptionLevel.MEDIUM)

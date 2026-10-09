@@ -11,12 +11,12 @@ from app.modules.p1_gestion_identidad_seguridad.services.user_service import Use
 router = APIRouter()
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("", response_model=UserResponse)
 def get_me(current_user: CurrentUser) -> UserResponse:
     return UserResponse.from_user(current_user)
 
 
-@router.patch("/me", response_model=UserResponse)
+@router.patch("", response_model=UserResponse)
 def update_me(
     payload: UserUpdate,
     current_user: CurrentUser,

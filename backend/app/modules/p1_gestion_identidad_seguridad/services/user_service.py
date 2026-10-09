@@ -22,6 +22,8 @@ class UserService:
             user.email = email
         if "full_name" in changes and changes["full_name"] is not None:
             user.full_name = changes["full_name"].strip()
+        if "bio" in changes:
+            user.bio = changes["bio"].strip() if changes["bio"] else None
 
         try:
             self.db.commit()

@@ -61,5 +61,5 @@ export async function logout(): Promise<void> {
 }
 
 export function getCurrentUser(): Promise<User> {
-  return apiRequest<User>("/users/me");
+  return apiRequest<User>("/profile");
 }

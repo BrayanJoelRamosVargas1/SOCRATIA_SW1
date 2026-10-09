@@ -62,11 +62,11 @@ def test_complete_authentication_flow(client: TestClient) -> None:
     assert "socratia_access" in registration.cookies
     assert "socratia_refresh" in registration.cookies
 
-    me = client.get("/api/v1/users/me")
+    me = client.get("/api/v1/profile")
     assert me.status_code == 200
     assert me.json()["full_name"] == "Ada Lovelace"
 
-    updated = client.patch("/api/v1/users/me", json={"full_name": "Ada Byron"})
+    updated = client.patch("/api/v1/profile", json={"full_name": "Ada Byron"})
     assert updated.status_code == 200
     assert updated.json()["full_name"] == "Ada Byron"
 
@@ -79,7 +79,7 @@ def test_complete_authentication_flow(client: TestClient) -> None:
     assert logout.status_code == 200
     assert logout.json() == {"message": "Sesión cerrada."}
 
-    unauthorized = client.get("/api/v1/users/me")
+    unauthorized = client.get("/api/v1/profile")
     assert unauthorized.status_code == 401
 
 
@@ -368,7 +368,7 @@ def test_password_reset_changes_password_and_revokes_every_session(
     assert reset.status_code == 200
     assert (
         client.get(
-            "/api/v1/users/me",
+            "/api/v1/profile",
             headers={"authorization": f"Bearer {old_access}"},
         ).status_code
         == 401

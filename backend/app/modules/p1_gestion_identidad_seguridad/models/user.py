@@ -38,6 +38,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="true", nullable=False)
+    bio: Mapped[str | None] = mapped_column(String(500), nullable=True)
     auth_version: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0", nullable=False
     )
