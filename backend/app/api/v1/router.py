@@ -48,3 +48,9 @@ from app.modules.p6_gestion_administracion.routes.dashboard_routes import (
 api_router.include_router(evaluation_router, tags=["evaluations"])
 api_router.include_router(history_router, tags=["history"])
 api_router.include_router(dashboard_router, prefix="/admin", tags=["admin-dashboard"])
+
+from app.modules.p6_gestion_administracion.routes.admin_users_routes import (
+    router as admin_users_router,
+)
+
+api_router.include_router(admin_users_router, prefix="/admin", tags=["admin-users"])

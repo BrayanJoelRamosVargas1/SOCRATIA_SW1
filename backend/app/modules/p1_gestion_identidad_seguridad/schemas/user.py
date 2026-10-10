@@ -30,6 +30,7 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     full_name: str | None = Field(default=None, min_length=2, max_length=120)
     bio: str | None = Field(default=None, max_length=500)
     email: EmailStr | None = None
