@@ -49,8 +49,18 @@ api_router.include_router(evaluation_router, tags=["evaluations"])
 api_router.include_router(history_router, tags=["history"])
 api_router.include_router(dashboard_router, prefix="/admin", tags=["admin-dashboard"])
 
+from app.modules.p5_gestion_saas.routes.admin_plans import (
+    router as admin_plans_router,
+)
+from app.modules.p5_gestion_saas.routes.admin_subscriptions import (
+    router as admin_subscriptions_router,
+)
 from app.modules.p6_gestion_administracion.routes.admin_users_routes import (
     router as admin_users_router,
 )
 
 api_router.include_router(admin_users_router, prefix="/admin", tags=["admin-users"])
+api_router.include_router(admin_plans_router, prefix="/admin/plans", tags=["admin-plans"])
+api_router.include_router(
+    admin_subscriptions_router, prefix="/admin/subscriptions", tags=["admin-subscriptions"]
+)

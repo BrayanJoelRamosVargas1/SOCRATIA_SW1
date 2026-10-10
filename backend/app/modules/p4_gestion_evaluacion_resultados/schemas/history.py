@@ -22,11 +22,13 @@ class PerformanceHistoryItem(BaseModel):
     delta_score: float | None
     report_url: str
 
+
 class PerformanceHistorySummary(BaseModel):
     total_simulations: int
     evaluated_simulations: int
     latest_score: float | None
     best_score: float | None
+
 
 class PerformanceHistoryResponse(BaseModel):
     summary: PerformanceHistorySummary

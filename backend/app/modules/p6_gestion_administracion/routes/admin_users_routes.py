@@ -11,6 +11,7 @@ from app.modules.p6_gestion_administracion.services.admin_user_service import Ad
 
 router = APIRouter()
 
+
 @router.get("/users")
 def list_users(
     admin: AdminUser,
@@ -19,29 +20,27 @@ def list_users(
     size: int = Query(20, ge=1, le=100),
     search: str | None = None,
     role: str | None = None,
-    is_active: bool | None = None
+    is_active: bool | None = None,
 ) -> dict[str, Any]:
     service = AdminUserService(db)
     result = service.list_users(page, size, search, role, is_active)
     result["items"] = [UserResponse.from_user(u).model_dump() for u in result["items"]]
     return result
 
+
 @router.get("/users/{user_id}", response_model=UserResponse)
-def get_user(
-    user_id: str,
-    admin: AdminUser,
-    db: Annotated[Session, Depends(get_db)]
-) -> Any:
+def get_user(user_id: str, admin: AdminUser, db: Annotated[Session, Depends(get_db)]) -> Any:
     service = AdminUserService(db)
     user = service.get_user(user_id)
     return UserResponse.from_user(user)
+
 
 @router.patch("/users/{user_id}", response_model=UserResponse)
 def update_user(
     user_id: str,
     payload: AdminUserUpdate,
     admin: AdminUser,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
 ) -> Any:
     service = AdminUserService(db)
     user = service.update_user(admin, user_id, payload)

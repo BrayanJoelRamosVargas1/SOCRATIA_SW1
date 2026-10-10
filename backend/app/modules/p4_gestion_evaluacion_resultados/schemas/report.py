@@ -10,6 +10,7 @@ class ScoreAvailability(BaseModel):
     communication: bool
     nonverbal: bool
 
+
 class ReportQuestionDetail(BaseModel):
     question: str
     answer: str
@@ -25,6 +26,7 @@ class ReportQuestionDetail(BaseModel):
     eye_contact_score: float | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class SimulationReportResponse(BaseModel):
     simulation_id: str

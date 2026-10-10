@@ -17,14 +17,16 @@ from app.modules.p4_gestion_evaluacion_resultados.schemas.report import (
 
 class ReportProjectionService:
     @staticmethod
-    def get_simulation_report(db: Session, simulation_id: str, user_id: str) -> SimulationReportResponse:
+    def get_simulation_report(
+        db: Session, simulation_id: str, user_id: str
+    ) -> SimulationReportResponse:
         # Load Simulation and Evaluation
         stmt = (
             select(Simulation)
             .options(
                 selectinload(Simulation.document),
                 selectinload(Simulation.questions),
-                selectinload(Simulation.turns).selectinload(SimulationTurn.simulation_question)
+                selectinload(Simulation.turns).selectinload(SimulationTurn.simulation_question),
             )
             .where(Simulation.id == simulation_id)
         )
@@ -32,7 +34,7 @@ class ReportProjectionService:
 
         if not simulation:
             raise HTTPException(status_code=404, detail="Simulation not found")
-        
+
         if simulation.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not enough permissions")
 
@@ -41,9 +43,7 @@ class ReportProjectionService:
 
         eval_stmt = (
             select(Evaluation)
-            .options(
-                selectinload(Evaluation.turn_evaluations)
-            )
+            .options(selectinload(Evaluation.turn_evaluations))
             .where(Evaluation.simulation_id == simulation_id)
         )
         evaluation = db.scalar(eval_stmt)
@@ -56,11 +56,15 @@ class ReportProjectionService:
 
         # Map turns to question-answer pairs
         # A question is asked by JURY, answered by STUDENT
-        
+
         # We need to map simulation_question_id to its QUESTION and ANSWER turns
-        question_turns = {t.simulation_question_id: t for t in simulation.turns if t.turn_type == "QUESTION"}
-        answer_turns = {t.simulation_question_id: t for t in simulation.turns if t.turn_type == "ANSWER"}
-        
+        question_turns = {
+            t.simulation_question_id: t for t in simulation.turns if t.turn_type == "QUESTION"
+        }
+        answer_turns = {
+            t.simulation_question_id: t for t in simulation.turns if t.turn_type == "ANSWER"
+        }
+
         # Map TurnEvaluations
         turn_evals = {te.simulation_turn_id: te for te in evaluation.turn_evaluations}
 
@@ -71,24 +75,26 @@ class ReportProjectionService:
 
             if not q_turn or not a_turn:
                 continue
-            
+
             te = turn_evals.get(a_turn.id)
-            
+
             if te:
-                report_questions.append(ReportQuestionDetail(
-                    question=q_turn.content,
-                    answer=a_turn.content,
-                    classification=te.classification,
-                    turn_score=te.turn_score,
-                    strengths=te.strengths,
-                    weaknesses=te.weaknesses,
-                    missing_points=te.missing_points,
-                    contradictions=te.contradictions,
-                    evidence=te.evidence,
-                    time_taken_seconds=te.time_taken_seconds,
-                    filler_words_count=te.filler_words_count,
-                    eye_contact_score=te.eye_contact_score
-                ))
+                report_questions.append(
+                    ReportQuestionDetail(
+                        question=q_turn.content,
+                        answer=a_turn.content,
+                        classification=te.classification,
+                        turn_score=te.turn_score,
+                        strengths=te.strengths,
+                        weaknesses=te.weaknesses,
+                        missing_points=te.missing_points,
+                        contradictions=te.contradictions,
+                        evidence=te.evidence,
+                        time_taken_seconds=te.time_taken_seconds,
+                        filler_words_count=te.filler_words_count,
+                        eye_contact_score=te.eye_contact_score,
+                    )
+                )
 
         duration = None
         if simulation.started_at and simulation.finished_at:
@@ -107,7 +113,7 @@ class ReportProjectionService:
             availability=ScoreAvailability(
                 content=evaluation.content_score is not None,
                 communication=evaluation.communication_score is not None,
-                nonverbal=evaluation.nonverbal_score is not None
+                nonverbal=evaluation.nonverbal_score is not None,
             ),
-            questions=report_questions
+            questions=report_questions,
         )

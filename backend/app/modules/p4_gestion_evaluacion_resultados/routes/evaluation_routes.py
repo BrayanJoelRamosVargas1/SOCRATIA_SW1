@@ -55,17 +55,17 @@ def get_evaluation(
 
     return evaluation
 
+
 from app.modules.p4_gestion_evaluacion_resultados.schemas.report import SimulationReportResponse
 from app.modules.p4_gestion_evaluacion_resultados.services.report_projection_service import (
     ReportProjectionService,
 )
 
 
-@router.get('/simulations/{id}/report', response_model=SimulationReportResponse)
+@router.get("/simulations/{id}/report", response_model=SimulationReportResponse)
 def get_report(
     id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     return ReportProjectionService.get_simulation_report(db, id, current_user.id)
-

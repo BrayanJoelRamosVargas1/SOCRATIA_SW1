@@ -333,6 +333,7 @@ def db_session() -> Session:
         "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test",
     )
     from sqlalchemy.pool import NullPool
+
     engine = create_engine(db_url, poolclass=NullPool)
     with engine.connect() as connection:
         pass  # no pragma foreign_keys needed for postgres
@@ -349,7 +350,11 @@ def db_session() -> Session:
             # Truncate all tables to keep schema but remove data (faster and avoids dropped table issues)
             tables = ", ".join([f'"{table.name}"' for table in Base.metadata.sorted_tables])
             if tables:
-                conn.execute(text(f"TRUNCATE {tables} CASCADE;"))
+                if engine.name == "sqlite":
+                    for table in Base.metadata.sorted_tables:
+                        conn.execute(text(f"DELETE FROM {table.name};"))
+                else:
+                    conn.execute(text(f"TRUNCATE {tables} CASCADE;"))
             conn.commit()
         engine.dispose()
 

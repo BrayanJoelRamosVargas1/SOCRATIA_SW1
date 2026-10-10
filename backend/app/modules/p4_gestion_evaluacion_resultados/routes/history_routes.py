@@ -11,6 +11,7 @@ from app.modules.p4_gestion_evaluacion_resultados.services.history_service impor
 
 router = APIRouter()
 
+
 @router.get("/performance-history", response_model=PerformanceHistoryResponse)
 def get_performance_history(
     page: int = Query(1, ge=1),
@@ -30,5 +31,5 @@ def get_performance_history(
         start_date=start_date,
         end_date=end_date,
         document_id=document_id,
-        status=status
+        status=status,
     )

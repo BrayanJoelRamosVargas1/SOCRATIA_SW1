@@ -4,13 +4,14 @@ Revision ID: c5996487352c
 Revises: a6ad5f18a9f3
 Create Date: 2026-09-10 10:13:42.249940
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = 'c5996487352c'
-down_revision: str | None = 'a6ad5f18a9f3'
+revision: str = "c5996487352c"
+down_revision: str | None = "a6ad5f18a9f3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -28,7 +29,9 @@ def upgrade() -> None:
         sa.Column("document_id", sa.String(length=36), nullable=False),
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("embedding_space_id", sa.String(length=64), nullable=False),
-        sa.Column("embedding", sa.Text(), nullable=False),  # We'll alter this raw SQL because Alembic doesn't natively support pgvector vector types well
+        sa.Column(
+            "embedding", sa.Text(), nullable=False
+        ),  # We'll alter this raw SQL because Alembic doesn't natively support pgvector vector types well
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -48,7 +51,9 @@ def upgrade() -> None:
     )
 
     # Convert embedding column to vector(768)
-    op.execute("ALTER TABLE vector_embeddings_768 ALTER COLUMN embedding TYPE vector(768) USING embedding::vector")
+    op.execute(
+        "ALTER TABLE vector_embeddings_768 ALTER COLUMN embedding TYPE vector(768) USING embedding::vector"
+    )
 
     # Indices for 768
     op.create_index(
@@ -67,8 +72,9 @@ def upgrade() -> None:
         unique=False,
     )
     # HNSW Index
-    op.execute("CREATE INDEX ix_vector_embeddings_768_embedding_hnsw ON vector_embeddings_768 USING hnsw (embedding vector_cosine_ops);")
-
+    op.execute(
+        "CREATE INDEX ix_vector_embeddings_768_embedding_hnsw ON vector_embeddings_768 USING hnsw (embedding vector_cosine_ops);"
+    )
 
     # 3. Table for 1024 dimension
     op.create_table(
@@ -98,7 +104,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("profile_id", "chunk_id", name="uq_profile_chunk_1024"),
     )
 
-    op.execute("ALTER TABLE vector_embeddings_1024 ALTER COLUMN embedding TYPE vector(1024) USING embedding::vector")
+    op.execute(
+        "ALTER TABLE vector_embeddings_1024 ALTER COLUMN embedding TYPE vector(1024) USING embedding::vector"
+    )
 
     op.create_index(
         "ix_vector_embeddings_1024_document_id",
@@ -116,8 +124,9 @@ def upgrade() -> None:
         unique=False,
     )
     # HNSW Index
-    op.execute("CREATE INDEX ix_vector_embeddings_1024_embedding_hnsw ON vector_embeddings_1024 USING hnsw (embedding vector_cosine_ops);")
-
+    op.execute(
+        "CREATE INDEX ix_vector_embeddings_1024_embedding_hnsw ON vector_embeddings_1024 USING hnsw (embedding vector_cosine_ops);"
+    )
 
     # 4. Table for EmbeddingProfileStoreSync
     op.create_table(
@@ -185,9 +194,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_vector_sync_outbox_next_retry_at", "vector_sync_outbox", ["next_retry_at"], unique=False
     )
-    op.create_index(
-        "ix_vector_sync_outbox_status", "vector_sync_outbox", ["status"], unique=False
-    )
+    op.create_index("ix_vector_sync_outbox_status", "vector_sync_outbox", ["status"], unique=False)
 
 
 def downgrade() -> None:
@@ -196,4 +203,3 @@ def downgrade() -> None:
     op.drop_table("vector_embeddings_1024")
     op.drop_table("vector_embeddings_768")
     op.execute("DROP EXTENSION IF EXISTS vector;")
-

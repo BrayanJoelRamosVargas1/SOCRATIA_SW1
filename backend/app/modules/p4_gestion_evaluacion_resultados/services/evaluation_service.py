@@ -32,6 +32,7 @@ class EvaluationService:
         if existing:
             if existing.status == EvaluationStatus.PROCESSING:
                 from fastapi import HTTPException
+
                 raise HTTPException(status_code=409, detail="Evaluation is already processing.")
             if existing.status == EvaluationStatus.COMPLETED:
                 return existing
@@ -149,7 +150,7 @@ class EvaluationService:
         except Exception as e:
             self.db.rollback()
             print("ERROR IN EVALUATION SERVICE:", e)
-            
+
             # Fetch again to avoid DetachedInstanceError
             evaluation = self.db.query(Evaluation).filter_by(id=evaluation.id).first()
             if evaluation:
