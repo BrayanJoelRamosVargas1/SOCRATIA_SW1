@@ -1,4 +1,3 @@
-import instructor
 from groq import AsyncGroq
 
 from app.core.config import get_settings
@@ -34,15 +33,17 @@ class Evaluator:
             self.model = model or settings.groq_question_model
             api_key = settings.groq_api_key.get_secret_value() if settings.groq_api_key else ""
             client = AsyncGroq(api_key=api_key)
-            self.client = instructor.from_groq(client, mode=instructor.Mode.TOOLS)
         else:
-            import google.generativeai as genai
-
-            api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else ""
-            genai.configure(api_key=api_key)
-            client = genai.GenerativeModel(model or settings.gemini_question_model)
-            self.client = instructor.from_gemini(client, mode=instructor.Mode.GEMINI_JSON)
             self.model = model or settings.gemini_question_model
+            try:
+                from google import genai
+
+                api_key = (
+                    settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else ""
+                )
+                self.client = genai.Client(api_key=api_key)
+            except Exception:
+                self.client = None
 
     async def evaluate_turn(
         self,

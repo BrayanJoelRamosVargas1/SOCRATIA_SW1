@@ -334,16 +334,30 @@ class FakePresentationGenerationProvider:
 @pytest.fixture
 def db_session() -> Session:
     import os
+    import socket
 
-    db_url = os.environ.get(
-        "TEST_DATABASE_URL",
-        "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test",
-    )
+    db_url = os.environ.get("TEST_DATABASE_URL")
+    if not db_url:
+        # Check if internal docker 'db' is resolvable
+        try:
+            socket.gethostbyname("db")
+            db_url = "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test"
+        except (socket.gaierror, OSError):
+            # Running directly on host (Windows/Linux local)
+            db_url = "postgresql+psycopg://socratia:socratia_dev_password@localhost:5435/socratia_test"
+
+    # STRICT SAFETY CHECK: Prevent running against dev or prod databases!
+    if "test" not in db_url.lower() and ":memory:" not in db_url:
+        raise RuntimeError(
+            f"SAFETY VIOLATION: Test suite must target a database containing 'test' (e.g. socratia_test). "
+            f"Received: {db_url}. Refusing to proceed to protect development/production data!"
+        )
+
     from sqlalchemy.pool import NullPool
 
     engine = create_engine(db_url, poolclass=NullPool)
     with engine.connect() as connection:
-        pass  # no pragma foreign_keys needed for postgres
+        pass  # verify connection
     TestingSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(engine)
     session = TestingSession()
@@ -364,6 +378,14 @@ def db_session() -> Session:
                     conn.execute(text(f"TRUNCATE {tables} CASCADE;"))
             conn.commit()
         engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def isolate_smtp_globally(email_provider: FakeEmailProvider):
+    """Guarantees that all tests across the suite strictly use FakeEmailProvider."""
+    app.dependency_overrides[get_email_provider] = lambda: email_provider
+    yield
+    app.dependency_overrides.pop(get_email_provider, None)
 
 
 @pytest.fixture

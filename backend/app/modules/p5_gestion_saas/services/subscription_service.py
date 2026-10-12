@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
@@ -71,8 +72,15 @@ class SubscriptionService:
             price_at_subscription=plan.price,
         )
         db.add(new_sub)
-        db.commit()
-        db.refresh(new_sub)
+        try:
+            db.commit()
+            db.refresh(new_sub)
+        except IntegrityError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already has an active subscription or concurrent modification detected.",
+            ) from err
         return new_sub
 
     @staticmethod
@@ -109,8 +117,15 @@ class SubscriptionService:
                 sub.plan_id = plan.id
                 sub.price_at_subscription = plan.price
 
-        db.commit()
-        db.refresh(sub)
+        try:
+            db.commit()
+            db.refresh(sub)
+        except IntegrityError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already has an active subscription or concurrent modification detected.",
+            ) from err
         return sub
 
     @staticmethod
@@ -152,8 +167,15 @@ class SubscriptionService:
             price_at_subscription=plan.price,
         )
         db.add(new_sub)
-        db.commit()
-        db.refresh(new_sub)
+        try:
+            db.commit()
+            db.refresh(new_sub)
+        except IntegrityError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already has an active subscription or concurrent modification detected.",
+            ) from err
         return new_sub
 
     @staticmethod
@@ -189,8 +211,15 @@ class SubscriptionService:
             price_at_subscription=new_plan.price,
         )
         db.add(new_sub)
-        db.commit()
-        db.refresh(new_sub)
+        try:
+            db.commit()
+            db.refresh(new_sub)
+        except IntegrityError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already has an active subscription or concurrent modification detected.",
+            ) from err
         return new_sub
 
     @staticmethod
