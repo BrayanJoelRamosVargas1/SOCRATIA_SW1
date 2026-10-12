@@ -50,6 +50,115 @@ export function NewSimulationPage() {
     }
   }
 
+  function getDifficultyBadge(strictness: number) {
+    if (strictness <= 2) {
+      return { label: "🟢 Nivel: Fácil / Formativo", color: "#166534", bg: "#dcfce7" };
+    }
+    if (strictness === 3) {
+      return { label: "🟡 Nivel: Intermedio / Estándar", color: "#854d0e", bg: "#fef9c3" };
+    }
+    return { label: "🔴 Nivel: Difícil / Tribunal Doctoral", color: "#991b1b", bg: "#fee2e2" };
+  }
+
   if (!user) return <main className="loading-screen"><div className="loading-orbit" /><p>Preparando configuración…</p></main>;
-  return <main className="dashboard-layout"><AppSidebar user={user} active="simulations" /><section className="dashboard-content simulations-content"><Link className="detail-back" href="/simulations">← Simulaciones</Link><header className="dashboard-header"><div><p className="eyebrow">CU12 · CU13</p><h1>Nueva simulación</h1><p>Elige el trabajo, el estilo del tribunal y tu tiempo disponible.</p></div></header>{error && <p className="form-error">{error}</p>}<section className="simulation-form-card"><label className="simulation-field">Documento<select value={documentId} onChange={(event) => setDocumentId(event.target.value)}><option value="">Selecciona un documento listo</option>{documents.map((item) => <option value={item.id} key={item.id}>{item.original_name}</option>)}</select></label>{documents.length === 0 && <p className="form-hint">Primero procesa un documento y genera su banco de 12 preguntas.</p>}<div className="simulation-field"><span>Perfil del jurado</span><div className="jury-grid">{juries.map((jury) => <button type="button" key={jury.id} className={`jury-option ${juryId === jury.id ? "selected" : ""}`} onClick={() => setJuryId(jury.id)}><b>{JURY_ICON[jury.focus_type]}</b><strong>{jury.name}</strong><p>{jury.description}</p><small>Exigencia {jury.strictness}/5 · Interrupción {jury.interruption_level.toLowerCase()}</small></button>)}</div></div><label className="simulation-field duration-field">Duración planificada<span><input type="range" min="5" max="30" step="5" value={duration} onChange={(event) => setDuration(Number(event.target.value))} /><b>{duration} minutos</b></span></label><button className="button button-primary simulation-submit" type="button" disabled={!documentId || !juryId || saving} onClick={() => void submit()}>{saving ? "Creando…" : "Continuar a calibración"}</button></section></section></main>;
+  return (
+    <main className="dashboard-layout">
+      <AppSidebar user={user} active="simulations" />
+      <section className="dashboard-content simulations-content">
+        <Link className="detail-back" href="/simulations">
+          ← Simulaciones
+        </Link>
+        <header className="dashboard-header">
+          <div>
+            <p className="eyebrow">CU10 · Configuración de Simulación</p>
+            <h1>Nueva Simulación de Defensa</h1>
+            <p>Selecciona tu tesis de grado, el tribunal evaluador y la rigurosidad socrática.</p>
+          </div>
+        </header>
+        {error && <p className="form-error">{error}</p>}
+        <section className="simulation-form-card">
+          <label className="simulation-field">
+            Documento de Tesis
+            <select value={documentId} onChange={(event) => setDocumentId(event.target.value)}>
+              <option value="">Selecciona un documento procesado</option>
+              {documents.map((item) => (
+                <option value={item.id} key={item.id}>
+                  📄 {item.original_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {documents.length === 0 && (
+            <p className="form-hint">
+              Primero sube y procesa un documento académico para generar su banco de preguntas socráticas.
+            </p>
+          )}
+
+          <div className="simulation-field">
+            <span>Tribunal Jurado Evaluador</span>
+            <div className="jury-grid">
+              {juries.map((jury) => {
+                const diff = getDifficultyBadge(jury.strictness);
+                const isSelected = juryId === jury.id;
+                return (
+                  <button
+                    type="button"
+                    key={jury.id}
+                    className={`jury-option ${isSelected ? "selected" : ""}`}
+                    onClick={() => setJuryId(jury.id)}
+                    style={{ position: "relative" }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                      <b>{JURY_ICON[jury.focus_type]}</b>
+                      <span
+                        style={{
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          background: diff.bg,
+                          color: diff.color,
+                        }}
+                      >
+                        {diff.label}
+                      </span>
+                    </div>
+                    <strong>{jury.name}</strong>
+                    <p>{jury.description}</p>
+                    <small>
+                      Rigurosidad: {jury.strictness}/5 · Interrupción: {jury.interruption_level.toLowerCase()} · Enfoque: {jury.focus_type.toLowerCase()}
+                    </small>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <label className="simulation-field duration-field">
+            Duración Planificada
+            <span>
+              <input
+                type="range"
+                min="5"
+                max="30"
+                step="5"
+                value={duration}
+                onChange={(event) => setDuration(Number(event.target.value))}
+              />
+              <b>{duration} minutos</b>
+            </span>
+          </label>
+
+          <button
+            className="button button-primary simulation-submit"
+            type="button"
+            disabled={!documentId || !juryId || saving}
+            onClick={() => void submit()}
+          >
+            {saving ? "Creando sala…" : "Continuar a Calibración de Hardware →"}
+          </button>
+        </section>
+      </section>
+    </main>
+  );
 }

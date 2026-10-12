@@ -40,6 +40,7 @@ export default function StudentSubscriptionPage() {
   // Confirmation Modals
   const [selectedPlanToSubscribe, setSelectedPlanToSubscribe] = useState<Plan | null>(null);
   const [selectedPlanToChange, setSelectedPlanToChange] = useState<Plan | null>(null);
+  const [confirmedPolicy, setConfirmedPolicy] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -211,21 +212,44 @@ export default function StudentSubscriptionPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {plans.map((plan) => {
                 const isCurrent = plan.id === currentPlanId;
+                const currentPrice = subData?.subscription?.price_at_subscription
+                  ? Number(subData.subscription.price_at_subscription)
+                  : 0;
+                const thisPrice = Number(plan.price);
+                const isUpgrade = currentPlanId && thisPrice > currentPrice;
+                const isDowngrade = currentPlanId && thisPrice < currentPrice;
+
                 return (
                   <div
                     key={plan.id}
                     className={`bg-white rounded-xl border p-6 flex flex-col justify-between shadow-sm transition-all ${
-                      isCurrent ? "ring-2 ring-blue-600 border-transparent bg-blue-50/20" : "hover:border-gray-300"
+                      isCurrent
+                        ? "ring-2 ring-emerald-500 border-transparent bg-emerald-50/15"
+                        : "hover:border-gray-300 hover:shadow-md"
                     }`}
                   >
                     <div>
-                      {isCurrent && (
-                        <span className="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded mb-2">
-                          ✓ Plan Actual Asignado
-                        </span>
-                      )}
+                      <div className="flex items-center justify-between mb-2">
+                        {isCurrent ? (
+                          <span className="inline-block bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                            🔒 Plan Actual Activo
+                          </span>
+                        ) : isUpgrade ? (
+                          <span className="inline-block bg-indigo-100 text-indigo-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                            🚀 Mejora de Plan (Upgrade)
+                          </span>
+                        ) : isDowngrade ? (
+                          <span className="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                            ⬇️ Cambio de Plan (Downgrade)
+                          </span>
+                        ) : (
+                          <span className="inline-block bg-gray-100 text-gray-700 text-xs font-medium px-2 py-0.5 rounded">
+                            Nivel Académico
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
-                      <p className="text-gray-500 text-sm mt-1 h-10 line-clamp-2">
+                      <p className="text-gray-500 text-sm mt-1 h-12 line-clamp-2">
                         {plan.description || "Plan estándar para estudiantes"}
                       </p>
                       <div className="mt-4">
@@ -236,13 +260,13 @@ export default function StudentSubscriptionPage() {
                       </div>
                       <ul className="mt-6 space-y-2 text-xs text-gray-600 border-t pt-4">
                         <li className="flex items-center gap-2">
-                          <span className="text-green-500 font-bold">✓</span> Hasta {plan.max_documents} documentos
+                          <span className="text-emerald-600 font-bold">✓</span> Hasta {plan.max_documents} documentos y tesis
                         </li>
                         <li className="flex items-center gap-2">
-                          <span className="text-green-500 font-bold">✓</span> {plan.max_simulations} simulaciones activas
+                          <span className="text-emerald-600 font-bold">✓</span> {plan.max_simulations} simulaciones de defensa
                         </li>
                         <li className="flex items-center gap-2">
-                          <span className="text-green-500 font-bold">✓</span> {plan.max_storage_mb} MB de almacenamiento
+                          <span className="text-emerald-600 font-bold">✓</span> {plan.max_storage_mb} MB almacenamiento seguro
                         </li>
                       </ul>
                     </div>
@@ -252,23 +276,30 @@ export default function StudentSubscriptionPage() {
                         <div className="text-center">
                           <button
                             disabled
-                            className="w-full bg-gray-100 text-gray-500 font-semibold py-2 px-4 rounded-lg text-xs cursor-not-allowed border border-gray-200"
+                            className="w-full bg-emerald-50 text-emerald-700 font-bold py-2.5 px-4 rounded-lg text-xs cursor-not-allowed border border-emerald-200"
                           >
-                            Plan Actual Activo
+                            ✓ Plan en uso en tu cuenta
                           </button>
-                          <span className="text-[10px] text-gray-400 mt-1 block">
-                            Tu cuenta ya cuenta con este plan
+                          <span className="text-[10px] text-gray-500 mt-1 block">
+                            Tu suscripción vigente está asignada a este plan
                           </span>
                         </div>
                       ) : currentPlanId ? (
                         <div>
                           <button
-                            onClick={() => setSelectedPlanToChange(plan)}
-                            className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold py-2 px-4 rounded-lg text-sm transition-colors border border-blue-200"
+                            onClick={() => {
+                              setConfirmedPolicy(false);
+                              setSelectedPlanToChange(plan);
+                            }}
+                            className={`w-full font-semibold py-2 px-4 rounded-lg text-sm transition-colors border ${
+                              isUpgrade
+                                ? "bg-indigo-600 hover:bg-indigo-700 text-white border-transparent"
+                                : "bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-300"
+                            }`}
                           >
-                            Cambiar a este plan
+                            {isUpgrade ? `🚀 Subir a ${plan.name}` : `⬇️ Cambiar a ${plan.name}`}
                           </button>
-                          <span className="text-[10px] text-amber-700 mt-1 block text-center">
+                          <span className="text-[10px] text-amber-700 mt-1 block text-center font-medium">
                             ⚠️ Sustituirá a tu plan actual
                           </span>
                         </div>
@@ -367,17 +398,26 @@ export default function StudentSubscriptionPage() {
       {selectedPlanToChange && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Cambiar Plan de Suscripción</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Solicitud de Cambio de Plan</h3>
             <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-lg text-xs mb-4">
-              <strong>⚠️ Política de Suscripción:</strong> Tu cuenta tiene activo el plan{" "}
-              <strong>{subData?.plan?.name || "Actual"}</strong>. Al confirmar el cambio, tu suscripción anterior
-              quedará <strong>cancelada inmediatamente</strong> y se activará <strong>{selectedPlanToChange.name}</strong>.
-              El historial de defensas y documentos permanece inalterado.
+              <strong>🛡️ Restricción de Suscripción Única:</strong> Tu cuenta mantiene activo actualmente el plan{" "}
+              <strong>{subData?.plan?.name || "Actual"}</strong>. Por arquitectura de seguridad académica, el sistema no permite múltiples suscripciones concurrentes.
+              Al procesar este cambio, tu plan anterior <strong>finalizará de inmediato</strong> y comenzará la vigencia de{" "}
+              <strong>{selectedPlanToChange.name}</strong> (${Number(selectedPlanToChange.price).toFixed(2)}/mes). Todo tu trabajo previo permanece asegurado.
             </div>
-            <p className="text-sm text-gray-600 mb-4">
-              ¿Confirmas la transición al plan <strong>{selectedPlanToChange.name}</strong> por{" "}
-              <strong>${Number(selectedPlanToChange.price).toFixed(2)}/mes</strong>?
-            </p>
+
+            <label className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-lg border border-gray-200 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmedPolicy}
+                onChange={(e) => setConfirmedPolicy(e.target.checked)}
+                className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-xs text-gray-700 leading-snug">
+                He leído y acepto la política de sustitución inmediata: mi plan activo actual será reemplazado por <strong>{selectedPlanToChange.name}</strong>.
+              </span>
+            </label>
+
             <div className="flex justify-end gap-3">
               <button
                 type="button"
@@ -389,11 +429,11 @@ export default function StudentSubscriptionPage() {
               </button>
               <button
                 type="button"
-                disabled={actionLoading}
+                disabled={actionLoading || !confirmedPolicy}
                 onClick={handleChangePlan}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
-                {actionLoading ? "Actualizando..." : "Cambiar Plan"}
+                {actionLoading ? "Actualizando..." : "Confirmar Cambio de Plan"}
               </button>
             </div>
           </div>
