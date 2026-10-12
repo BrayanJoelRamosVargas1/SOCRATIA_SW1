@@ -22,8 +22,14 @@ Guidelines:
 
 
 class Evaluator:
-    def __init__(self, provider: str = "groq", model: str | None = None):
+    def __init__(
+        self,
+        provider: str = "groq",
+        model: str | None = None,
+        temperature: float = 0.0,
+    ):
         self.provider = provider
+        self.temperature = temperature
         if provider == "groq":
             self.model = model or settings.groq_question_model
             api_key = settings.groq_api_key.get_secret_value() if settings.groq_api_key else ""
@@ -67,7 +73,7 @@ class Evaluator:
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=2048,
-                temperature=0.0,
+                temperature=self.temperature,
             )
         else:
             response = await self.client.chat.completions.create(
@@ -76,6 +82,7 @@ class Evaluator:
                     {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
+                generation_config={"temperature": self.temperature},
             )
 
         return response

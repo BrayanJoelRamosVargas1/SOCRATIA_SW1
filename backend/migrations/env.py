@@ -26,6 +26,9 @@ from app.modules.p4_gestion_evaluacion_resultados import (
     models as evaluation_models,  # noqa: F401, E402
 )
 from app.modules.p5_gestion_saas import models as saas_models  # noqa: F401, E402
+from app.modules.p6_gestion_administracion import (
+    models as admin_models,  # noqa: F401, E402
+)
 
 config = context.config
 

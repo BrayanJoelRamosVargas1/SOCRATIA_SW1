@@ -59,10 +59,14 @@ class PresentationMaterialService:
         self.retrieval: DocumentRetrievalService | None = None
         if retrieval_router is not None:
             settings = get_settings()
+            from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+                AIConfigurationService,
+            )
 
+            ai_cfg = AIConfigurationService(db).get_active_config()
             self.retrieval = DocumentRetrievalService(
                 router=retrieval_router,
-                top_k=settings.question_retrieval_top_k,
+                top_k=ai_cfg.retrieval_top_k,
                 max_context_chars=settings.question_context_max_chars,
             )
 
@@ -74,6 +78,12 @@ class PresentationMaterialService:
         duration_minutes: int,
         regenerate: bool,
     ) -> PresentationMaterial:
+        if self.retrieval is not None:
+            from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+                AIConfigurationService,
+            )
+
+            self.retrieval.top_k = AIConfigurationService(self.db).get_active_config().retrieval_top_k
         document = DocumentPolicy.can_read(user, self.documents.get_by_id(document_id))
         if document.status != DocumentStatus.PROCESSED:
             raise DocumentNotProcessedError

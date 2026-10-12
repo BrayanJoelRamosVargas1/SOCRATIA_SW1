@@ -54,6 +54,13 @@ from app.modules.p2_gestion_documentos_preparacion.models import (
     question_bank,  # noqa: F401
 )
 from app.modules.p3_gestion_simulacion import models as simulation_models  # noqa: F401
+from app.modules.p4_gestion_evaluacion_resultados import (
+    models as evaluation_models,  # noqa: F401
+)
+from app.modules.p5_gestion_saas import models as saas_models  # noqa: F401
+from app.modules.p6_gestion_administracion import (
+    models as admin_models,  # noqa: F401
+)
 
 
 class FakeEmailProvider:

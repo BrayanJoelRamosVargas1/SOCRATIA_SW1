@@ -253,7 +253,12 @@ class SessionService:
         if not parent:
             raise InvalidTurnError
 
-        if parent.follow_up_depth >= 2:
+        from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+            AIConfigurationService,
+        )
+
+        max_followups = AIConfigurationService(self.db).get_active_config().max_followups
+        if parent.follow_up_depth >= max_followups:
             raise InvalidTurnError("Se ha alcanzado el límite máximo de preguntas de seguimiento.")
 
         now = datetime.now(UTC)

@@ -46,14 +46,23 @@ class QuestionBankService:
         self.banks = QuestionBankRepository(db)
         self.generation_router = generation_router
         settings = get_settings()
+        from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+            AIConfigurationService,
+        )
 
+        ai_cfg = AIConfigurationService(db).get_active_config()
         self.retrieval = QuestionRetrievalService(
             router=retrieval_router,
-            top_k=settings.question_retrieval_top_k,
+            top_k=ai_cfg.retrieval_top_k,
             max_context_chars=settings.question_context_max_chars,
         )
 
     def generate(self, user: User, document_id: str) -> QuestionBank:
+        from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+            AIConfigurationService,
+        )
+
+        self.retrieval.top_k = AIConfigurationService(self.db).get_active_config().retrieval_top_k
         document = DocumentPolicy.can_read(user, self.documents.get_by_id(document_id))
         if document.status != DocumentStatus.PROCESSED:
             raise DocumentNotProcessedError

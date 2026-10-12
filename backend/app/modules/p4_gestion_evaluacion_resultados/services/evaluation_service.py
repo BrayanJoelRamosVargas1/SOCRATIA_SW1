@@ -21,10 +21,22 @@ from app.modules.p4_gestion_evaluacion_resultados.services.evaluator import Eval
 
 
 class EvaluationService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, evaluator: Evaluator | None = None):
         self.db = db
         self.repository = EvaluationRepository(db)
-        self.evaluator = Evaluator()
+        if evaluator is not None:
+            self.evaluator = evaluator
+        else:
+            from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+                AIConfigurationService,
+            )
+
+            ai_cfg = AIConfigurationService(db).get_active_config()
+            self.evaluator = Evaluator(
+                provider=ai_cfg.evaluation_provider,
+                model=ai_cfg.evaluation_model,
+                temperature=ai_cfg.evaluation_temperature,
+            )
 
     async def evaluate_simulation(self, simulation_id: str) -> Evaluation:
         # Idempotency check

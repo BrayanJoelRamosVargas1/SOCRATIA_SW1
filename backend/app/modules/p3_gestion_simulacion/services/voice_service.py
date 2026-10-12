@@ -32,7 +32,7 @@ class VoiceService:
         Returns: (transcribed_text, fallback_used, jury_action, tts_stream, snapshot)
         """
         stt = get_stt_router()
-        llm = get_jury_routing_router()
+        llm = get_jury_routing_router(db=self.db)
         tts = get_tts_provider()
 
         # 1. STT
@@ -116,9 +116,14 @@ class VoiceService:
             logger.info("VOICE_PROCESSING: LiveJuryRouter decided: %s", action)
 
             # Enforce Capa IA follow-up depth limit
+            from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+                AIConfigurationService,
+            )
+
+            max_followups = AIConfigurationService(self.db).get_active_config().max_followups
             depth = current_question_model.follow_up_depth if current_question_model else 0
-            if action == JuryAction.FOLLOW_UP.value and depth >= 2:
-                logger.info("VOICE_PROCESSING: Follow-up depth >= 2, forcing NEXT_BANK")
+            if action == JuryAction.FOLLOW_UP.value and depth >= max_followups:
+                logger.info("VOICE_PROCESSING: Follow-up depth >= %d, forcing NEXT_BANK", max_followups)
                 action = JuryAction.NEXT_BANK.value
                 decision = None
 

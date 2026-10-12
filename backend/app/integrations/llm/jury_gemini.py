@@ -27,11 +27,15 @@ class GeminiJuryRoutingProvider(JuryRoutingProvider):
         model: str,
         timeout_seconds: int,
         max_attempts: int,
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
     ) -> None:
         self.api_key = api_key
         self._model = model
         self.timeout_seconds = timeout_seconds
         self.max_attempts = max_attempts
+        self.temperature = temperature
+        self.max_tokens = max_tokens
 
     @property
     def model(self) -> str:
@@ -71,7 +75,8 @@ class GeminiJuryRoutingProvider(JuryRoutingProvider):
             "generationConfig": {
                 "responseMimeType": "application/json",
                 "responseSchema": JURY_ROUTING_JSON_SCHEMA,
-                "temperature": 0.2,
+                "temperature": self.temperature,
+                "maxOutputTokens": self.max_tokens,
             },
         }
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:

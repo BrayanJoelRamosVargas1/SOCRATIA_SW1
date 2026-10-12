@@ -64,24 +64,53 @@ def get_presentation_generation_router() -> PresentationGenerationRouter:
     )
 
 
-@lru_cache
-def get_jury_routing_router() -> JuryRoutingRouter:
+def get_jury_routing_router(db=None) -> JuryRoutingRouter:
+    from app.modules.p6_gestion_administracion.services.ai_configuration_service import (
+        AIConfigurationService,
+    )
+
     settings = get_settings()
-    primary = GroqJuryRoutingProvider(
-        api_key=settings.groq_api_key.get_secret_value() if settings.groq_api_key else None,
-        model=settings.groq_question_model,  # Reusing model config for now
-        timeout_seconds=settings.question_generation_timeout_seconds,
-        max_attempts=settings.question_generation_max_attempts,
-    )
-    fallback = GeminiJuryRoutingProvider(
-        api_key=settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None,
-        model=settings.gemini_question_model,  # Reusing model config for now
-        timeout_seconds=settings.question_generation_timeout_seconds,
-        max_attempts=settings.question_generation_max_attempts,
-    )
+    ai_config = AIConfigurationService(db).get_active_config()
+
+    if ai_config.jury_provider == "gemini":
+        primary = GeminiJuryRoutingProvider(
+            api_key=(settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None),
+            model=ai_config.jury_model,
+            timeout_seconds=settings.question_generation_timeout_seconds,
+            max_attempts=settings.question_generation_max_attempts,
+            temperature=ai_config.jury_temperature,
+            max_tokens=ai_config.jury_max_tokens,
+        )
+        fallback = GroqJuryRoutingProvider(
+            api_key=settings.groq_api_key.get_secret_value() if settings.groq_api_key else None,
+            model=settings.groq_question_model or "openai/gpt-oss-20b",
+            timeout_seconds=settings.question_generation_timeout_seconds,
+            max_attempts=settings.question_generation_max_attempts,
+            temperature=ai_config.jury_temperature,
+            max_tokens=ai_config.jury_max_tokens,
+        )
+    else:
+        primary = GroqJuryRoutingProvider(
+            api_key=settings.groq_api_key.get_secret_value() if settings.groq_api_key else None,
+            model=ai_config.jury_model,
+            timeout_seconds=settings.question_generation_timeout_seconds,
+            max_attempts=settings.question_generation_max_attempts,
+            temperature=ai_config.jury_temperature,
+            max_tokens=ai_config.jury_max_tokens,
+        )
+        fallback = GeminiJuryRoutingProvider(
+            api_key=(settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None),
+            model=settings.gemini_question_model or "gemini-1.5-flash",
+            timeout_seconds=settings.question_generation_timeout_seconds,
+            max_attempts=settings.question_generation_max_attempts,
+            temperature=ai_config.jury_temperature,
+            max_tokens=ai_config.jury_max_tokens,
+        )
+
     return JuryRoutingRouter(
         primary=primary,
         fallback=fallback,
         failure_threshold=settings.question_circuit_breaker_threshold,
         recovery_seconds=settings.question_circuit_breaker_recovery_seconds,
+        fallback_enabled=ai_config.fallback_enabled,
     )

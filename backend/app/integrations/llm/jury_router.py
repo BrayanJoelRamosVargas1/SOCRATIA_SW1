@@ -18,9 +18,11 @@ class JuryRoutingRouter:
         fallback: JuryRoutingProvider,
         failure_threshold: int,
         recovery_seconds: int,
+        fallback_enabled: bool = True,
     ) -> None:
         self.primary = primary
         self.fallback = fallback
+        self.fallback_enabled = fallback_enabled
         self.breaker = CircuitBreaker(
             failure_threshold=failure_threshold,
             recovery_seconds=recovery_seconds,
@@ -47,6 +49,11 @@ class JuryRoutingRouter:
                 primary_failure_reason = exc.telemetry_reason
         else:
             primary_failure_reason = f"{self.primary.name}:circuit_open"
+
+        if not self.fallback_enabled:
+            raise JuryRoutingFailed(
+                f"Primary provider failed and fallback is disabled ({primary_failure_reason})"
+            )
 
         try:
             decision = await self.fallback.route(request)

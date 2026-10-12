@@ -55,11 +55,17 @@ from app.modules.p5_gestion_saas.routes.admin_plans import (
 from app.modules.p5_gestion_saas.routes.admin_subscriptions import (
     router as admin_subscriptions_router,
 )
+from app.modules.p6_gestion_administracion.routes.admin_ai_settings_routes import (
+    router as admin_ai_settings_router,
+)
 from app.modules.p6_gestion_administracion.routes.admin_users_routes import (
     router as admin_users_router,
 )
 
 api_router.include_router(admin_users_router, prefix="/admin", tags=["admin-users"])
+api_router.include_router(
+    admin_ai_settings_router, prefix="/admin", tags=["admin-ai-settings"]
+)
 api_router.include_router(admin_plans_router, prefix="/admin/plans", tags=["admin-plans"])
 api_router.include_router(
     admin_subscriptions_router, prefix="/admin/subscriptions", tags=["admin-subscriptions"]
