@@ -8,6 +8,8 @@ import { getSimulationSession } from "@/features/simulations/api";
 import { simulationWebSocketUrl } from "@/lib/config";
 import type { SessionSnapshot } from "@/types/simulation";
 
+import { TalkingJuryAvatar } from "./talking-jury-avatar";
+
 type ConnectionState = "connecting" | "connected" | "reconnecting" | "offline";
 type PendingAnswer = { type: "answer.submit"; message_id: string; payload: { question_id: string; content: string } };
 type VoiceStartMessage = { type: "voice.utterance.start"; message_id: string; payload: { mime_type: string } };
@@ -62,6 +64,15 @@ export function SimulationLivePage() {
   const [dressCode, setDressCode] = useState("Analizando vestimenta...");
   const [dressIsFormal, setDressIsFormal] = useState(true);
   const [gesturesLabel, setGesturesLabel] = useState("Gesticulación activa");
+
+  // Reactive Tribunal Observations
+  const [juryObservation, setJuryObservation] = useState<{
+    type: "posture" | "dress" | "praise";
+    message: string;
+  } | null>(null);
+  const observationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const badPostureStartRef = useRef<number | null>(null);
+  const hadBadPostureRef = useRef<boolean>(false);
 
   const speakCurrentQuestion = useCallback(() => {
     if (!snapshot?.current_question) return;
@@ -412,6 +423,35 @@ export function SimulationLivePage() {
                 setDressIsFormal(isFormal);
               }
 
+              // 5. Reactive Tribunal Interventions on Posture and Protocol
+              if (computedPosture < 65) {
+                if (badPostureStartRef.current === null) {
+                  badPostureStartRef.current = Date.now();
+                } else if (Date.now() - badPostureStartRef.current > 3000 && !hadBadPostureRef.current) {
+                  hadBadPostureRef.current = true;
+                  setJuryObservation({
+                    type: "posture",
+                    message: "Postulante, le solicitamos mantener una postura erguida y la vista hacia el jurado examinador.",
+                  });
+                }
+              } else if (computedPosture >= 85 && hadBadPostureRef.current) {
+                hadBadPostureRef.current = false;
+                badPostureStartRef.current = null;
+                setJuryObservation({
+                  type: "praise",
+                  message: "Postura corregida adecuadamente. Puede continuar con su argumentación.",
+                });
+                if (observationTimeoutRef.current) clearTimeout(observationTimeoutRef.current);
+                observationTimeoutRef.current = setTimeout(() => {
+                  setJuryObservation(null);
+                }, 4000);
+              } else if (!isFormal && !hadBadPostureRef.current && !juryObservation) {
+                setJuryObservation({
+                  type: "dress",
+                  message: "Observación de Protocolo: La defensa formal de grado requiere vestimenta formal (camisa o saco).",
+                });
+              }
+
               try {
                 localStorage.setItem(`socratia_vision_${id}`, JSON.stringify({
                   dressCode: detectedDress,
@@ -586,9 +626,23 @@ export function SimulationLivePage() {
           Terminar simulación
         </button>
       )}
-    </div><article className="live-question">
+    </div>
+
+    {/* Stage del Tribunal Académico con Avatar Animado y Lip-Sync */}
+    <TalkingJuryAvatar
+      juryName="Dr. Roberto Méndez"
+      focusType="Presidente del Tribunal Examinador"
+      isSpeaking={isJuryAudioPlaying || serverState === "jury.speaking"}
+      isListening={canAnswer || isRecording}
+      isThinking={serverState === "jury.thinking" || sending}
+      observation={juryObservation}
+      onSpeakQuestion={speakCurrentQuestion}
+      canSpeakQuestion={snapshot.status !== "COMPLETED" && !!snapshot.current_question}
+    />
+
+    <article className="live-question">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-        <span>{snapshot.status === "COMPLETED" ? "Sistema" : "Jurado Examinador"}</span>
+        <span>{snapshot.status === "COMPLETED" ? "Sistema" : "Pregunta Formulada por el Tribunal"}</span>
         {snapshot.status !== "COMPLETED" && snapshot.current_question && (
           <button
             type="button"
