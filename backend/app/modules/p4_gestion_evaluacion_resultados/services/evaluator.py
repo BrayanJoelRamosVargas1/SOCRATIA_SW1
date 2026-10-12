@@ -30,20 +30,28 @@ class Evaluator:
         self.provider = provider
         self.temperature = temperature
         if provider == "groq":
+            import instructor
+
             self.model = model or settings.groq_question_model
             api_key = settings.groq_api_key.get_secret_value() if settings.groq_api_key else ""
-            client = AsyncGroq(api_key=api_key)
+            raw_client = AsyncGroq(api_key=api_key)
+            self.client = instructor.from_groq(raw_client, mode=instructor.Mode.TOOLS)
+            self._init_error = None
         else:
             self.model = model or settings.gemini_question_model
             try:
                 from google import genai
+                from instructor.v2.providers.genai.client import from_genai
 
                 api_key = (
                     settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else ""
                 )
-                self.client = genai.Client(api_key=api_key)
-            except Exception:
+                raw_client = genai.Client(api_key=api_key)
+                self.client = from_genai(raw_client)
+                self._init_error = None
+            except (ImportError, ModuleNotFoundError) as err:
                 self.client = None
+                self._init_error = str(err)
 
     async def evaluate_turn(
         self,
@@ -52,6 +60,11 @@ class Evaluator:
         context_text: str,
         expected_points: list[str] | None = None,
     ) -> TurnEvaluationResult:
+        if self.client is None:
+            raise RuntimeError(
+                f"Evaluator provider '{self.provider}' is not available: "
+                f"{getattr(self, '_init_error', 'client was not initialized')}"
+            )
 
         prompt = f"Question: {question}\n\n"
         if expected_points:
@@ -65,7 +78,9 @@ class Evaluator:
         prompt += f"Student Response:\n{student_response}\n\n"
         prompt += "Evaluate the student response strictly based on the provided context."
 
-        if self.provider == "groq":
+        import inspect
+
+        if inspect.iscoroutinefunction(self.client.chat.completions.create):
             response = await self.client.chat.completions.create(
                 model=self.model,
                 response_model=TurnEvaluationResult,
@@ -77,13 +92,19 @@ class Evaluator:
                 temperature=self.temperature,
             )
         else:
-            response = await self.client.chat.completions.create(
-                response_model=TurnEvaluationResult,
-                messages=[
-                    {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                generation_config={"temperature": self.temperature},
-            )
+            import anyio
+
+            def sync_create():
+                return self.client.chat.completions.create(
+                    model=self.model,
+                    response_model=TurnEvaluationResult,
+                    messages=[
+                        {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=self.temperature,
+                )
+
+            response = await anyio.to_thread.run_sync(sync_create)
 
         return response

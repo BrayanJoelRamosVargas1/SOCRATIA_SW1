@@ -347,10 +347,27 @@ def db_session() -> Session:
             db_url = "postgresql+psycopg://socratia:socratia_dev_password@localhost:5435/socratia_test"
 
     # STRICT SAFETY CHECK: Prevent running against dev or prod databases!
-    if "test" not in db_url.lower() and ":memory:" not in db_url:
+    from sqlalchemy.engine import make_url
+
+    parsed_url = make_url(db_url)
+    db_name = (parsed_url.database or "").lower()
+    safe_rendered_url = parsed_url.render_as_string(hide_password=True)
+
+    is_sqlite_memory = parsed_url.get_backend_name() == "sqlite" and (
+        db_name == ":memory:" or not db_name
+    )
+    is_dedicated_test_db = (
+        db_name.endswith(("_test", "-test"))
+        or db_name.startswith(("test_", "test-"))
+        or db_name in ("test", "testing", "socratia_test")
+    )
+    is_forbidden_prod_dev = db_name in ("socratia", "socratia_dev", "socratia_prod", "production")
+
+    if (not is_sqlite_memory and not is_dedicated_test_db) or is_forbidden_prod_dev:
         raise RuntimeError(
-            f"SAFETY VIOLATION: Test suite must target a database containing 'test' (e.g. socratia_test). "
-            f"Received: {db_url}. Refusing to proceed to protect development/production data!"
+            f"SAFETY VIOLATION: Test suite must target a dedicated test database (e.g. database name ending in '_test'). "
+            f"Detected database name: '{parsed_url.database}' at '{safe_rendered_url}'. "
+            f"Execution halted to protect production and development data."
         )
 
     from sqlalchemy.pool import NullPool
