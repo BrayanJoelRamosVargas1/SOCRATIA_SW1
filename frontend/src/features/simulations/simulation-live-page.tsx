@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getSimulationSession } from "@/features/simulations/api";
+import { getSimulationSession, evaluateSimulation } from "@/features/simulations/api";
 import { simulationWebSocketUrl } from "@/lib/config";
 import type { SessionSnapshot } from "@/types/simulation";
 
@@ -44,6 +44,7 @@ export function SimulationLivePage() {
   
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
+  const [micVolume, setMicVolume] = useState(0);
   const isRecordingRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceMessageIdRef = useRef<string | null>(null);
@@ -156,7 +157,11 @@ export function SimulationLivePage() {
       }
       const event = JSON.parse(message.data) as ServerEvent;
       if (event.type === "session.snapshot" || event.type === "session.state") {
-        setSnapshot(event.payload as SessionSnapshot);
+        const snap = event.payload as SessionSnapshot;
+        setSnapshot(snap);
+        if (snap.status === "COMPLETED") {
+          evaluateSimulation(id).catch(() => undefined);
+        }
       } else if (event.type === "answer.accepted") {
         const accepted = event.payload as { message_id?: string };
         if (pendingRef.current?.message_id === accepted.message_id) {
@@ -717,6 +722,7 @@ export function SimulationLivePage() {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: "session.close" }));
     }
+    evaluateSimulation(id).catch(() => undefined);
   }
 
   function submit() {
@@ -796,6 +802,7 @@ export function SimulationLivePage() {
         for (let i = 0; i < dataArray.length; i++) {
           if (dataArray[i] > maxVol) maxVol = dataArray[i];
         }
+        setMicVolume(Math.min(100, Math.round((maxVol / 128) * 100)));
         
         if (maxVol > 20) {
           silenceStart = 0;
@@ -830,6 +837,7 @@ export function SimulationLivePage() {
       isRecordingRef.current = false;
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      setMicVolume(0);
     }
   }
 
@@ -883,7 +891,28 @@ export function SimulationLivePage() {
         )}
       </div>
       <h1>{snapshot.status === "COMPLETED" ? "Simulación Finalizada" : (snapshot.current_question?.text ?? "Has respondido todas las preguntas.")}</h1>
-      {snapshot.status === "COMPLETED" && <p>La simulación ha concluido. El reporte de evaluación estará disponible en la vista de reporte.</p>}
+      {snapshot.status === "COMPLETED" && (
+        <div style={{ marginTop: "1rem" }}>
+          <p style={{ color: "var(--text-muted, #64748b)", marginBottom: "0.85rem" }}>
+            La simulación ha concluido. El jurado evaluador ha registrado las respuestas y el análisis biomecánico.
+          </p>
+          <Link
+            href={`/simulations/${id}/report`}
+            className="button button-primary"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              fontSize: "0.95rem",
+              padding: "0.6rem 1.25rem",
+              textDecoration: "none",
+              fontWeight: 700,
+            }}
+          >
+            📊 Ver Reporte de Desempeño y Calificación Final →
+          </Link>
+        </div>
+      )}
     </article>{error && <p className="form-error" role="alert">{error}</p>}
   
   {snapshot.status !== "COMPLETED" && (
@@ -891,7 +920,17 @@ export function SimulationLivePage() {
     <button className={`button ${isRecording ? 'button-danger' : isJuryAudioPlaying ? 'button-secondary' : 'button-primary'}`} type="button" disabled={!canAnswer && !isRecording && !isJuryAudioPlaying} onClick={isRecording ? stopRecording : startRecording}>
       {isRecording ? "⏹️ Detener Grabación" : isJuryAudioPlaying ? "✋ Interrumpir para responder" : "🎤 Hablar al Jurado"}
     </button>
-    <span style={{ fontSize: '0.875rem', fontWeight: 500, color: isJuryAudioPlaying ? 'var(--brand-primary, #0d9488)' : isRecording ? '#e11d48' : 'var(--text-muted)' }}>{statusText}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '0.875rem', fontWeight: 500, color: isJuryAudioPlaying ? 'var(--brand-primary, #0d9488)' : isRecording ? '#e11d48' : 'var(--text-muted)' }}>{statusText}</span>
+      {isRecording && (
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(225, 29, 72, 0.1)", padding: "2px 8px", borderRadius: "12px", border: "1px solid rgba(225, 29, 72, 0.3)" }}>
+          <div style={{ width: "40px", height: "6px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
+            <div style={{ width: `${Math.max(8, micVolume)}%`, height: "100%", background: "#e11d48", transition: "width 0.08s ease" }} />
+          </div>
+          <span style={{ fontSize: "0.68rem", color: "#e11d48", fontWeight: 700 }}>{micVolume}%</span>
+        </div>
+      )}
+    </div>
   </section>
 )}
 

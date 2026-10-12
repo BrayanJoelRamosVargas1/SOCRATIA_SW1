@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { SimulationReportResponse } from "@/types/report";
 import { getSimulationReport, evaluateSimulation } from "@/features/simulations/api";
+import { ApiError } from "@/lib/api";
 
 export default function ReportPage() {
   const { id } = useParams() as { id: string };
@@ -12,8 +14,8 @@ export default function ReportPage() {
   const [evalStatus, setEvalStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [downloading] = useState(false); // remove setDownloading if not used
-  const [visionData, setVisionData] = useState<{
+  const [downloading] = useState(false);
+  const [visionData] = useState<{
     dressCode?: string;
     postureScore?: number;
     postureLabel?: string;
@@ -22,26 +24,24 @@ export default function ReportPage() {
     gesturesLabel?: string;
     nonverbalScore?: number;
     communicationScore?: number;
-  }>({
-    dressCode: "Formal (Camisa / Traje)",
-    postureScore: 94,
-    postureLabel: "Erguida",
-    eyeContactScore: 91,
-    eyeContactLabel: "Directo",
-    gesturesLabel: "Natural y Fluida",
-    nonverbalScore: 92,
-    communicationScore: 88,
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(`socratia_vision_${id}`);
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return {
+      dressCode: "Formal (Camisa / Traje)",
+      postureScore: 94,
+      postureLabel: "Erguida",
+      eyeContactScore: 91,
+      eyeContactLabel: "Directo",
+      gesturesLabel: "Natural y Fluida",
+      nonverbalScore: 92,
+      communicationScore: 88,
+    };
   });
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`socratia_vision_${id}`);
-      if (stored) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setVisionData(JSON.parse(stored));
-      }
-    } catch {}
-  }, [id]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -58,13 +58,19 @@ export default function ReportPage() {
       } catch (err: unknown) {
         if (!active) return;
         const msg = err instanceof Error ? err.message : "";
-        const isNotFound = msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("no se encontró") || msg.toLowerCase().includes("not completed");
-        
-        if (isNotFound) {
+        const isPendingOrNotFound =
+          (err instanceof ApiError && (err.status === 404 || err.status === 400 || err.status === 409)) ||
+          msg.toLowerCase().includes("not found") ||
+          msg.toLowerCase().includes("no se encontró") ||
+          msg.toLowerCase().includes("not completed") ||
+          msg.toLowerCase().includes("processing") ||
+          msg.toLowerCase().includes("already processing");
+
+        if (isPendingOrNotFound) {
           setEvalStatus("PROCESSING");
-          // Disparar evaluación si no está iniciada
+          // Disparar evaluación si aún no está iniciada en backend
           evaluateSimulation(id).catch(() => undefined);
-          
+
           if (!timer) {
             timer = setInterval(() => {
               getSimulationReport(id)
@@ -76,7 +82,7 @@ export default function ReportPage() {
                   if (timer) clearInterval(timer);
                 })
                 .catch(() => undefined);
-            }, 2500);
+            }, 2000);
           }
         } else {
           setError(msg || "Error al cargar reporte.");
@@ -146,6 +152,9 @@ export default function ReportPage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto bg-gray-50 min-h-screen">
+      <Link href={`/simulations/${id}`} className="text-indigo-600 hover:underline text-sm mb-4 inline-flex items-center gap-1 font-semibold">
+        ← Volver a la Simulación
+      </Link>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Reporte de Desempeño</h1>
         <button 
