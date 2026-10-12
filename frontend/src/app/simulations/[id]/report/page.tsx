@@ -91,7 +91,7 @@ export default function ReportPage() {
           disabled={downloading}
           className="px-4 py-2 bg-indigo-600 text-white font-medium rounded hover:bg-indigo-700 disabled:opacity-50"
         >
-          {downloading ? "Generando..." : "Descargar PDF"}
+          {downloading ? "Generando..." : "Imprimir / Guardar como PDF"}
         </button>
       </div>
 

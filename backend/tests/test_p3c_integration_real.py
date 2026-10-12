@@ -3,13 +3,15 @@ import os
 import uuid
 from pathlib import Path
 
+import pytest
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
-if "DATABASE_URL" in os.environ and "TEST_DATABASE_URL" not in os.environ:
-    os.environ["TEST_DATABASE_URL"] = os.environ["DATABASE_URL"]
+if "TEST_DATABASE_URL" not in os.environ:
+    base_db = os.environ.get("DATABASE_URL", "postgresql+psycopg://socratia:socratia_dev_password@localhost:5435/socratia")
+    os.environ["TEST_DATABASE_URL"] = base_db + "_test" if not base_db.endswith("_test") else base_db
 
 from app.main import app
 from tests.test_simulation_configuration import create, profiles, register
@@ -42,7 +44,10 @@ def ready_simulation(client: TestClient, email: str, db: Session) -> str:
         QuestionBankStatus,
     )
 
-    user_id = db.query(User).filter_by(email=email).first().id
+    db.commit()
+    user = db.query(User).filter_by(email=email).first()
+    assert user is not None, f"User with email {email} was not found"
+    user_id = user.id
     bank = QuestionBank(document_id=document_id, user_id=user_id, status=QuestionBankStatus.READY)
     db.add(bank)
     db.commit()
@@ -76,7 +81,12 @@ def start(client: TestClient, simulation_id: str) -> dict:
     return response.json()
 
 
-def test_p3c_voice_integration_real_credentials(db_session: Session):
+def test_p3c_voice_integration_real_credentials(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+):
+    from app.core.database import get_db
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, lambda: db_session)
     client = TestClient(app)
     email = f"p3c-real-{uuid.uuid4().hex[:6]}@example.com"
     register(client, email)
