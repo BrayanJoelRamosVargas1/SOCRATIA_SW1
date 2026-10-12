@@ -55,6 +55,7 @@ export function SimulationLivePage() {
 
   // Live Biomechanics & Dress Code AI State
   const liveVideoRef = useRef<HTMLVideoElement>(null);
+  const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [postureScore, setPostureScore] = useState(94);
@@ -65,7 +66,11 @@ export function SimulationLivePage() {
   const [dressIsFormal, setDressIsFormal] = useState(true);
   const [gesturesLabel, setGesturesLabel] = useState("Gesticulación activa");
 
-  // Reactive Tribunal Observations
+  // Posture & Dress Smoothing Filters
+  const postureEmaRef = useRef<number>(94);
+  const dressHistoryRef = useRef<Array<{ dress: string; isFormal: boolean; score: number }>>([]);
+
+  // Reactive Tribunal Observations & Voice Interventions
   const [juryObservation, setJuryObservation] = useState<{
     type: "posture" | "dress" | "praise";
     message: string;
@@ -73,6 +78,39 @@ export function SimulationLivePage() {
   const observationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const badPostureStartRef = useRef<number | null>(null);
   const hadBadPostureRef = useRef<boolean>(false);
+  const [isJuryVoiceSpeaking, setIsJuryVoiceSpeaking] = useState(false);
+  const lastVoiceInterventionTimeRef = useRef<number>(0);
+  const lastDressVoiceTimeRef = useRef<number>(0);
+
+  const speakTribunalSpeech = useCallback((text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "es-ES";
+      utter.rate = 1.0;
+      utter.pitch = 0.94;
+      const voices = window.speechSynthesis.getVoices();
+      const spVoice = voices.find((v) =>
+        v.lang.startsWith("es") &&
+        (v.name.includes("Natural") ||
+          v.name.includes("Google") ||
+          v.name.includes("Microsoft") ||
+          v.name.includes("Sabina") ||
+          v.name.includes("Jorge") ||
+          v.name.includes("Pablo"))
+      );
+      if (spVoice) utter.voice = spVoice;
+
+      setIsJuryVoiceSpeaking(true);
+      utter.onstart = () => setIsJuryVoiceSpeaking(true);
+      utter.onend = () => setIsJuryVoiceSpeaking(false);
+      utter.onerror = () => setIsJuryVoiceSpeaking(false);
+      window.speechSynthesis.speak(utter);
+    } catch {
+      setIsJuryVoiceSpeaking(false);
+    }
+  }, []);
 
   const speakCurrentQuestion = useCallback(() => {
     if (!snapshot?.current_question) return;
@@ -294,25 +332,60 @@ export function SimulationLivePage() {
               const leftWrist = lm[15];
               const rightWrist = lm[16];
 
-              // 1. Dynamic Posture Calculation
-              let computedPosture = 92;
-              let postureText = "Erguida";
-              if (leftShoulder && rightShoulder && nose) {
-                const tilt = Math.abs(leftShoulder.y - rightShoulder.y);
-                const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
-                const neckAlignment = Math.abs(nose.x - midShoulderX);
-                computedPosture = Math.max(35, Math.min(98, Math.round(100 - (tilt * 420 + neckAlignment * 340))));
-                if (computedPosture >= 85) postureText = "Erguida";
-                else if (computedPosture >= 70) postureText = "Inclinada";
-                else postureText = "Encorvada";
-                setPostureScore(computedPosture);
-                setPostureLabel(postureText);
+              if (!leftShoulder || !rightShoulder || !nose) return;
+
+              // 1. High-Precision Biomechanics & Slouching Calculation
+              const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
+              const midShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+              const shoulderWidth = Math.max(0.12, Math.abs(rightShoulder.x - leftShoulder.x));
+              const neckHeight = midShoulderY - nose.y;
+              const neckRatio = neckHeight / shoulderWidth;
+
+              // A. Slouching / Head Forward / Spine compression penalty
+              let slouchPenalty = 0;
+              if (neckRatio < 0.48) {
+                slouchPenalty = Math.min(50, (0.48 - neckRatio) * 360);
               }
+
+              // B. Shoulder Lateral Imbalance (Desnivel de hombros)
+              const shoulderTiltY = Math.abs(leftShoulder.y - rightShoulder.y);
+              const tiltAngleDeg = Math.round(
+                Math.abs((Math.atan2(leftShoulder.y - rightShoulder.y, leftShoulder.x - rightShoulder.x) * 180) / Math.PI - 180)
+              );
+              const normTiltDeg = tiltAngleDeg > 90 ? Math.abs(tiltAngleDeg - 180) : tiltAngleDeg;
+              const tiltPenalty = Math.min(35, (shoulderTiltY / shoulderWidth) * 230);
+
+              // C. Head Off-Center Shift relative to spine axis
+              const headShift = Math.abs(nose.x - midShoulderX) / shoulderWidth;
+              const shiftPenalty = Math.min(30, headShift * 180);
+
+              // D. Hand-on-Face / Resting Chin on Hand (Postura inadecuada de desinterés)
+              let handOnFace = false;
+              if (leftWrist && Math.hypot(leftWrist.x - nose.x, leftWrist.y - nose.y) < 0.16) handOnFace = true;
+              if (rightWrist && Math.hypot(rightWrist.x - nose.x, rightWrist.y - nose.y) < 0.16) handOnFace = true;
+              const handPenalty = handOnFace ? 45 : 0;
+
+              // Combined instant score with Exponential Moving Average (EMA) to avoid jitter
+              const instantPosture = Math.max(
+                25,
+                Math.min(99, Math.round(100 - (slouchPenalty + tiltPenalty + shiftPenalty + handPenalty)))
+              );
+              postureEmaRef.current = Math.round(postureEmaRef.current * 0.7 + instantPosture * 0.3);
+              const computedPosture = postureEmaRef.current;
+
+              let postureText = "Erguida";
+              if (handOnFace) postureText = "Mano en rostro";
+              else if (computedPosture >= 84) postureText = "Erguida";
+              else if (computedPosture >= 68) postureText = "Inclinada";
+              else postureText = "Encorvada";
+
+              setPostureScore(computedPosture);
+              setPostureLabel(postureText);
 
               // 2. Dynamic Eye Contact Calculation
               let computedEye = 90;
               let eyeText = "Directo al Tribunal";
-              if (nose && leftEye && rightEye) {
+              if (leftEye && rightEye) {
                 const eyeCenter = (leftEye.x + rightEye.x) / 2;
                 const gazeDiff = Math.abs(nose.x - eyeCenter);
                 computedEye = Math.max(30, Math.min(98, Math.round(100 - gazeDiff * 650)));
@@ -325,34 +398,30 @@ export function SimulationLivePage() {
 
               // 3. Gestures
               let gestureText = "Postura neutral";
-              if (leftWrist && rightWrist && leftShoulder && rightShoulder) {
-                if (leftWrist.y < leftShoulder.y + 0.15 || rightWrist.y < rightShoulder.y + 0.15) {
+              if (leftWrist && rightWrist) {
+                if (leftWrist.y < leftShoulder.y + 0.12 || rightWrist.y < rightShoulder.y + 0.12) {
                   gestureText = "Gesticulación activa";
                 }
                 setGesturesLabel(gestureText);
               }
 
-              // 4. Real Dynamic Dress Code Pixel Sampling
-              let detectedDress = "👔 Formal (Camisa / Traje)";
+              // 4. Robust Dress Code Detection with Placket & Collar Contrast
+              const roiTopNorm = Math.max(0, Math.min(0.85, nose.y * 0.3 + midShoulderY * 0.7));
+              const roiBottomNorm = Math.max(roiTopNorm + 0.12, Math.min(1.0, midShoulderY + shoulderWidth * 0.45));
+              const roiLeftNorm = Math.max(0, Math.min(0.85, midShoulderX - shoulderWidth * 0.32));
+              const roiRightNorm = Math.max(roiLeftNorm + 0.15, Math.min(1.0, midShoulderX + shoulderWidth * 0.32));
+
+              let detectedDress = "👔 Formal (Camisa formal con cuello)";
               let detectedScore = 95;
               let isFormal = true;
 
-              if (offscreenCtx && video.videoWidth > 0 && leftShoulder && rightShoulder && nose) {
+              if (offscreenCtx && video.videoWidth > 0) {
                 offscreenCtx.drawImage(video, 0, 0, 160, 120);
-
-                const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
-                const shoulderDist = Math.abs(rightShoulder.x - leftShoulder.x);
-
-                // Sample upper chest and neckline between chin and chest
-                const roiTopNorm = Math.max(0, Math.min(0.9, nose.y + (leftShoulder.y - nose.y) * 0.5));
-                const roiBottomNorm = Math.max(0.1, Math.min(1.0, leftShoulder.y + shoulderDist * 0.45));
-                const roiLeftNorm = Math.max(0, Math.min(0.9, midShoulderX - shoulderDist * 0.28));
-                const roiRightNorm = Math.max(0.1, Math.min(1.0, midShoulderX + shoulderDist * 0.28));
 
                 const rx = Math.floor(roiLeftNorm * 160);
                 const ry = Math.floor(roiTopNorm * 120);
-                const rw = Math.max(8, Math.floor((roiRightNorm - roiLeftNorm) * 160));
-                const rh = Math.max(8, Math.floor((roiBottomNorm - roiTopNorm) * 120));
+                const rw = Math.max(12, Math.floor((roiRightNorm - roiLeftNorm) * 160));
+                const rh = Math.max(12, Math.floor((roiBottomNorm - roiTopNorm) * 120));
 
                 const imgData = offscreenCtx.getImageData(rx, ry, Math.min(rw, 160 - rx), Math.min(rh, 120 - ry));
                 const p = imgData.data;
@@ -361,6 +430,23 @@ export function SimulationLivePage() {
                 let sampleCount = 0;
                 let totalSat = 0;
                 let totalBright = 0;
+
+                // Central column placket / tie edge detector
+                const midCol = Math.floor(rw / 2);
+                let centralContrastSum = 0;
+                let rowCount = 0;
+
+                for (let y = 0; y < rh; y++) {
+                  rowCount++;
+                  const idxLeft = (y * rw + Math.max(0, midCol - 3)) * 4;
+                  const idxRight = (y * rw + Math.min(rw - 1, midCol + 3)) * 4;
+                  if (idxRight < p.length) {
+                    const lumL = (p[idxLeft] + p[idxLeft + 1] + p[idxLeft + 2]) / 3;
+                    const lumR = (p[idxRight] + p[idxRight + 1] + p[idxRight + 2]) / 3;
+                    centralContrastSum += Math.abs(lumL - lumR);
+                  }
+                }
+                const centralContrast = rowCount > 0 ? centralContrastSum / rowCount : 0;
 
                 for (let i = 0; i < p.length; i += 16) {
                   const r = p[i];
@@ -378,7 +464,7 @@ export function SimulationLivePage() {
                   totalBright += br;
 
                   // Human skin detection heuristic
-                  if (r > 80 && g > 35 && b > 20 && delta > 12 && r > g && r > b && (r - g) > 10) {
+                  if (r > 80 && g > 35 && b > 20 && delta > 12 && r > g && r > b && r - g > 10) {
                     skinCount++;
                   }
                 }
@@ -387,60 +473,186 @@ export function SimulationLivePage() {
                 const avgSat = sampleCount > 0 ? totalSat / sampleCount : 0;
                 const avgBright = sampleCount > 0 ? totalBright / sampleCount : 0;
 
-                if (skinRatio > 0.40) {
-                  // Bare chest / shoulders / without shirt
-                  detectedDress = "⚠️ Informal (Torso / Pecho descubierto)";
+                if (skinRatio > 0.22) {
+                  detectedDress = "⚠️ Informal (Torso / Escote descubierto)";
                   detectedScore = 40;
                   isFormal = false;
                 } else if (avgSat > 0.38) {
-                  // Saturated sports / casual t-shirt
-                  detectedDress = "⚠️ Informal (Camiseta Casual / Deportiva)";
-                  detectedScore = 65;
+                  detectedDress = "⚠️ Informal (Prenda deportiva / Casual llamativa)";
+                  detectedScore = 60;
                   isFormal = false;
-                } else if (avgBright < 80 && avgSat < 0.32) {
-                  // Dark formal suit or dark button-down shirt
-                  detectedDress = "👔 Formal (Saco / Camisa oscura)";
-                  detectedScore = 95;
-                  isFormal = true;
-                } else if (avgBright > 165 && avgSat < 0.22) {
-                  // White or light formal dress shirt
-                  detectedDress = "👔 Formal (Camisa blanca / clara)";
-                  detectedScore = 98;
-                  isFormal = true;
-                } else if (avgSat < 0.28) {
-                  // Business formal neutral tones
+                } else if (centralContrast > 14) {
+                  // Button placket, tie, or formal lapel detected!
+                  if (centralContrast > 26 && avgBright < 110) {
+                    detectedDress = "👔 Formal (Saco formal con corbata)";
+                    detectedScore = 99;
+                    isFormal = true;
+                  } else if (avgBright > 140) {
+                    detectedDress = "👔 Formal (Camisa blanca de vestir)";
+                    detectedScore = 98;
+                    isFormal = true;
+                  } else {
+                    detectedDress = "👔 Formal (Camisa formal con cuello / botones)";
+                    detectedScore = 95;
+                    isFormal = true;
+                  }
+                } else if (avgSat < 0.25 && (avgBright < 75 || avgBright > 170) && skinRatio < 0.08) {
                   detectedDress = "👔 Formal (Vestimenta formal de tribunal)";
                   detectedScore = 92;
                   isFormal = true;
                 } else {
-                  // Casual t-shirt
-                  detectedDress = "⚠️ Informal (Camiseta casual detectada)";
-                  detectedScore = 68;
+                  detectedDress = "⚠️ Informal (Camiseta básica sin cuello)";
+                  detectedScore = 65;
                   isFormal = false;
                 }
+
+                // Temporal Sliding Window to prevent rapid dress flickering
+                const hist = dressHistoryRef.current;
+                hist.push({ dress: detectedDress, isFormal, score: detectedScore });
+                if (hist.length > 7) hist.shift();
+
+                const formalVotes = hist.filter((h) => h.isFormal).length;
+                const consensusFormal = formalVotes >= Math.ceil(hist.length / 2);
+                const latestMatch = hist.filter((h) => h.isFormal === consensusFormal).pop() || hist[hist.length - 1];
+
+                detectedDress = latestMatch.dress;
+                isFormal = consensusFormal;
+                detectedScore = latestMatch.score;
 
                 setDressCode(detectedDress);
                 setDressIsFormal(isFormal);
               }
 
-              // 5. Reactive Tribunal Interventions on Posture and Protocol
+              // 5. Draw Real-time HUD Skeleton & Telemetry Overlay on Canvas
+              const hud = hudCanvasRef.current;
+              if (hud && video.videoWidth > 0) {
+                hud.width = video.videoWidth;
+                hud.height = video.videoHeight;
+                const ctx = hud.getContext("2d");
+                if (ctx) {
+                  ctx.clearRect(0, 0, hud.width, hud.height);
+                  const W = hud.width;
+                  const H = hud.height;
+
+                  // A. Shoulder Bar
+                  const lx = leftShoulder.x * W;
+                  const ly = leftShoulder.y * H;
+                  const rx = rightShoulder.x * W;
+                  const ry = rightShoulder.y * H;
+                  const shoulderColor = normTiltDeg <= 3.5 ? "#22c55e" : normTiltDeg <= 6.5 ? "#f59e0b" : "#ef4444";
+
+                  ctx.save();
+                  ctx.strokeStyle = shoulderColor;
+                  ctx.lineWidth = 3;
+                  ctx.shadowColor = shoulderColor;
+                  ctx.shadowBlur = 8;
+                  ctx.beginPath();
+                  ctx.moveTo(lx, ly);
+                  ctx.lineTo(rx, ry);
+                  ctx.stroke();
+
+                  // Landmark points
+                  [[lx, ly], [rx, ry]].forEach(([x, y]) => {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = shoulderColor;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.stroke();
+                  });
+
+                  // B. Spine alignment axis
+                  const mx = midShoulderX * W;
+                  const my = midShoulderY * H;
+                  const nx = nose.x * W;
+                  const ny = nose.y * H;
+
+                  ctx.strokeStyle = "#38bdf8";
+                  ctx.lineWidth = 2.5;
+                  ctx.shadowColor = "#38bdf8";
+                  ctx.shadowBlur = 6;
+                  ctx.beginPath();
+                  ctx.moveTo(mx, my);
+                  ctx.lineTo(nx, ny);
+                  ctx.stroke();
+
+                  // Nose center
+                  ctx.beginPath();
+                  ctx.arc(nx, ny, 4, 0, Math.PI * 2);
+                  ctx.fillStyle = "#38bdf8";
+                  ctx.fill();
+
+                  // C. Dress Code Chest ROI Box
+                  const bx = roiLeftNorm * W;
+                  const by = roiTopNorm * H;
+                  const bw = (roiRightNorm - roiLeftNorm) * W;
+                  const bh = (roiBottomNorm - roiTopNorm) * H;
+                  const boxCol = isFormal ? "#2dd4bf" : "#f43f5e";
+
+                  ctx.strokeStyle = boxCol;
+                  ctx.lineWidth = 2;
+                  ctx.shadowColor = boxCol;
+                  ctx.shadowBlur = 6;
+                  ctx.strokeRect(bx, by, bw, bh);
+
+                  // Corner indicators
+                  ctx.fillStyle = boxCol;
+                  ctx.fillRect(bx - 2, by - 2, 8, 3);
+                  ctx.fillRect(bx - 2, by - 2, 3, 8);
+                  ctx.fillRect(bx + bw - 6, by - 2, 8, 3);
+                  ctx.fillRect(bx + bw + 1, by - 2, 3, 8);
+
+                  // ROI Label tag
+                  ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+                  ctx.fillRect(bx, by - 18, Math.min(bw, 145), 18);
+                  ctx.fillStyle = boxCol;
+                  ctx.font = "bold 9px sans-serif";
+                  ctx.fillText(isFormal ? "IA: VESTIMENTA FORMAL" : "IA: VESTIMENTA INFORMAL", bx + 5, by - 5);
+
+                  // D. Upper Telemetry HUD
+                  ctx.fillStyle = "rgba(15, 23, 42, 0.82)";
+                  ctx.fillRect(W - 145, 8, 137, 40);
+                  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+                  ctx.lineWidth = 1;
+                  ctx.strokeRect(W - 145, 8, 137, 40);
+
+                  ctx.font = "bold 10px sans-serif";
+                  ctx.fillStyle = shoulderColor;
+                  ctx.fillText(`POSTURA: ${computedPosture}% (${postureText.toUpperCase()})`, W - 138, 23);
+                  ctx.fillStyle = "#cbd5e1";
+                  ctx.font = "9px sans-serif";
+                  ctx.fillText(`NIVEL HOMBROS: ±${normTiltDeg}°`, W - 138, 38);
+
+                  ctx.restore();
+                }
+              }
+
+              // 6. Reactive Tribunal Voice Interventions and Observations
+              const now = Date.now();
               if (computedPosture < 65) {
                 if (badPostureStartRef.current === null) {
-                  badPostureStartRef.current = Date.now();
-                } else if (Date.now() - badPostureStartRef.current > 3000 && !hadBadPostureRef.current) {
+                  badPostureStartRef.current = now;
+                } else if (now - badPostureStartRef.current > 3000 && !hadBadPostureRef.current) {
                   hadBadPostureRef.current = true;
                   setJuryObservation({
                     type: "posture",
                     message: "Postulante, le solicitamos mantener una postura erguida y la vista hacia el jurado examinador.",
                   });
+                  // Spoken Voice Alert (20s cooldown)
+                  if (now - lastVoiceInterventionTimeRef.current > 20000) {
+                    lastVoiceInterventionTimeRef.current = now;
+                    speakTribunalSpeech("Postulante, le solicitamos mantener una postura erguida frente al jurado examinador.");
+                  }
                 }
-              } else if (computedPosture >= 85 && hadBadPostureRef.current) {
+              } else if (computedPosture >= 84 && hadBadPostureRef.current) {
                 hadBadPostureRef.current = false;
                 badPostureStartRef.current = null;
                 setJuryObservation({
                   type: "praise",
                   message: "Postura corregida adecuadamente. Puede continuar con su argumentación.",
                 });
+                speakTribunalSpeech("Postura corregida. Puede continuar.");
                 if (observationTimeoutRef.current) clearTimeout(observationTimeoutRef.current);
                 observationTimeoutRef.current = setTimeout(() => {
                   setJuryObservation(null);
@@ -454,25 +666,33 @@ export function SimulationLivePage() {
                       }
                     : prev
                 );
+                // Spoken Dress Alert (35s cooldown)
+                if (now - lastDressVoiceTimeRef.current > 35000) {
+                  lastDressVoiceTimeRef.current = now;
+                  speakTribunalSpeech("Observación de protocolo: Se requiere vestimenta formal con camisa o saco para esta defensa.");
+                }
               }
 
               try {
-                localStorage.setItem(`socratia_vision_${id}`, JSON.stringify({
-                  dressCode: detectedDress,
-                  dressScore: detectedScore,
-                  isFormal: isFormal,
-                  postureScore: computedPosture,
-                  postureLabel: postureText,
-                  eyeContactScore: computedEye,
-                  eyeContactLabel: eyeText,
-                  gesturesLabel: gestureText,
-                  nonverbalScore: Math.round(computedPosture * 0.4 + computedEye * 0.35 + detectedScore * 0.25),
-                  communicationScore: 88,
-                }));
+                localStorage.setItem(
+                  `socratia_vision_${id}`,
+                  JSON.stringify({
+                    dressCode: detectedDress,
+                    dressScore: detectedScore,
+                    isFormal: isFormal,
+                    postureScore: computedPosture,
+                    postureLabel: postureText,
+                    eyeContactScore: computedEye,
+                    eyeContactLabel: eyeText,
+                    gesturesLabel: gestureText,
+                    nonverbalScore: Math.round(computedPosture * 0.4 + computedEye * 0.35 + detectedScore * 0.25),
+                    communicationScore: 88,
+                  })
+                );
               } catch {}
             }
           } catch {}
-        }, 350);
+        }, 180);
       } catch (err) {
         console.warn("Live camera optional:", err);
       }
@@ -487,8 +707,11 @@ export function SimulationLivePage() {
         cameraStreamRef.current.getTracks().forEach((t) => t.stop());
         cameraStreamRef.current = null;
       }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
     };
-  }, [id]);
+  }, [id, speakTribunalSpeech]);
 
   function closeSimulation() {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -636,7 +859,7 @@ export function SimulationLivePage() {
     <TalkingJuryAvatar
       juryName="Dr. Roberto Méndez"
       focusType="Presidente del Tribunal Examinador"
-      isSpeaking={isJuryAudioPlaying || serverState === "jury.speaking"}
+      isSpeaking={isJuryAudioPlaying || serverState === "jury.speaking" || isJuryVoiceSpeaking}
       isListening={canAnswer || isRecording}
       isThinking={serverState === "jury.thinking" || sending}
       observation={juryObservation}
@@ -672,5 +895,5 @@ export function SimulationLivePage() {
   </section>
 )}
 
-  <section className="answer-panel"><label htmlFor="simulation-answer">Tu respuesta escrita</label><textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={10000} disabled={snapshot.status === "COMPLETED" || snapshot.questions_exhausted || isRecording} placeholder="O usa el modo texto (siempre disponible)..." /><div><small>{answer.length}/10000 · El modo texto siempre permanece disponible</small><button className="button button-secondary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>{sending ? "Enviando…" : "Enviar texto"}</button></div></section></div><aside className="live-transcript"><div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "var(--surface-color, white)", borderRadius: "12px", border: "1px solid var(--border-color, #e2e8f0)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}><span style={{ fontSize: "0.82rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--brand-dark, #0f172a)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: isCameraActive ? "#22c55e" : "#94a3b8" }} />Biomecánica & Vestimenta en Vivo</span><span style={{ fontSize: "0.7rem", color: "#0f766e", background: "#ccfbf1", padding: "2px 6px", borderRadius: "8px", fontWeight: 600 }}>MediaPipe AI</span></div><div style={{ position: "relative", width: "100%", height: "135px", background: "#0f172a", borderRadius: "8px", overflow: "hidden", marginBottom: "0.6rem" }}><video ref={liveVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} /><div style={{ position: "absolute", bottom: "6px", left: "6px", right: "6px", background: dressIsFormal ? "rgba(15,23,42,0.88)" : "rgba(185,28,28,0.92)", color: "#f8fafc", padding: "3px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.3)" }}><span>{dressCode}</span><span style={{ fontSize: "0.62rem", opacity: 0.9 }}>{dressIsFormal ? "Protocolo OK" : "Atención"}</span></div></div>{!dressIsFormal && isCameraActive && (<div style={{ marginBottom: "0.6rem", padding: "5px 8px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#991b1b", fontSize: "0.68rem", lineHeight: 1.3 }}>⚠️ <strong>Alerta:</strong> Se detectó vestimenta informal o torso descubierto. Para la defensa de tesis formal se recomienda camisa o saco.</div>)}<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", fontSize: "0.75rem" }}><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Postura Corporal</div><strong style={{ color: postureScore >= 80 ? "#16a34a" : postureScore >= 65 ? "#ca8a04" : "#dc2626", fontSize: "0.8rem" }}>{postureScore}% · {postureLabel}</strong></div><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Contacto Visual</div><strong style={{ color: eyeContactScore >= 80 ? "#16a34a" : eyeContactScore >= 65 ? "#ca8a04" : "#dc2626", fontSize: "0.8rem" }}>{eyeContactScore}% · {eyeContactLabel}</strong></div></div><div style={{ marginTop: "0.4rem", fontSize: "0.7rem", color: "#64748b", textAlign: "center" }}>🖐️ {gesturesLabel}</div></div><h2>Transcript</h2><p>{snapshot.answered_questions} respuestas confirmadas</p><ol>{snapshot.transcript.map((turn) => <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}><span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span><p>{turn.content}</p></li>)}</ol></aside></section></main>;
+  <section className="answer-panel"><label htmlFor="simulation-answer">Tu respuesta escrita</label><textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={10000} disabled={snapshot.status === "COMPLETED" || snapshot.questions_exhausted || isRecording} placeholder="O usa el modo texto (siempre disponible)..." /><div><small>{answer.length}/10000 · El modo texto siempre permanece disponible</small><button className="button button-secondary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>{sending ? "Enviando…" : "Enviar texto"}</button></div></section></div><aside className="live-transcript"><div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "var(--surface-color, white)", borderRadius: "12px", border: "1px solid var(--border-color, #e2e8f0)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}><span style={{ fontSize: "0.82rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--brand-dark, #0f172a)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: isCameraActive ? "#22c55e" : "#94a3b8" }} />Biomecánica & Vestimenta en Vivo</span><span style={{ fontSize: "0.7rem", color: "#0f766e", background: "#ccfbf1", padding: "2px 6px", borderRadius: "8px", fontWeight: 600 }}>MediaPipe HUD</span></div><div style={{ position: "relative", width: "100%", height: "185px", background: "#0f172a", borderRadius: "10px", overflow: "hidden", marginBottom: "0.6rem" }}><video ref={liveVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} /><canvas ref={hudCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} /><div style={{ position: "absolute", bottom: "6px", left: "6px", right: "6px", background: dressIsFormal ? "rgba(15,23,42,0.92)" : "rgba(185,28,28,0.94)", color: "#f8fafc", padding: "4px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.4)" }}><span>{dressCode}</span><span style={{ fontSize: "0.62rem", opacity: 0.9, background: "rgba(255,255,255,0.18)", padding: "1px 5px", borderRadius: "4px" }}>{dressIsFormal ? "Protocolo OK" : "Atención"}</span></div></div><div style={{ display: "flex", gap: "4px", marginBottom: "0.6rem", fontSize: "0.68rem" }}><button type="button" onClick={() => { setDressIsFormal(true); setDressCode("👔 Formal (Protocolo verificado por postulante)"); }} style={{ flex: 1, padding: "3px 4px", borderRadius: "4px", border: "1px solid #cbd5e1", background: dressIsFormal ? "#0f766e" : "#f1f5f9", color: dressIsFormal ? "#fff" : "#475569", fontWeight: 600, cursor: "pointer" }}>👔 Forzar Formal</button><button type="button" onClick={() => { setDressIsFormal(false); setDressCode("⚠️ Informal (Alerta de protocolo activada)"); }} style={{ flex: 1, padding: "3px 4px", borderRadius: "4px", border: "1px solid #cbd5e1", background: !dressIsFormal ? "#b91c1c" : "#f1f5f9", color: !dressIsFormal ? "#fff" : "#475569", fontWeight: 600, cursor: "pointer" }}>⚠️ Forzar Informal</button></div>{!dressIsFormal && isCameraActive && (<div style={{ marginBottom: "0.6rem", padding: "5px 8px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#991b1b", fontSize: "0.68rem", lineHeight: 1.3 }}>⚠️ <strong>Alerta:</strong> Se detectó vestimenta informal o torso descubierto. Para la defensa de tesis formal se recomienda camisa o saco.</div>)}<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", fontSize: "0.75rem" }}><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Postura Corporal</div><strong style={{ color: postureScore >= 80 ? "#16a34a" : postureScore >= 65 ? "#ca8a04" : "#dc2626", fontSize: "0.8rem" }}>{postureScore}% · {postureLabel}</strong></div><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Contacto Visual</div><strong style={{ color: eyeContactScore >= 80 ? "#16a34a" : eyeContactScore >= 65 ? "#ca8a04" : "#dc2626", fontSize: "0.8rem" }}>{eyeContactScore}% · {eyeContactLabel}</strong></div></div><div style={{ marginTop: "0.4rem", fontSize: "0.7rem", color: "#64748b", textAlign: "center" }}>🖐️ {gesturesLabel}</div></div><h2>Transcript</h2><p>{snapshot.answered_questions} respuestas confirmadas</p><ol>{snapshot.transcript.map((turn) => <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}><span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span><p>{turn.content}</p></li>)}</ol></aside></section></main>;
 }
