@@ -445,11 +445,15 @@ export function SimulationLivePage() {
                 observationTimeoutRef.current = setTimeout(() => {
                   setJuryObservation(null);
                 }, 4000);
-              } else if (!isFormal && !hadBadPostureRef.current && !juryObservation) {
-                setJuryObservation({
-                  type: "dress",
-                  message: "Observación de Protocolo: La defensa formal de grado requiere vestimenta formal (camisa o saco).",
-                });
+              } else if (!isFormal && !hadBadPostureRef.current) {
+                setJuryObservation((prev) =>
+                  !prev
+                    ? {
+                        type: "dress",
+                        message: "Observación de Protocolo: La defensa formal de grado requiere vestimenta formal (camisa o saco).",
+                      }
+                    : prev
+                );
               }
 
               try {
