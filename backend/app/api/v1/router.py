@@ -64,3 +64,15 @@ api_router.include_router(admin_plans_router, prefix="/admin/plans", tags=["admi
 api_router.include_router(
     admin_subscriptions_router, prefix="/admin/subscriptions", tags=["admin-subscriptions"]
 )
+
+from app.modules.p5_gestion_saas.routes.student_plans import (
+    router as student_plans_router,
+)
+from app.modules.p5_gestion_saas.routes.student_subscriptions import (
+    router as student_subscriptions_router,
+)
+
+api_router.include_router(student_plans_router, prefix="/plans", tags=["student-plans"])
+api_router.include_router(
+    student_subscriptions_router, prefix="/subscription", tags=["student-subscriptions"]
+)

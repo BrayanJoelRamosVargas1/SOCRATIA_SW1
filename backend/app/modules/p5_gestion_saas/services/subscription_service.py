@@ -112,3 +112,98 @@ class SubscriptionService:
         db.commit()
         db.refresh(sub)
         return sub
+
+    @staticmethod
+    def get_user_active_subscription(db: Session, user_id: str) -> Subscription | None:
+        result = db.execute(
+            select(Subscription).where(
+                Subscription.user_id == user_id,
+                Subscription.status == SubscriptionStatus.ACTIVE,
+            )
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    def get_user_subscriptions(db: Session, user_id: str) -> Sequence[Subscription]:
+        result = db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user_id)
+            .order_by(Subscription.created_at.desc())
+        )
+        return result.scalars().all()
+
+    @staticmethod
+    def subscribe_student(db: Session, user_id: str, plan_id: str) -> Subscription:
+        SubscriptionService._check_user_active_subs(db, user_id)
+
+        plan = db.get(Plan, plan_id)
+        if not plan:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+        if not plan.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plan is inactive and cannot be selected",
+            )
+
+        new_sub = Subscription(
+            user_id=user_id,
+            plan_id=plan.id,
+            status=SubscriptionStatus.ACTIVE,
+            price_at_subscription=plan.price,
+        )
+        db.add(new_sub)
+        db.commit()
+        db.refresh(new_sub)
+        return new_sub
+
+    @staticmethod
+    def change_student_plan(db: Session, user_id: str, new_plan_id: str) -> Subscription:
+        active_sub = SubscriptionService.get_user_active_subscription(db, user_id)
+        if not active_sub:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No active subscription found to change",
+            )
+        if active_sub.plan_id == new_plan_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change to the same plan currently active",
+            )
+
+        new_plan = db.get(Plan, new_plan_id)
+        if not new_plan:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+        if not new_plan.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plan is inactive and cannot be selected",
+            )
+
+        active_sub.status = SubscriptionStatus.CANCELLED
+        active_sub.cancelled_at = datetime.now(UTC)
+
+        new_sub = Subscription(
+            user_id=user_id,
+            plan_id=new_plan.id,
+            status=SubscriptionStatus.ACTIVE,
+            price_at_subscription=new_plan.price,
+        )
+        db.add(new_sub)
+        db.commit()
+        db.refresh(new_sub)
+        return new_sub
+
+    @staticmethod
+    def cancel_student_subscription(db: Session, user_id: str) -> Subscription:
+        active_sub = SubscriptionService.get_user_active_subscription(db, user_id)
+        if not active_sub:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No active subscription found to cancel",
+            )
+
+        active_sub.status = SubscriptionStatus.CANCELLED
+        active_sub.cancelled_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(active_sub)
+        return active_sub

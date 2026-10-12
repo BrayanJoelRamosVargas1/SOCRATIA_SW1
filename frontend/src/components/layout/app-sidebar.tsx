@@ -6,7 +6,7 @@ import { LogoutButton } from "@/features/auth/logout-button";
 
 type AppSidebarProps = {
   user: User;
-  active: "dashboard" | "documents" | "simulations" | "profile";
+  active: "dashboard" | "documents" | "simulations" | "profile" | "subscription";
 };
 
 export function AppSidebar({ user, active }: AppSidebarProps) {
@@ -26,6 +26,9 @@ export function AppSidebar({ user, active }: AppSidebarProps) {
         </Link>
         <Link className={`nav-item ${active === "profile" ? "active" : ""}`} href="/profile">
           Perfil
+        </Link>
+        <Link className={`nav-item ${active === "subscription" ? "active" : ""}`} href="/subscription">
+          Suscripción
         </Link>
         <span className="nav-item disabled">Reportes <small>Próximo</small></span>
       </nav>

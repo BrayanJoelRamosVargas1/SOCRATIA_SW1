@@ -33,3 +33,27 @@ class SubscriptionResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class StudentSubscriptionCreate(BaseModel):
+    plan_id: str = Field(..., max_length=36)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class StudentSubscriptionChange(BaseModel):
+    plan_id: str = Field(..., max_length=36)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+from app.modules.p5_gestion_saas.schemas.plan_schemas import PlanResponse
+
+
+class StudentCurrentSubscriptionResponse(BaseModel):
+    subscription: SubscriptionResponse | None = None
+    plan: PlanResponse | None = None
+    history: list[SubscriptionResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+

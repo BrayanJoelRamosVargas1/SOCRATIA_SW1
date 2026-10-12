@@ -15,6 +15,11 @@ class PlanService:
         return result.scalars().all()
 
     @staticmethod
+    def get_active_plans(db: Session) -> Sequence[Plan]:
+        result = db.execute(select(Plan).where(Plan.is_active.is_(True)))
+        return result.scalars().all()
+
+    @staticmethod
     def get_plan(db: Session, plan_id: str) -> Plan:
         plan = db.get(Plan, plan_id)
         if not plan:
