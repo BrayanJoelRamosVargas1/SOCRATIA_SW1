@@ -203,6 +203,13 @@ Esto garantiza que la base de datos rechace a nivel transaccional (`IntegrityErr
   7. `push_bytes(tts_audio_bytes)` a navegador
   8. `persist_turn(student_transcript, jury_text, timestamps)`
 
+### Diagramas Exportados desde Enterprise Architect
+Los diagramas fueron renderizados directamente por el motor de Enterprise Architect y exportados en alta resolución:
+- [`Diagrama General de Casos de Uso`](file:///c:/Users/ElCremosasWee/SOCRATIA_SW1/docs/uml/diagrams/Diagrama_General_de_Casos_de_Uso.png) (185 KB)
+- [`Diagrama de Clases de Dominio`](file:///c:/Users/ElCremosasWee/SOCRATIA_SW1/docs/uml/diagrams/Diagrama_de_Clases_de_Dominio.png) (58 KB)
+- [`Diagrama de Componentes del Sistema`](file:///c:/Users/ElCremosasWee/SOCRATIA_SW1/docs/uml/diagrams/Diagrama_de_Componentes_del_Sistema.png) (47 KB)
+- [`Diagrama de Secuencia - Turno de Voz`](file:///c:/Users/ElCremosasWee/SOCRATIA_SW1/docs/uml/diagrams/Diagrama_de_Secuencia_-_Turno_de_Voz.png) (14 KB)
+
 ---
 
 ## 7. EVIDENCIAS VISUALES Y FÍSICAS RECOPILADAS
@@ -230,6 +237,7 @@ Todas las capturas de pantalla fueron obtenidas de forma automatizada mediante *
 - **Archivo generado**: [`docs/evidencias/reporte_defensa_simulacion.pdf`](file:///c:/Users/ElCremosasWee/SOCRATIA_SW1/docs/evidencias/reporte_defensa_simulacion.pdf)
 - **Tamaño**: 165.391 bytes (165 KB).
 - **Formato**: PDF 1.4 binario válido, estructurado en hojas A4 con tablas vectoriales de puntajes y márgenes normalizados.
+- **Puntaje Proyectado en la Prueba**: En la simulación real de prueba (`a474bb97-73fa-458e-b817-a9b7c47168b0`), el estudiante envió una respuesta sintética e incompleta, por lo que el evaluador LLM (`Instructor`) registró un `overall_score` de 10/100 con clasificación `INCOMPLETE`, debilidades y puntos faltantes, idéntico tanto en la interfaz web como en el documento PDF extraído.
 
 ---
 
