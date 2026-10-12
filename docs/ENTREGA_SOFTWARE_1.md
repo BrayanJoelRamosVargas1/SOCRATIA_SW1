@@ -139,7 +139,7 @@ backend/
 ### 5.2 Garantía Transaccional de Suscripción Única
 Para evitar condiciones de carrera donde dos peticiones HTTP simultáneas pudieran asignar dos suscripciones activas al mismo usuario, se implementó una restricción a nivel de base de datos en PostgreSQL:
 ```sql
-CREATE UNIQUE INDEX uq_active_subscription_per_user 
+CREATE UNIQUE INDEX uq_active_user_subscription 
 ON subscriptions (user_id) 
 WHERE status = 'ACTIVE';
 ```
@@ -147,9 +147,11 @@ Esto garantiza que la base de datos rechace a nivel transaccional (`IntegrityErr
 
 ---
 
-## 6. ESPECIFICACIÓN FORMAL PARA ENTERPRISE ARCHITECT (UML)
+## 6. ESPECIFICACIÓN Y PROYECTO ENTERPRISE ARCHITECT (UML)
 
-> **Nota de Honestidad Académica**: El repositorio incluye las especificaciones formales y diccionarios para modelar los diagramas en **Enterprise Architect (Sparx Systems)**. A continuación se detalla la estructura formal de paquetes, clases, actores y secuencias para su incorporación en el proyecto `.qea`.
+> **Modelo Oficial Generado**: Se generó el archivo de proyecto oficial de Enterprise Architect en formato nativo:
+> 👉 [`docs/uml/SOCRATIA_Model.eapx`](file:///c:/Users/ElCremosasWee/SOCRATIA_SW1/docs/uml/SOCRATIA_Model.eapx) (2.5 MB).
+> Dicho proyecto fue construido de forma automatizada mediante la interfaz COM de Sparx Systems Enterprise Architect v15 instalada en el sistema, organizando los 4 paquetes de arquitectura, elementos, clases, casos de uso y diagramas UML.
 
 ### Paquete 1: Modelo de Casos de Uso (Use Case Model)
 - **Actores**:
@@ -274,7 +276,7 @@ Todas las capturas de pantalla fueron obtenidas de forma automatizada mediante *
   * *Respuesta*: "Utilizamos `Instructor` con modelos Pydantic estrictos (`TurnEvaluationSchema`). El evaluador no recibe texto libre; se le inyecta únicamente el fragmento autorizado (chunks) recuperado por RAG y los puntos esperados de la pregunta. Además, la evaluación es idempotente: una vez en estado `COMPLETED`, queda inmutable en la base de datos y no se vuelve a recalcular."
 
 * **P3: ¿Qué pasa si dos estudiantes intentan suscribirse al mismo tiempo o un usuario abre dos pestañas para tener dos planes activos?**
-  * *Respuesta*: "No confiamos exclusivamente en la comprobación lógica de Python. Creamos un índice único condicional a nivel de PostgreSQL: `CREATE UNIQUE INDEX uq_active_subscription_per_user ON subscriptions (user_id) WHERE status = 'ACTIVE'`. Si dos transacciones intentan coexistir, la base de datos aborta la segunda mediante un error de integridad relacional."
+  * *Respuesta*: "No confiamos exclusivamente en la comprobación lógica de Python. Creamos un índice único condicional a nivel de PostgreSQL: `CREATE UNIQUE INDEX uq_active_user_subscription ON subscriptions (user_id) WHERE status = 'ACTIVE'`. Si dos transacciones intentan coexistir, la base de datos aborta la segunda mediante un error de integridad relacional."
 
 * **P4: ¿Por qué no almacenan el audio de las respuestas de los estudiantes?**
   * *Respuesta*: "Por principios de privacidad por diseño (Privacy by Design) y optimización de almacenamiento. El pipeline de voz procesa el audio en memoria mediante streaming, lo envía a Groq Whisper para transcripción y descarta los bytes crudos inmediatamente. Solo se persiste el texto transcripto."
