@@ -59,8 +59,35 @@ export function SimulationLivePage() {
   const [postureLabel, setPostureLabel] = useState("Erguida");
   const [eyeContactScore, setEyeContactScore] = useState(91);
   const [eyeContactLabel, setEyeContactLabel] = useState("Directo al Tribunal");
-  const [dressCode, setDressCode] = useState("Formal (Camisa / Traje)");
+  const [dressCode, setDressCode] = useState("Analizando vestimenta...");
+  const [dressIsFormal, setDressIsFormal] = useState(true);
   const [gesturesLabel, setGesturesLabel] = useState("Gesticulación activa");
+
+  const speakCurrentQuestion = useCallback(() => {
+    if (!snapshot?.current_question) return;
+    window.speechSynthesis.cancel();
+    if (juryAudioRef.current) {
+      juryAudioRef.current.pause();
+      juryAudioRef.current = null;
+    }
+    const textToSpeak = snapshot.current_question.text;
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = "es-ES";
+    utterance.rate = 1.0;
+    utterance.onstart = () => {
+      setIsJuryAudioPlaying(true);
+      setServerState("jury.speaking");
+    };
+    utterance.onend = () => {
+      setIsJuryAudioPlaying(false);
+      setServerState("jury.idle");
+    };
+    utterance.onerror = () => {
+      setIsJuryAudioPlaying(false);
+      setServerState("jury.idle");
+    };
+    window.speechSynthesis.speak(utterance);
+  }, [snapshot?.current_question]);
 
   const connect = useCallback(() => {
     if (stoppedRef.current) return;
@@ -220,6 +247,7 @@ export function SimulationLivePage() {
 
         const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
         const fileset = await FilesetResolver.forVisionTasks(WASM_URL);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let pose: any = null;
         try {
           pose = await PoseLandmarker.createFromOptions(fileset, {
@@ -235,10 +263,16 @@ export function SimulationLivePage() {
           });
         }
 
+        const offscreenCanvas = document.createElement("canvas");
+        offscreenCanvas.width = 160;
+        offscreenCanvas.height = 120;
+        const offscreenCtx = offscreenCanvas.getContext("2d", { willReadFrequently: true });
+
         timer = setInterval(() => {
           if (!active || !liveVideoRef.current || liveVideoRef.current.readyState < 2 || !pose) return;
           try {
-            const result = pose.detectForVideo(liveVideoRef.current, performance.now());
+            const video = liveVideoRef.current;
+            const result = pose.detectForVideo(video, performance.now());
             if (result.landmarks && result.landmarks.length > 0) {
               const lm = result.landmarks[0];
               const nose = lm[0];
@@ -249,58 +283,152 @@ export function SimulationLivePage() {
               const leftWrist = lm[15];
               const rightWrist = lm[16];
 
-              if (leftShoulder && rightShoulder) {
+              // 1. Dynamic Posture Calculation
+              let computedPosture = 92;
+              let postureText = "Erguida";
+              if (leftShoulder && rightShoulder && nose) {
                 const tilt = Math.abs(leftShoulder.y - rightShoulder.y);
-                if (tilt < 0.04) {
-                  setPostureScore(94);
-                  setPostureLabel("Erguida");
-                } else if (tilt < 0.08) {
-                  setPostureScore(80);
-                  setPostureLabel("Inclinada");
-                } else {
-                  setPostureScore(68);
-                  setPostureLabel("Encorvada");
-                }
+                const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
+                const neckAlignment = Math.abs(nose.x - midShoulderX);
+                computedPosture = Math.max(35, Math.min(98, Math.round(100 - (tilt * 420 + neckAlignment * 340))));
+                if (computedPosture >= 85) postureText = "Erguida";
+                else if (computedPosture >= 70) postureText = "Inclinada";
+                else postureText = "Encorvada";
+                setPostureScore(computedPosture);
+                setPostureLabel(postureText);
               }
 
+              // 2. Dynamic Eye Contact Calculation
+              let computedEye = 90;
+              let eyeText = "Directo al Tribunal";
               if (nose && leftEye && rightEye) {
                 const eyeCenter = (leftEye.x + rightEye.x) / 2;
                 const gazeDiff = Math.abs(nose.x - eyeCenter);
-                if (gazeDiff < 0.035) {
-                  setEyeContactScore(91);
-                  setEyeContactLabel("Directo al Tribunal");
-                } else {
-                  setEyeContactScore(70);
-                  setEyeContactLabel("Mirada fuera");
-                }
+                computedEye = Math.max(30, Math.min(98, Math.round(100 - gazeDiff * 650)));
+                if (computedEye >= 82) eyeText = "Directo al Tribunal";
+                else if (computedEye >= 65) eyeText = "Mirada Periférica";
+                else eyeText = "Mirada Desviada";
+                setEyeContactScore(computedEye);
+                setEyeContactLabel(eyeText);
               }
 
-              if (leftWrist && rightWrist && leftShoulder) {
-                if (leftWrist.y < leftShoulder.y + 0.2 || rightWrist.y < rightShoulder.y + 0.2) {
-                  setGesturesLabel("Gesticulación activa");
-                } else {
-                  setGesturesLabel("Postura neutral");
+              // 3. Gestures
+              let gestureText = "Postura neutral";
+              if (leftWrist && rightWrist && leftShoulder && rightShoulder) {
+                if (leftWrist.y < leftShoulder.y + 0.15 || rightWrist.y < rightShoulder.y + 0.15) {
+                  gestureText = "Gesticulación activa";
                 }
+                setGesturesLabel(gestureText);
               }
 
-              setDressCode("Formal (Camisa / Traje)");
+              // 4. Real Dynamic Dress Code Pixel Sampling
+              let detectedDress = "👔 Formal (Camisa / Traje)";
+              let detectedScore = 95;
+              let isFormal = true;
+
+              if (offscreenCtx && video.videoWidth > 0 && leftShoulder && rightShoulder && nose) {
+                offscreenCtx.drawImage(video, 0, 0, 160, 120);
+
+                const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
+                const shoulderDist = Math.abs(rightShoulder.x - leftShoulder.x);
+
+                // Sample upper chest and neckline between chin and chest
+                const roiTopNorm = Math.max(0, Math.min(0.9, nose.y + (leftShoulder.y - nose.y) * 0.5));
+                const roiBottomNorm = Math.max(0.1, Math.min(1.0, leftShoulder.y + shoulderDist * 0.45));
+                const roiLeftNorm = Math.max(0, Math.min(0.9, midShoulderX - shoulderDist * 0.28));
+                const roiRightNorm = Math.max(0.1, Math.min(1.0, midShoulderX + shoulderDist * 0.28));
+
+                const rx = Math.floor(roiLeftNorm * 160);
+                const ry = Math.floor(roiTopNorm * 120);
+                const rw = Math.max(8, Math.floor((roiRightNorm - roiLeftNorm) * 160));
+                const rh = Math.max(8, Math.floor((roiBottomNorm - roiTopNorm) * 120));
+
+                const imgData = offscreenCtx.getImageData(rx, ry, Math.min(rw, 160 - rx), Math.min(rh, 120 - ry));
+                const p = imgData.data;
+
+                let skinCount = 0;
+                let sampleCount = 0;
+                let totalSat = 0;
+                let totalBright = 0;
+
+                for (let i = 0; i < p.length; i += 16) {
+                  const r = p[i];
+                  const g = p[i + 1];
+                  const b = p[i + 2];
+                  sampleCount++;
+
+                  const mx = Math.max(r, g, b);
+                  const mn = Math.min(r, g, b);
+                  const delta = mx - mn;
+                  const sat = mx === 0 ? 0 : delta / mx;
+                  const br = (r + g + b) / 3;
+
+                  totalSat += sat;
+                  totalBright += br;
+
+                  // Human skin detection heuristic
+                  if (r > 80 && g > 35 && b > 20 && delta > 12 && r > g && r > b && (r - g) > 10) {
+                    skinCount++;
+                  }
+                }
+
+                const skinRatio = sampleCount > 0 ? skinCount / sampleCount : 0;
+                const avgSat = sampleCount > 0 ? totalSat / sampleCount : 0;
+                const avgBright = sampleCount > 0 ? totalBright / sampleCount : 0;
+
+                if (skinRatio > 0.40) {
+                  // Bare chest / shoulders / without shirt
+                  detectedDress = "⚠️ Informal (Torso / Pecho descubierto)";
+                  detectedScore = 40;
+                  isFormal = false;
+                } else if (avgSat > 0.38) {
+                  // Saturated sports / casual t-shirt
+                  detectedDress = "⚠️ Informal (Camiseta Casual / Deportiva)";
+                  detectedScore = 65;
+                  isFormal = false;
+                } else if (avgBright < 80 && avgSat < 0.32) {
+                  // Dark formal suit or dark button-down shirt
+                  detectedDress = "👔 Formal (Saco / Camisa oscura)";
+                  detectedScore = 95;
+                  isFormal = true;
+                } else if (avgBright > 165 && avgSat < 0.22) {
+                  // White or light formal dress shirt
+                  detectedDress = "👔 Formal (Camisa blanca / clara)";
+                  detectedScore = 98;
+                  isFormal = true;
+                } else if (avgSat < 0.28) {
+                  // Business formal neutral tones
+                  detectedDress = "👔 Formal (Vestimenta formal de tribunal)";
+                  detectedScore = 92;
+                  isFormal = true;
+                } else {
+                  // Casual t-shirt
+                  detectedDress = "⚠️ Informal (Camiseta casual detectada)";
+                  detectedScore = 68;
+                  isFormal = false;
+                }
+
+                setDressCode(detectedDress);
+                setDressIsFormal(isFormal);
+              }
 
               try {
                 localStorage.setItem(`socratia_vision_${id}`, JSON.stringify({
-                  dressCode: "Formal (Camisa / Traje)",
-                  dressScore: 95,
-                  postureScore: 94,
-                  postureLabel: "Erguida y Nivelada",
-                  eyeContactScore: 91,
-                  eyeContactLabel: "Directo al Tribunal",
-                  gesturesLabel: "Natural y Fluida",
-                  nonverbalScore: 92,
+                  dressCode: detectedDress,
+                  dressScore: detectedScore,
+                  isFormal: isFormal,
+                  postureScore: computedPosture,
+                  postureLabel: postureText,
+                  eyeContactScore: computedEye,
+                  eyeContactLabel: eyeText,
+                  gesturesLabel: gestureText,
+                  nonverbalScore: Math.round(computedPosture * 0.4 + computedEye * 0.35 + detectedScore * 0.25),
                   communicationScore: 88,
                 }));
               } catch {}
             }
           } catch {}
-        }, 400);
+        }, 350);
       } catch (err) {
         console.warn("Live camera optional:", err);
       }
@@ -459,7 +587,20 @@ export function SimulationLivePage() {
         </button>
       )}
     </div><article className="live-question">
-      <span>{snapshot.status === "COMPLETED" ? "Sistema" : "Jurado"}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+        <span>{snapshot.status === "COMPLETED" ? "Sistema" : "Jurado Examinador"}</span>
+        {snapshot.status !== "COMPLETED" && snapshot.current_question && (
+          <button
+            type="button"
+            className="button button-secondary"
+            style={{ fontSize: "0.75rem", padding: "0.25rem 0.65rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+            onClick={speakCurrentQuestion}
+            disabled={isJuryAudioPlaying || isRecording}
+          >
+            {isJuryAudioPlaying ? "🔊 Reproduciendo..." : "🔊 Escuchar Pregunta"}
+          </button>
+        )}
+      </div>
       <h1>{snapshot.status === "COMPLETED" ? "Simulación Finalizada" : (snapshot.current_question?.text ?? "Has respondido todas las preguntas.")}</h1>
       {snapshot.status === "COMPLETED" && <p>La simulación ha concluido. El reporte de evaluación estará disponible en la vista de reporte.</p>}
     </article>{error && <p className="form-error" role="alert">{error}</p>}
@@ -473,5 +614,5 @@ export function SimulationLivePage() {
   </section>
 )}
 
-  <section className="answer-panel"><label htmlFor="simulation-answer">Tu respuesta escrita</label><textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={10000} disabled={snapshot.status === "COMPLETED" || snapshot.questions_exhausted || isRecording} placeholder="O usa el modo texto (siempre disponible)..." /><div><small>{answer.length}/10000 · El modo texto siempre permanece disponible</small><button className="button button-secondary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>{sending ? "Enviando…" : "Enviar texto"}</button></div></section></div><aside className="live-transcript"><div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "var(--surface-color, white)", borderRadius: "12px", border: "1px solid var(--border-color, #e2e8f0)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}><span style={{ fontSize: "0.82rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--brand-dark, #0f172a)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: isCameraActive ? "#22c55e" : "#94a3b8" }} />Biomecánica & Vestimenta en Vivo</span><span style={{ fontSize: "0.7rem", color: "#0f766e", background: "#ccfbf1", padding: "2px 6px", borderRadius: "8px", fontWeight: 600 }}>MediaPipe AI</span></div><div style={{ position: "relative", width: "100%", height: "135px", background: "#0f172a", borderRadius: "8px", overflow: "hidden", marginBottom: "0.6rem" }}><video ref={liveVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} /><div style={{ position: "absolute", bottom: "6px", left: "6px", background: "rgba(15,23,42,0.85)", color: "#f8fafc", padding: "2px 8px", borderRadius: "6px", fontSize: "0.7rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}><span>👔</span> {dressCode}</div></div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", fontSize: "0.75rem" }}><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Postura Corporal</div><strong style={{ color: postureScore >= 80 ? "#16a34a" : "#ca8a04", fontSize: "0.8rem" }}>{postureScore}% · {postureLabel}</strong></div><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Contacto Visual</div><strong style={{ color: eyeContactScore >= 80 ? "#16a34a" : "#ca8a04", fontSize: "0.8rem" }}>{eyeContactScore}% · {eyeContactLabel}</strong></div></div><div style={{ marginTop: "0.4rem", fontSize: "0.7rem", color: "#64748b", textAlign: "center" }}>🖐️ {gesturesLabel}</div></div><h2>Transcript</h2><p>{snapshot.answered_questions} respuestas confirmadas</p><ol>{snapshot.transcript.map((turn) => <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}><span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span><p>{turn.content}</p></li>)}</ol></aside></section></main>;
+  <section className="answer-panel"><label htmlFor="simulation-answer">Tu respuesta escrita</label><textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={10000} disabled={snapshot.status === "COMPLETED" || snapshot.questions_exhausted || isRecording} placeholder="O usa el modo texto (siempre disponible)..." /><div><small>{answer.length}/10000 · El modo texto siempre permanece disponible</small><button className="button button-secondary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>{sending ? "Enviando…" : "Enviar texto"}</button></div></section></div><aside className="live-transcript"><div style={{ marginBottom: "1.25rem", padding: "0.85rem", background: "var(--surface-color, white)", borderRadius: "12px", border: "1px solid var(--border-color, #e2e8f0)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}><span style={{ fontSize: "0.82rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--brand-dark, #0f172a)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: isCameraActive ? "#22c55e" : "#94a3b8" }} />Biomecánica & Vestimenta en Vivo</span><span style={{ fontSize: "0.7rem", color: "#0f766e", background: "#ccfbf1", padding: "2px 6px", borderRadius: "8px", fontWeight: 600 }}>MediaPipe AI</span></div><div style={{ position: "relative", width: "100%", height: "135px", background: "#0f172a", borderRadius: "8px", overflow: "hidden", marginBottom: "0.6rem" }}><video ref={liveVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} /><div style={{ position: "absolute", bottom: "6px", left: "6px", right: "6px", background: dressIsFormal ? "rgba(15,23,42,0.88)" : "rgba(185,28,28,0.92)", color: "#f8fafc", padding: "3px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.3)" }}><span>{dressCode}</span><span style={{ fontSize: "0.62rem", opacity: 0.9 }}>{dressIsFormal ? "Protocolo OK" : "Atención"}</span></div></div>{!dressIsFormal && isCameraActive && (<div style={{ marginBottom: "0.6rem", padding: "5px 8px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#991b1b", fontSize: "0.68rem", lineHeight: 1.3 }}>⚠️ <strong>Alerta:</strong> Se detectó vestimenta informal o torso descubierto. Para la defensa de tesis formal se recomienda camisa o saco.</div>)}<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", fontSize: "0.75rem" }}><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Postura Corporal</div><strong style={{ color: postureScore >= 80 ? "#16a34a" : postureScore >= 65 ? "#ca8a04" : "#dc2626", fontSize: "0.8rem" }}>{postureScore}% · {postureLabel}</strong></div><div style={{ background: "var(--bg-muted, #f8fafc)", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}><div style={{ color: "#64748b", fontSize: "0.7rem" }}>Contacto Visual</div><strong style={{ color: eyeContactScore >= 80 ? "#16a34a" : eyeContactScore >= 65 ? "#ca8a04" : "#dc2626", fontSize: "0.8rem" }}>{eyeContactScore}% · {eyeContactLabel}</strong></div></div><div style={{ marginTop: "0.4rem", fontSize: "0.7rem", color: "#64748b", textAlign: "center" }}>🖐️ {gesturesLabel}</div></div><h2>Transcript</h2><p>{snapshot.answered_questions} respuestas confirmadas</p><ol>{snapshot.transcript.map((turn) => <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}><span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span><p>{turn.content}</p></li>)}</ol></aside></section></main>;
 }

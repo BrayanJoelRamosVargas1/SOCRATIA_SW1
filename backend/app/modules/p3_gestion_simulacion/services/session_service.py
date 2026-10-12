@@ -208,13 +208,26 @@ class SessionService:
     def _ask_question(
         self, simulation: Simulation, question: SimulationQuestion, now: datetime
     ) -> SimulationTurn:
-        text = question.prompt_text or (question.question.question if question.question else "")
-        if not text:
+        raw_text = question.prompt_text or (question.question.question if question.question else "")
+        if not raw_text:
             raise SimulationNotReadyError
+
+        sequence = self.turns.next_sequence(simulation.id)
+        jury_name = simulation.jury_profile.name if simulation.jury_profile else "Jurado Académico"
+
+        # Saludo protocolar de inicio formal de defensa para el primer turno
+        if sequence == 1 and question.source.value == "BANK" and not raw_text.startswith("Buenas"):
+            text = (
+                f"Buenas tardes, postulante. Soy el {jury_name} de su tribunal examinador. "
+                f"Damos inicio formal a la defensa de su tesis. Comenzamos con la primera pregunta: {raw_text}"
+            )
+        else:
+            text = raw_text
+
         turn = self.turns.add(
             SimulationTurn(
                 simulation_id=simulation.id,
-                sequence=self.turns.next_sequence(simulation.id),
+                sequence=sequence,
                 speaker=SimulationTurnSpeaker.JURY,
                 turn_type=(
                     SimulationTurnType.QUESTION

@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { SimulationReportResponse } from "@/types/report";
-import { getSimulationReport, getEvaluation, evaluateSimulation } from "@/features/simulations/api";
+import { getSimulationReport, evaluateSimulation } from "@/features/simulations/api";
 
 export default function ReportPage() {
   const { id } = useParams() as { id: string };
-  const router = useRouter();
 
   const [report, setReport] = useState<SimulationReportResponse | null>(null);
   const [evalStatus, setEvalStatus] = useState<string | null>(null);
@@ -38,6 +37,7 @@ export default function ReportPage() {
     try {
       const stored = localStorage.getItem(`socratia_vision_${id}`);
       if (stored) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setVisionData(JSON.parse(stored));
       }
     } catch {}

@@ -129,6 +129,22 @@ export default function StudentSubscriptionPage() {
         </p>
       </div>
 
+      {/* Banner de Política de Suscripción Única */}
+      {subData?.subscription && subData.subscription.status === "ACTIVE" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+          <div className="text-2xl">🛡️</div>
+          <div>
+            <h3 className="text-sm font-bold text-blue-900">
+              Política de Suscripción Única Activa ({subData.plan?.name || "Plan Actual"})
+            </h3>
+            <p className="text-xs text-blue-800 mt-1 leading-relaxed">
+              De acuerdo con las reglas de negocio de Socratia, cada cuenta puede mantener <strong>únicamente un plan activo a la vez</strong>.
+              Si seleccionas un plan diferente, tu suscripción actual quedará finalizada de inmediato y será sustituida por el nuevo plan contratado. Todo tu historial de documentos y evaluaciones previas se conservará intacto.
+            </p>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
           {error}
@@ -199,13 +215,13 @@ export default function StudentSubscriptionPage() {
                   <div
                     key={plan.id}
                     className={`bg-white rounded-xl border p-6 flex flex-col justify-between shadow-sm transition-all ${
-                      isCurrent ? "ring-2 ring-blue-600 border-transparent" : "hover:border-gray-300"
+                      isCurrent ? "ring-2 ring-blue-600 border-transparent bg-blue-50/20" : "hover:border-gray-300"
                     }`}
                   >
                     <div>
                       {isCurrent && (
                         <span className="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded mb-2">
-                          Plan Actual
+                          ✓ Plan Actual Asignado
                         </span>
                       )}
                       <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
@@ -233,19 +249,29 @@ export default function StudentSubscriptionPage() {
 
                     <div className="mt-6 pt-4 border-t">
                       {isCurrent ? (
-                        <button
-                          disabled
-                          className="w-full bg-gray-100 text-gray-400 font-semibold py-2 px-4 rounded-lg text-sm cursor-not-allowed"
-                        >
-                          Plan Actual
-                        </button>
+                        <div className="text-center">
+                          <button
+                            disabled
+                            className="w-full bg-gray-100 text-gray-500 font-semibold py-2 px-4 rounded-lg text-xs cursor-not-allowed border border-gray-200"
+                          >
+                            Plan Actual Activo
+                          </button>
+                          <span className="text-[10px] text-gray-400 mt-1 block">
+                            Tu cuenta ya cuenta con este plan
+                          </span>
+                        </div>
                       ) : currentPlanId ? (
-                        <button
-                          onClick={() => setSelectedPlanToChange(plan)}
-                          className="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
-                        >
-                          Cambiar a este plan
-                        </button>
+                        <div>
+                          <button
+                            onClick={() => setSelectedPlanToChange(plan)}
+                            className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold py-2 px-4 rounded-lg text-sm transition-colors border border-blue-200"
+                          >
+                            Cambiar a este plan
+                          </button>
+                          <span className="text-[10px] text-amber-700 mt-1 block text-center">
+                            ⚠️ Sustituirá a tu plan actual
+                          </span>
+                        </div>
                       ) : (
                         <button
                           onClick={() => setSelectedPlanToSubscribe(plan)}
@@ -340,11 +366,17 @@ export default function StudentSubscriptionPage() {
       {/* Modal Cambiar Plan */}
       {selectedPlanToChange && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Cambiar de Plan</h3>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Cambiar Plan de Suscripción</h3>
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-lg text-xs mb-4">
+              <strong>⚠️ Política de Suscripción:</strong> Tu cuenta tiene activo el plan{" "}
+              <strong>{subData?.plan?.name || "Actual"}</strong>. Al confirmar el cambio, tu suscripción anterior
+              quedará <strong>cancelada inmediatamente</strong> y se activará <strong>{selectedPlanToChange.name}</strong>.
+              El historial de defensas y documentos permanece inalterado.
+            </div>
             <p className="text-sm text-gray-600 mb-4">
-              ¿Deseas cambiar tu suscripción al plan <strong>{selectedPlanToChange.name}</strong> por{" "}
-              <strong>${Number(selectedPlanToChange.price).toFixed(2)}/mes</strong>? Tu plan anterior quedará finalizado y tu historial permanecerá guardado.
+              ¿Confirmas la transición al plan <strong>{selectedPlanToChange.name}</strong> por{" "}
+              <strong>${Number(selectedPlanToChange.price).toFixed(2)}/mes</strong>?
             </p>
             <div className="flex justify-end gap-3">
               <button
