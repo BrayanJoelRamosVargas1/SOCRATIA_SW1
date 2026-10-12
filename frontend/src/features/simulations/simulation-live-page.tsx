@@ -46,6 +46,8 @@ export function SimulationLivePage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const ttsChunksRef = useRef<Blob[]>([]);
   const [serverState, setServerState] = useState<string>("");
+  const [isJuryAudioPlaying, setIsJuryAudioPlaying] = useState(false);
+  const juryAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const connect = useCallback(() => {
     if (stoppedRef.current) return;
@@ -97,20 +99,44 @@ export function SimulationLivePage() {
            window.speechSynthesis.cancel();
            const utterance = new SpeechSynthesisUtterance(textToSpeak);
            utterance.lang = "es-ES"; // es-419
+           utterance.onstart = () => setIsJuryAudioPlaying(true);
+           utterance.onend = () => { setIsJuryAudioPlaying(false); setServerState("jury.idle"); };
+           utterance.onerror = () => { setIsJuryAudioPlaying(false); setServerState("jury.idle"); };
            window.speechSynthesis.speak(utterance);
         }
       } else if (event.type === "tts.started") {
         window.speechSynthesis.cancel();
+        setIsJuryAudioPlaying(true);
       } else if (event.type === "jury.speaking") {
         setServerState("jury.speaking");
+        setIsJuryAudioPlaying(true);
         ttsChunksRef.current = [];
       } else if (event.type === "jury.finished") {
         setServerState("jury.finished");
         if (ttsChunksRef.current.length > 0) {
+          if (juryAudioRef.current) {
+            juryAudioRef.current.pause();
+          }
           const blob = new Blob(ttsChunksRef.current, { type: "audio/mpeg" });
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
-          audio.play().catch(console.error);
+          juryAudioRef.current = audio;
+          setIsJuryAudioPlaying(true);
+          audio.onended = () => {
+            setIsJuryAudioPlaying(false);
+            setServerState("jury.idle");
+            juryAudioRef.current = null;
+          };
+          audio.onerror = () => {
+            setIsJuryAudioPlaying(false);
+            setServerState("jury.idle");
+            juryAudioRef.current = null;
+          };
+          audio.play().catch(() => {
+            setIsJuryAudioPlaying(false);
+          });
+        } else {
+          setIsJuryAudioPlaying(false);
         }
       } else {
         setServerState(event.type);
@@ -177,6 +203,12 @@ export function SimulationLivePage() {
   }
 
   async function startRecording() {
+    if (juryAudioRef.current) {
+      juryAudioRef.current.pause();
+      juryAudioRef.current = null;
+    }
+    window.speechSynthesis.cancel();
+    setIsJuryAudioPlaying(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : 
@@ -277,10 +309,11 @@ export function SimulationLivePage() {
   const canAnswer = connection === "connected" && snapshot.status !== "COMPLETED" && snapshot.turn_state === "WAITING_STUDENT" && !!snapshot.current_question && !sending;
   
   let statusText = "";
-  if (sending || serverState === "voice.transcribing") statusText = "Transcribiendo/Enviando...";
-  else if (serverState === "voice.listening" || isRecording) statusText = "Te escuchamos...";
-  else if (serverState === "jury.thinking") statusText = "Jurado pensando...";
-  else if (serverState === "jury.speaking") statusText = "Jurado hablando...";
+  if (sending || serverState === "voice.transcribing") statusText = "Transcribiendo respuesta con IA...";
+  else if (serverState === "voice.listening" || isRecording) statusText = "🎙️ Grabando... Habla claro a tu micrófono";
+  else if (serverState === "jury.thinking") statusText = "🤔 El Jurado está analizando tu intervención...";
+  else if (isJuryAudioPlaying || serverState === "jury.speaking") statusText = "🔊 El Jurado está hablando... Escucha la pregunta.";
+  else if (canAnswer) statusText = "✨ Es tu turno de responder: Presiona 'Hablar al Jurado' o escribe abajo.";
   
   return <main className="live-shell"><header className="live-header"><Link href={`/simulations/${id}`}>SR · Socratia</Link><div><span className={`connection-dot connection-${connection}`} />{connection === "connected" ? "Conectado" : connection === "offline" ? "Sin conexión" : "Reconectando…"}</div><time>{elapsedLabel(snapshot.started_at, now, snapshot.finished_at)}</time></header><section className="live-workspace"><div className="live-main"><div className="live-progress" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <div style={{ flex: 1 }}>
@@ -295,15 +328,15 @@ export function SimulationLivePage() {
     </div><article className="live-question">
       <span>{snapshot.status === "COMPLETED" ? "Sistema" : "Jurado"}</span>
       <h1>{snapshot.status === "COMPLETED" ? "Simulación Finalizada" : (snapshot.current_question?.text ?? "Has respondido todas las preguntas.")}</h1>
-      {snapshot.status === "COMPLETED" && <p>La simulación ha concluido. El reporte de evaluación estará disponible próximamente en P4.</p>}
+      {snapshot.status === "COMPLETED" && <p>La simulación ha concluido. El reporte de evaluación estará disponible en la vista de reporte.</p>}
     </article>{error && <p className="form-error" role="alert">{error}</p>}
   
   {snapshot.status !== "COMPLETED" && (
   <section className="voice-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', padding: '1rem', background: 'var(--surface-color)', borderRadius: '12px' }}>
-    <button className={`button ${isRecording ? 'button-danger' : 'button-primary'}`} type="button" disabled={!canAnswer && !isRecording} onClick={isRecording ? stopRecording : startRecording}>
-      {isRecording ? "⏹️ Detener Grabación" : "🎤 Hablar al Jurado"}
+    <button className={`button ${isRecording ? 'button-danger' : isJuryAudioPlaying ? 'button-secondary' : 'button-primary'}`} type="button" disabled={!canAnswer && !isRecording && !isJuryAudioPlaying} onClick={isRecording ? stopRecording : startRecording}>
+      {isRecording ? "⏹️ Detener Grabación" : isJuryAudioPlaying ? "✋ Interrumpir para responder" : "🎤 Hablar al Jurado"}
     </button>
-    <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{statusText}</span>
+    <span style={{ fontSize: '0.875rem', fontWeight: 500, color: isJuryAudioPlaying ? 'var(--brand-primary, #0d9488)' : isRecording ? '#e11d48' : 'var(--text-muted)' }}>{statusText}</span>
   </section>
 )}
 

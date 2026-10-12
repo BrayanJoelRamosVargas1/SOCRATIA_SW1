@@ -29,7 +29,7 @@ export function CalibrationPage() {
   const [checking, setChecking] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
 
   const stop = useCallback(() => { cancelAnimationFrame(audioFrameRef.current); cancelAnimationFrame(visionFrameRef.current); streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; void audioRef.current?.close(); audioRef.current = null; }, []);
-  useEffect(() => { Promise.all([getCurrentUser(), getSimulation(params.id)]).then(([current, item]) => { setUser(current); setSimulation(item); }).catch(() => router.replace("/simulations")); return stop; }, [params.id, router, stop]);
+  useEffect(() => { Promise.all([getCurrentUser(), getSimulation(params.id)]).then(([current, item]) => { if (item.status === "COMPLETED") { router.replace(`/simulations/${item.id}`); return; } setUser(current); setSimulation(item); }).catch(() => router.replace("/simulations")); return stop; }, [params.id, router, stop]);
 
   async function calibrate() {
     stop(); setChecking(true); setError(""); setCameraReady(false); setMicrophoneReady(false); setVisionReady(false); setAudioLevel(0);

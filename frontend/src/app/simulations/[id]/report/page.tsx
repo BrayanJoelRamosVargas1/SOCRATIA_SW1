@@ -16,41 +16,75 @@ export default function ReportPage() {
   const [downloading] = useState(false); // remove setDownloading if not used
 
   useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let active = true;
+
     async function load() {
       try {
         const data = await getSimulationReport(id);
+        if (!active) return;
         setReport(data);
+        setEvalStatus(null);
+        setError(null);
+        if (timer) clearInterval(timer);
       } catch (err: unknown) {
-        const isNotCompleted = err instanceof Error && err.message?.includes("not completed");
-        if (isNotCompleted) {
-          try {
-            const ev = await getEvaluation(id);
-            setEvalStatus(ev.status);
-          } catch {
-            setError("No se pudo obtener el estado de la evaluación.");
+        if (!active) return;
+        const msg = err instanceof Error ? err.message : "";
+        const isNotFound = msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("no se encontró") || msg.toLowerCase().includes("not completed");
+        
+        if (isNotFound) {
+          setEvalStatus("PROCESSING");
+          // Disparar evaluación si no está iniciada
+          evaluateSimulation(id).catch(() => undefined);
+          
+          if (!timer) {
+            timer = setInterval(() => {
+              getSimulationReport(id)
+                .then((data) => {
+                  if (!active) return;
+                  setReport(data);
+                  setEvalStatus(null);
+                  setError(null);
+                  if (timer) clearInterval(timer);
+                })
+                .catch(() => undefined);
+            }, 2500);
           }
         } else {
-          setError(err instanceof Error ? err.message : "Error al cargar reporte.");
+          setError(msg || "Error al cargar reporte.");
         }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
+
     load();
+
+    return () => {
+      active = false;
+      if (timer) clearInterval(timer);
+    };
   }, [id]);
 
   const downloadPDF = () => {
     window.print();
   };
 
-  if (loading) return <div className="p-8 text-center">Cargando reporte...</div>;
+  if (loading) return <div className="p-8 text-center"><div className="loading-orbit mx-auto mb-4" /><p>Abriendo reporte…</p></div>;
 
   if (evalStatus === "PENDING" || evalStatus === "PROCESSING") {
     return (
-      <div className="p-8 max-w-3xl mx-auto text-center">
-        <h2 className="text-2xl font-bold mb-4">La evaluación todavía está en proceso</h2>
-        <p className="text-gray-600">Por favor, regresa más tarde.</p>
-        <button onClick={() => router.push(`/simulations/${id}`)} className="mt-4 text-blue-600 underline">Volver a simulación</button>
+      <div className="p-8 max-w-2xl mx-auto text-center" style={{ marginTop: "4rem" }}>
+        <div className="loading-orbit mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-3" style={{ color: "var(--brand-dark, #0f172a)" }}>
+          Generando evaluación con Inteligencia Artificial
+        </h2>
+        <p className="text-gray-600 mb-2">
+          El jurado examinador está analizando la precisión técnica de tus respuestas, detectando fortalezas, debilidades y contrastando los puntos clave.
+        </p>
+        <p className="text-sm text-gray-400">
+          Esto toma unos segundos, tu reporte aparecerá aquí automáticamente…
+        </p>
       </div>
     );
   }
