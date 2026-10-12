@@ -100,9 +100,13 @@ class ReportProjectionService:
         if simulation.started_at and simulation.finished_at:
             duration = (simulation.finished_at - simulation.started_at).total_seconds() / 60.0
 
+        doc_title = "Untitled"
+        if simulation.document:
+            doc_title = getattr(simulation.document, "original_name", None) or getattr(simulation.document, "title", "Untitled")
+
         return SimulationReportResponse(
             simulation_id=simulation.id,
-            document_title=simulation.document.title if simulation.document else "Untitled",
+            document_title=doc_title,
             date=simulation.created_at,
             duration_minutes=duration,
             overall_score=evaluation.overall_score,
