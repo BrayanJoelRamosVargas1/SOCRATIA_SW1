@@ -70,12 +70,38 @@ export function SimulationLivePage() {
   const [dressIsFormal, setDressIsFormal] = useState(true);
   const [gesturesLabel, setGesturesLabel] = useState("Gesticulación académica activa");
   const [isCalibrated, setIsCalibrated] = useState(false);
+  const [isPersonPresent, setIsPersonPresent] = useState(true);
+
+  // Live Oratory, Stuttering & Choppy Speech AI State
+  const [fluencyScore, setFluencyScore] = useState(94);
+  const [fluencyLabel, setFluencyLabel] = useState("Fluida y Elocuente");
+  const [fillerWordsCount, setFillerWordsCount] = useState(0);
+  const [detectedFillers, setDetectedFillers] = useState<string[]>([]);
+  const [stutterCount, setStutterCount] = useState(0);
+  const [detectedStutters, setDetectedStutters] = useState<string[]>([]);
+  const [isSpeechChoppy, setIsSpeechChoppy] = useState(false);
+  const [speechCadenceLabel, setSpeechCadenceLabel] = useState("Cadencia continua y fluida");
 
   // Posture & Dress Smoothing Filters
   const postureEmaRef = useRef<number>(94);
   const baselineNeckRatioRef = useRef<number | null>(null);
   const calibrationFramesRef = useRef<number>(0);
   const dressHistoryRef = useRef<Array<{ dress: string; isFormal: boolean; score: number }>>([]);
+
+  // Oratory & Absence Telemetry Refs
+  const oratoryScoreRef = useRef<number>(94);
+  const stutterCountRef = useRef<number>(0);
+  const fillerWordsCountRef = useRef<number>(0);
+  const fluencyLabelRef = useRef<string>("Fluida y Elocuente");
+  const choppyBurstsCountRef = useRef<number>(0);
+  const lastVolStateRef = useRef<"quiet" | "speaking">("quiet");
+  const lastVolSwitchTimeRef = useRef<number>(0);
+  const lastOratoryVoiceTimeRef = useRef<number>(0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const personAbsentStartRef = useRef<number | null>(null);
+  const wasAbsentRef = useRef<boolean>(false);
+  const lastAbsentVoiceTimeRef = useRef<number>(0);
 
   // Reactive Tribunal Observations & Voice Interventions
   const [juryObservation, setJuryObservation] = useState<{
@@ -159,6 +185,117 @@ export function SimulationLivePage() {
     }
   }, []);
 
+  const analyzeOratoryAndDiction = useCallback((text: string, isAcousticallyChoppy?: boolean) => {
+    if (!text || text.trim().length === 0) return;
+    const clean = text.trim();
+    const lower = clean.toLowerCase();
+
+    // 1. Stuttering & Syllable/Word Repetitions (Tartamudeo, traba, "entrelengua")
+    // A) Word repetition: "yo yo", "este este", "el el", "que que", "la la", "de de", "para para"
+    const wordRepetitionRegex = /\b([a-záéíóúñ]{2,})\s+\1\b/gi;
+    const wordMatches: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = wordRepetitionRegex.exec(lower)) !== null) {
+      wordMatches.push(m[0]);
+    }
+
+    // B) Syllable stuttering / hyphenated repetitions: "es-este", "pro-propuesta", "si-sistema"
+    const syllableStutterRegex = /\b([a-záéíóúñ]{1,4})[-—\s]+(?:\1[a-záéíóúñ]*)\b/gi;
+    while ((m = syllableStutterRegex.exec(lower)) !== null) {
+      if (!wordMatches.includes(m[0])) {
+        wordMatches.push(m[0]);
+      }
+    }
+
+    // C) Letter stutter: "e-e-este", "p-p-pero", "s-s-si"
+    const letterStutterRegex = /\b([a-záéíóúñ])[-—]+\1[-—]*[a-záéíóúñ]+\b/gi;
+    while ((m = letterStutterRegex.exec(lower)) !== null) {
+      if (!wordMatches.includes(m[0])) {
+        wordMatches.push(m[0]);
+      }
+    }
+
+    // 2. Academic Filler Words (Muletillas de oratoria)
+    const fillerRegex = /\b(este|eh|ehh|ehhh|mmm|em|o sea|osea|la verdad|tipo|digamos|como que|básicamente|bueno|en plan|verdad\?|no\?)\b/gi;
+    const fillerMatches: string[] = [];
+    while ((m = fillerRegex.exec(lower)) !== null) {
+      fillerMatches.push(m[0]);
+    }
+
+    const sCount = wordMatches.length;
+    const fCount = fillerMatches.length;
+    const choppy = Boolean(isAcousticallyChoppy || choppyBurstsCountRef.current >= 6);
+
+    // 3. Fluency and Diction Scoring (0 to 100)
+    let penalty = sCount * 10;
+    if (fCount > 1) {
+      penalty += (fCount - 1) * 4;
+    }
+    if (choppy) {
+      penalty += 12;
+    }
+
+    const computedFluency = Math.max(30, Math.min(100, 96 - penalty));
+    let label = "Elocuente y Fluida (Excelente)";
+    if (computedFluency < 50) {
+      label = "⚠️ Traba Severa / Vacilaciones Frecuentes";
+    } else if (computedFluency < 70) {
+      label = "⚠️ Entrecortada / Con Muletillas";
+    } else if (computedFluency < 85) {
+      label = "Fluidez Moderada (Aceptable)";
+    }
+
+    const cadenceText = choppy
+      ? "⚠️ Habla entrecortada (Microcortes detectados)"
+      : "Cadencia continua y fluida";
+
+    setFluencyScore(computedFluency);
+    setFluencyLabel(label);
+    setStutterCount(sCount);
+    setDetectedStutters(wordMatches);
+    setFillerWordsCount(fCount);
+    setDetectedFillers(fillerMatches);
+    setIsSpeechChoppy(choppy);
+    setSpeechCadenceLabel(cadenceText);
+
+    oratoryScoreRef.current = computedFluency;
+    stutterCountRef.current = sCount;
+    fillerWordsCountRef.current = fCount;
+    fluencyLabelRef.current = label;
+
+    // 4. Reactive Tribunal Intervention for Oratory Disfluency
+    const nowTs = Date.now();
+    if ((sCount >= 2 || fCount >= 4 || computedFluency < 62) && nowTs - lastOratoryVoiceTimeRef.current > 28000) {
+      lastOratoryVoiceTimeRef.current = nowTs;
+      setJuryObservation({
+        type: "posture",
+        message: `Observación de Oratoria: El tribunal nota vacilaciones (${sCount} repeticiones, ${fCount} muletillas). Postulante, respire con calma, ordene sus ideas y exponga con fluidez.`,
+      });
+      speakTribunalSpeech("Postulante, tómese una pausa, respire con calma y exponga sus ideas con fluidez.");
+    }
+
+    // 5. Update localStorage
+    try {
+      const prevStr = localStorage.getItem(`socratia_vision_${id}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prev: Record<string, any> = prevStr ? JSON.parse(prevStr) : {};
+      localStorage.setItem(
+        `socratia_vision_${id}`,
+        JSON.stringify({
+          ...prev,
+          communicationScore: computedFluency,
+          oratoryScore: computedFluency,
+          stutterCount: sCount,
+          detectedStutters: wordMatches,
+          fillerWordsCount: fCount,
+          detectedFillers: fillerMatches,
+          speechFluencyLabel: label,
+          isSpeechChoppy: choppy,
+        })
+      );
+    } catch {}
+  }, [id, speakTribunalSpeech]);
+
   const speakCurrentQuestion = useCallback(() => {
     if (!snapshot?.current_question) return;
     window.speechSynthesis.cancel();
@@ -233,6 +370,11 @@ export function SimulationLivePage() {
         }
       } else if (event.type === "voice.transcription") {
         setSending(false);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const transText = (event as any).text || (event.payload as any)?.text || "";
+        if (transText) {
+          analyzeOratoryAndDiction(transText, choppyBurstsCountRef.current >= 6);
+        }
       } else if (event.type === "error") {
         pendingRef.current = null;
         setSending(false);
@@ -330,7 +472,7 @@ export function SimulationLivePage() {
       retryRef.current += 1;
       reconnectTimer.current = setTimeout(() => connectRef.current(), delay);
     };
-  }, [id, speakTurnGuidance, snapshot?.current_question?.id]);
+  }, [id, speakTurnGuidance, snapshot?.current_question?.id, analyzeOratoryAndDiction]);
 
   useEffect(() => {
     connectRef.current = connect;
@@ -409,7 +551,15 @@ export function SimulationLivePage() {
           try {
             const video = liveVideoRef.current;
             const result = pose.detectForVideo(video, performance.now());
-            if (result.landmarks && result.landmarks.length > 0) {
+            const hasPerson = Boolean(
+              result.landmarks &&
+              result.landmarks.length > 0 &&
+              result.landmarks[0] &&
+              result.landmarks[0][0] &&
+              result.landmarks[0][11] &&
+              result.landmarks[0][12]
+            );
+            if (hasPerson) {
               const lm = result.landmarks[0];
               const nose = lm[0];
               const leftEye = lm[2];
@@ -423,7 +573,19 @@ export function SimulationLivePage() {
               const leftHip = lm[23];
               const rightHip = lm[24];
 
-              if (!leftShoulder || !rightShoulder || !nose) return;
+              setIsPersonPresent(true);
+
+              if (wasAbsentRef.current) {
+                wasAbsentRef.current = false;
+                personAbsentStartRef.current = null;
+                setJuryObservation({
+                  type: "praise",
+                  message: "Postulante detectado nuevamente frente al tribunal examinador. Puede continuar con su defensa.",
+                });
+                speakTribunalSpeech("Postulante reincorporado. Puede continuar.");
+                if (observationTimeoutRef.current) clearTimeout(observationTimeoutRef.current);
+                observationTimeoutRef.current = setTimeout(() => setJuryObservation(null), 4000);
+              }
 
               // 1. High-Precision Biomechanics & Craniovertebral Slouching Calculation
               const midShoulderX = (leftShoulder.x + rightShoulder.x) / 2;
@@ -816,6 +978,7 @@ export function SimulationLivePage() {
                 localStorage.setItem(
                   `socratia_vision_${id}`,
                   JSON.stringify({
+                    personPresent: true,
                     dressCode: detectedDress,
                     dressScore: detectedScore,
                     isFormal: isFormal,
@@ -826,7 +989,107 @@ export function SimulationLivePage() {
                     eyeContactLabel: eyeText,
                     gesturesLabel: gestureText,
                     nonverbalScore: Math.round(computedPosture * 0.4 + computedEye * 0.35 + detectedScore * 0.25),
-                    communicationScore: 88,
+                    communicationScore: oratoryScoreRef.current || 88,
+                    oratoryScore: oratoryScoreRef.current || 88,
+                    stutterCount: stutterCountRef.current || 0,
+                    fillerWordsCount: fillerWordsCountRef.current || 0,
+                    speechFluencyLabel: fluencyLabelRef.current || "Fluida",
+                    isSpeechChoppy: choppyBurstsCountRef.current >= 6,
+                  })
+                );
+              } catch {}
+            } else {
+              // Postulante ausente / Cámara vacía
+              setIsPersonPresent(false);
+              setPostureScore(0);
+              setPostureLabel("⚠️ Ausente (Nadie en cámara)");
+              setPostureStance("No detectado");
+              setDistanceLabel("Fuera de cuadro");
+              setEyeContactScore(0);
+              setEyeContactLabel("Sin contacto (Cámara vacía)");
+              setDressCode("⚠️ Cámara vacía (Sin postulante)");
+              setDressIsFormal(false);
+              setGesturesLabel("Sin sujeto detectado");
+
+              // Render red pulsating alert on HUD canvas
+              const hud = hudCanvasRef.current;
+              if (hud && video.videoWidth > 0) {
+                hud.width = video.videoWidth;
+                hud.height = video.videoHeight;
+                const ctx = hud.getContext("2d");
+                if (ctx) {
+                  ctx.clearRect(0, 0, hud.width, hud.height);
+                  const W = hud.width;
+                  const H = hud.height;
+
+                  // Flashing red border
+                  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 250);
+                  ctx.save();
+                  ctx.strokeStyle = `rgba(239, 68, 68, ${pulse})`;
+                  ctx.lineWidth = 6;
+                  ctx.strokeRect(4, 4, W - 8, H - 8);
+
+                  // Central alert box
+                  const boxW = Math.min(W * 0.88, 360);
+                  const boxH = 72;
+                  const boxX = (W - boxW) / 2;
+                  const boxY = (H - boxH) / 2;
+
+                  ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+                  ctx.fillRect(boxX, boxY, boxW, boxH);
+                  ctx.strokeStyle = "#ef4444";
+                  ctx.lineWidth = 2;
+                  ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+                  ctx.fillStyle = "#ef4444";
+                  ctx.font = "bold 13px sans-serif";
+                  ctx.textAlign = "center";
+                  ctx.fillText("⚠️ POSTULANTE NO DETECTADO", W / 2, boxY + 28);
+
+                  ctx.fillStyle = "#cbd5e1";
+                  ctx.font = "10px sans-serif";
+                  ctx.fillText("Por favor ubíquese frente a la cámara para la evaluación", W / 2, boxY + 50);
+                  ctx.restore();
+                }
+              }
+
+              // Absence timer & tribunal verbal alert after 3 seconds
+              const nowTs = Date.now();
+              if (personAbsentStartRef.current === null) {
+                personAbsentStartRef.current = nowTs;
+              } else if (nowTs - personAbsentStartRef.current > 3000 && !wasAbsentRef.current) {
+                wasAbsentRef.current = true;
+                setJuryObservation({
+                  type: "posture",
+                  message: "Atención del Tribunal: El postulante no se encuentra visible frente a la cámara. Por favor reincorpórese.",
+                });
+                if (nowTs - lastAbsentVoiceTimeRef.current > 25000) {
+                  lastAbsentVoiceTimeRef.current = nowTs;
+                  speakTribunalSpeech("Atención: El postulante no se encuentra visible frente a la cámara. Por favor reincorpórese.");
+                }
+              }
+
+              try {
+                localStorage.setItem(
+                  `socratia_vision_${id}`,
+                  JSON.stringify({
+                    personPresent: false,
+                    dressCode: "⚠️ Ausente (Nadie en cámara)",
+                    dressScore: 0,
+                    isFormal: false,
+                    postureScore: 0,
+                    postureLabel: "Ausente",
+                    postureStance: "No detectado",
+                    eyeContactScore: 0,
+                    eyeContactLabel: "Sin contacto",
+                    gesturesLabel: "Sin sujeto detectado",
+                    nonverbalScore: 0,
+                    communicationScore: oratoryScoreRef.current || 85,
+                    oratoryScore: oratoryScoreRef.current || 85,
+                    stutterCount: stutterCountRef.current || 0,
+                    fillerWordsCount: fillerWordsCountRef.current || 0,
+                    speechFluencyLabel: fluencyLabelRef.current || "No evaluada",
+                    isSpeechChoppy: choppyBurstsCountRef.current >= 6,
                   })
                 );
               } catch {}
@@ -863,6 +1126,7 @@ export function SimulationLivePage() {
   function submit() {
     const content = answer.trim();
     if (!content || !snapshot?.current_question || pendingRef.current) return;
+    analyzeOratoryAndDiction(content, false);
     const message: PendingAnswer = { type: "answer.submit", message_id: crypto.randomUUID(), payload: { question_id: snapshot.current_question.id, content } };
     pendingRef.current = message;
     setSending(true);
@@ -878,6 +1142,9 @@ export function SimulationLivePage() {
     }
     window.speechSynthesis.cancel();
     setIsJuryAudioPlaying(false);
+    choppyBurstsCountRef.current = 0;
+    lastVolStateRef.current = "quiet";
+    lastVolSwitchTimeRef.current = Date.now();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : 
@@ -938,10 +1205,23 @@ export function SimulationLivePage() {
         }
         setMicVolume(Math.min(100, Math.round((maxVol / 128) * 100)));
         
-        if (maxVol > 20) {
+        const nowMs = Date.now();
+        if (maxVol > 22) {
           silenceStart = 0;
           hasSpoken = true;
+          if (lastVolStateRef.current === "quiet") {
+            const dt = nowMs - lastVolSwitchTimeRef.current;
+            if (dt < 420 && dt > 40) {
+              choppyBurstsCountRef.current += 1;
+            }
+            lastVolStateRef.current = "speaking";
+            lastVolSwitchTimeRef.current = nowMs;
+          }
         } else if (hasSpoken) {
+          if (maxVol < 8 && lastVolStateRef.current === "speaking") {
+            lastVolStateRef.current = "quiet";
+            lastVolSwitchTimeRef.current = nowMs;
+          }
           if (silenceStart === 0) {
             silenceStart = Date.now();
           } else if (Date.now() - silenceStart > VAD_SILENCE_TIMEOUT_MS) {
@@ -956,6 +1236,30 @@ export function SimulationLivePage() {
       setIsRecording(true);
       requestAnimationFrame(checkSilence);
       
+      // Optional browser live interim speech recognition for instantaneous feedback
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const SpeechRec = typeof window !== "undefined" && ((window as any).webkitSpeechRecognition || (window as any).SpeechRecognition);
+      if (SpeechRec) {
+        try {
+          const recognizer = new SpeechRec();
+          recognizer.continuous = true;
+          recognizer.interimResults = true;
+          recognizer.lang = "es-ES";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          recognizer.onresult = (e: any) => {
+            let interimText = "";
+            for (let i = 0; i < e.results.length; i++) {
+              interimText += e.results[i][0].transcript + " ";
+            }
+            if (interimText.trim()) {
+              analyzeOratoryAndDiction(interimText.trim(), choppyBurstsCountRef.current >= 6);
+            }
+          };
+          recognizer.start();
+          recognitionRef.current = recognizer;
+        } catch {}
+      }
+
       mediaRecorder.start(500);
       setError("");
     } catch (err) {
@@ -965,6 +1269,12 @@ export function SimulationLivePage() {
   }
 
   function stopRecording() {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       isRecordingRef.current = false;
       mediaRecorderRef.current.stop();
@@ -1153,21 +1463,36 @@ export function SimulationLivePage() {
             <div style={{ position: "relative", width: "100%", height: "185px", background: "#0f172a", borderRadius: "10px", overflow: "hidden", marginBottom: "0.6rem" }}>
               <video ref={liveVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <canvas ref={hudCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
-              <div style={{ position: "absolute", bottom: "6px", left: "6px", right: "6px", background: dressIsFormal ? "rgba(15,23,42,0.92)" : "rgba(185,28,28,0.94)", color: "#f8fafc", padding: "4px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
-                <span>{dressCode}</span>
+              <div style={{
+                position: "absolute",
+                bottom: "6px",
+                left: "6px",
+                right: "6px",
+                background: !isPersonPresent ? "rgba(185,28,28,0.96)" : dressIsFormal ? "rgba(15,23,42,0.92)" : "rgba(185,28,28,0.94)",
+                color: "#f8fafc",
+                padding: "4px 8px",
+                borderRadius: "6px",
+                fontSize: "0.68rem",
+                fontWeight: 600,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.4)"
+              }}>
+                <span>{!isPersonPresent ? "⚠️ Ausente (Nadie en cámara)" : dressCode}</span>
                 <span style={{ fontSize: "0.62rem", opacity: 0.9, background: "rgba(255,255,255,0.18)", padding: "1px 5px", borderRadius: "4px" }}>
-                  {dressIsFormal ? "Protocolo OK" : "Atención"}
+                  {!isPersonPresent ? "⚠️ Sin postulante" : dressIsFormal ? "Protocolo OK" : "Atención"}
                 </span>
               </div>
             </div>
 
-            {/* Quick Calibration Action & Dress Simulation Controls */}
-            <div style={{ display: "flex", gap: "4px", marginBottom: "0.6rem", fontSize: "0.68rem" }}>
+            {/* Quick Calibration Action & Dress / Absence / Oratory Simulation Controls */}
+            <div style={{ display: "flex", gap: "4px", marginBottom: "0.6rem", fontSize: "0.68rem", flexWrap: "wrap" }}>
               <button
                 type="button"
                 onClick={calibrateCurrentPosture}
                 style={{
-                  flex: 1.2,
+                  flex: "1 1 45%",
                   padding: "4px 6px",
                   borderRadius: "5px",
                   border: "1px solid #0d9488",
@@ -1185,23 +1510,71 @@ export function SimulationLivePage() {
               </button>
               <button
                 type="button"
+                onClick={() => {
+                  if (isPersonPresent) {
+                    setIsPersonPresent(false);
+                    setPostureScore(0);
+                    setPostureLabel("⚠️ Ausente (Simulado)");
+                    setDressCode("⚠️ Cámara vacía (Sin postulante)");
+                    setDressIsFormal(false);
+                    setEyeContactScore(0);
+                  } else {
+                    setIsPersonPresent(true);
+                    setPostureScore(94);
+                    setPostureLabel("Erguida (Excelente)");
+                    setDressCode("👔 Formal (Protocolo verificado)");
+                    setDressIsFormal(true);
+                    setEyeContactScore(92);
+                  }
+                }}
+                style={{
+                  flex: "1 1 45%",
+                  padding: "4px 6px",
+                  borderRadius: "5px",
+                  border: "1px solid #cbd5e1",
+                  background: !isPersonPresent ? "#fee2e2" : "#f1f5f9",
+                  color: !isPersonPresent ? "#b91c1c" : "#334155",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {isPersonPresent ? "👤 Simular Ausente" : "👤 Simular Presente"}
+              </button>
+              <button
+                type="button"
                 onClick={() => { setDressIsFormal(true); setDressCode("👔 Formal (Protocolo verificado)"); }}
                 style={{ flex: 1, padding: "3px 4px", borderRadius: "4px", border: "1px solid #cbd5e1", background: dressIsFormal ? "#0f766e" : "#f1f5f9", color: dressIsFormal ? "#fff" : "#475569", fontWeight: 600, cursor: "pointer" }}
               >
-                👔 Forzar Formal
+                👔 Formal
               </button>
               <button
                 type="button"
                 onClick={() => { setDressIsFormal(false); setDressCode("⚠️ Informal (Alerta activada)"); }}
                 style={{ flex: 1, padding: "3px 4px", borderRadius: "4px", border: "1px solid #cbd5e1", background: !dressIsFormal ? "#b91c1c" : "#f1f5f9", color: !dressIsFormal ? "#fff" : "#475569", fontWeight: 600, cursor: "pointer" }}
               >
-                ⚠️ Forzar Informal
+                ⚠️ Informal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  analyzeOratoryAndDiction("este este yo yo propongo que osea básicamente el el sistema funciona con vacilaciones", true);
+                }}
+                style={{ flex: 1, padding: "3px 4px", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#fef3c7", color: "#92400e", fontWeight: 600, cursor: "pointer" }}
+                title="Prueba inmediata de detección de muletillas y tartamudeo"
+              >
+                🗣️ Probar Traba
               </button>
             </div>
 
-            {!dressIsFormal && isCameraActive && (
+            {!isPersonPresent && isCameraActive && (
+              <div style={{ marginBottom: "0.6rem", padding: "6px 9px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#991b1b", fontSize: "0.7rem", lineHeight: 1.3 }}>
+                ⚠️ <strong>Alerta de Presencia:</strong> Postulante no detectado en cámara. Para la defensa oficial debe permanecer visible ante el jurado examinador.
+              </div>
+            )}
+
+            {!dressIsFormal && isPersonPresent && isCameraActive && (
               <div style={{ marginBottom: "0.6rem", padding: "5px 8px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#991b1b", fontSize: "0.68rem", lineHeight: 1.3 }}>
-                ⚠️ <strong>Alerta:</strong> Se detectó vestimenta informal o camiseta sin cuello. Para la defensa formal se exige camisa con cuello o traje.
+                ⚠️ <strong>Alerta de Vestimenta:</strong> Se detectó vestimenta informal o camiseta sin cuello. Para la defensa formal se exige camisa con cuello o traje.
               </div>
             )}
 
@@ -1224,6 +1597,73 @@ export function SimulationLivePage() {
 
             <div style={{ marginTop: "0.4rem", fontSize: "0.7rem", color: "#64748b", textAlign: "center" }}>
               🖐️ {gesturesLabel}
+            </div>
+
+            {/* Tarjeta de Oratoria, Dicción y Fluidez Vocal */}
+            <div style={{ marginTop: "0.75rem", padding: "0.75rem", background: "var(--surface-color, white)", borderRadius: "10px", border: "1px solid var(--border-color, #e2e8f0)", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
+                <span style={{ fontSize: "0.8rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--brand-dark, #0f172a)" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: fluencyScore >= 70 ? "#22c55e" : fluencyScore >= 50 ? "#f59e0b" : "#ef4444" }} />
+                  🎙️ Oratoria, Dicción & Fluidez
+                </span>
+                <span style={{
+                  fontSize: "0.66rem",
+                  fontWeight: 700,
+                  padding: "2px 6px",
+                  borderRadius: "6px",
+                  background: fluencyScore >= 85 ? "#dcfce7" : fluencyScore >= 70 ? "#ccfbf1" : fluencyScore >= 50 ? "#fef3c7" : "#fee2e2",
+                  color: fluencyScore >= 85 ? "#15803d" : fluencyScore >= 70 ? "#0f766e" : fluencyScore >= 50 ? "#b45309" : "#b91c1c",
+                }}>
+                  {fluencyScore}% · {fluencyLabel}
+                </span>
+              </div>
+
+              {/* Barra de progreso de fluidez */}
+              <div style={{ width: "100%", height: "5px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden", marginBottom: "0.55rem" }}>
+                <div style={{
+                  width: `${fluencyScore}%`,
+                  height: "100%",
+                  background: fluencyScore >= 80 ? "linear-gradient(90deg, #10b981, #059669)" : fluencyScore >= 60 ? "linear-gradient(90deg, #f59e0b, #d97706)" : "linear-gradient(90deg, #ef4444, #b91c1c)",
+                  transition: "width 0.3s ease",
+                }} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.35rem", fontSize: "0.72rem", marginBottom: "0.45rem" }}>
+                <div style={{ background: "var(--bg-muted, #f8fafc)", padding: "5px 7px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}>
+                  <div style={{ color: "#64748b", fontSize: "0.65rem" }}>Muletillas Detectadas</div>
+                  <strong style={{ color: fillerWordsCount > 2 ? "#dc2626" : fillerWordsCount > 0 ? "#d97706" : "#16a34a", fontSize: "0.76rem" }}>
+                    {fillerWordsCount} {fillerWordsCount === 1 ? "muletilla" : "muletillas"}
+                  </strong>
+                  {detectedFillers.length > 0 && (
+                    <div style={{ color: "#94a3b8", fontSize: "0.62rem", marginTop: "1px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {detectedFillers.slice(0, 3).join(", ")}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ background: "var(--bg-muted, #f8fafc)", padding: "5px 7px", borderRadius: "6px", border: "1px solid var(--border-color, #e2e8f0)" }}>
+                  <div style={{ color: "#64748b", fontSize: "0.65rem" }}>Traba / Tartamudeo</div>
+                  <strong style={{ color: stutterCount > 0 ? "#dc2626" : "#16a34a", fontSize: "0.76rem" }}>
+                    {stutterCount} {stutterCount === 1 ? "repetición" : "repeticiones"}
+                  </strong>
+                  {detectedStutters.length > 0 && (
+                    <div style={{ color: "#94a3b8", fontSize: "0.62rem", marginTop: "1px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {detectedStutters.slice(0, 2).join(", ")}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ fontSize: "0.66rem", color: isSpeechChoppy ? "#dc2626" : "#64748b", display: "flex", alignItems: "center", gap: "4px" }}>
+                <span>{isSpeechChoppy ? "⚠️" : "🔊"}</span>
+                <span>{speechCadenceLabel}</span>
+              </div>
+
+              {(stutterCount > 0 || fillerWordsCount > 2 || isSpeechChoppy) && (
+                <div style={{ marginTop: "0.45rem", padding: "5px 7px", background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "5px", color: "#92400e", fontSize: "0.65rem", lineHeight: 1.3 }}>
+                  💡 <strong>Recomendación:</strong> Evita repetir palabras consecutivas o usar muletillas (&quot;este&quot;, &quot;o sea&quot;). Realiza pausas de respiración para proyectar serenidad ante el tribunal.
+                </div>
+              )}
             </div>
           </div>
 

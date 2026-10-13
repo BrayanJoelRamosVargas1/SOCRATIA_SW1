@@ -67,6 +67,12 @@ export default function ReportPage() {
     gesturesLabel?: string;
     nonverbalScore?: number;
     communicationScore?: number;
+    personPresent?: boolean;
+    oratoryScore?: number;
+    stutterCount?: number;
+    fillerWordsCount?: number;
+    speechFluencyLabel?: string;
+    isSpeechChoppy?: boolean;
   }>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -83,6 +89,12 @@ export default function ReportPage() {
       gesturesLabel: "Natural y Fluida",
       nonverbalScore: 92,
       communicationScore: 88,
+      personPresent: true,
+      oratoryScore: 92,
+      stutterCount: 0,
+      fillerWordsCount: 0,
+      speechFluencyLabel: "Fluida y Elocuente",
+      isSpeechChoppy: false,
     };
   });
 
@@ -377,7 +389,19 @@ export default function ReportPage() {
               {report.communication_score ?? visionData.communicationScore ?? 88}
               <span className="text-sm font-semibold text-gray-400"> / 100</span>
             </p>
-            <small className="text-xs text-gray-500 mt-2 block">Fluidez vocal, pausas y modulación</small>
+            <small className="text-xs text-gray-500 mt-2 block">
+              {visionData.speechFluencyLabel ? `Fluidez: ${visionData.speechFluencyLabel}` : "Fluidez vocal, pausas y modulación"}
+            </small>
+            {(visionData.stutterCount !== undefined || visionData.fillerWordsCount !== undefined) && (
+              <div className="mt-2 text-xs text-slate-600 flex justify-center gap-1.5 flex-wrap">
+                <span className="bg-white/80 px-2 py-0.5 rounded border border-emerald-200">
+                  {visionData.stutterCount ?? 0} trabas
+                </span>
+                <span className="bg-white/80 px-2 py-0.5 rounded border border-emerald-200">
+                  {visionData.fillerWordsCount ?? 0} muletillas
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="border border-teal-100 p-5 rounded-xl text-center bg-teal-50/40 shadow-xs">
@@ -399,14 +423,22 @@ export default function ReportPage() {
             <div className="flex items-center gap-2.5">
               <span className="text-2xl">👔</span>
               <div>
-                <h3 className="font-bold text-teal-950 text-base">Telemetría Biométrica y Protocolo de Grado</h3>
-                <p className="text-xs text-teal-700">Auditado frame-a-frame mediante MediaPipe Holistic Vision AI (Ejecución local WASM sin almacenar video)</p>
+                <h3 className="font-bold text-teal-950 text-base">Telemetría Biométrica, Presencia y Oratoria</h3>
+                <p className="text-xs text-teal-700">Auditado frame-a-frame mediante MediaPipe Holistic Vision AI & Procesamiento Acústico</p>
               </div>
             </div>
-            <span className="bg-teal-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow-2xs">
-              Protocolo Académico OK ✓
+            <span className={`text-white text-xs font-bold px-3 py-1 rounded-full shadow-2xs ${
+              visionData.personPresent === false ? "bg-rose-600" : "bg-teal-700"
+            }`}>
+              {visionData.personPresent === false ? "⚠️ Ausencia en Cámara" : "Protocolo Académico OK ✓"}
             </span>
           </div>
+
+          {visionData.personPresent === false && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs">
+              ⚠️ <strong>Observación de Tribunal:</strong> Se registró ausencia del postulante frente al marco de la cámara durante momentos de la defensa.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white p-3.5 rounded-lg border border-teal-100 shadow-2xs">
@@ -417,13 +449,13 @@ export default function ReportPage() {
 
             <div className="bg-white p-3.5 rounded-lg border border-teal-100 shadow-2xs">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Postura Corporal</span>
-              <p className="font-bold text-gray-800 text-sm mt-1">{visionData.postureScore || 94} / 100 · {visionData.postureLabel || "Erguida"}</p>
+              <p className="font-bold text-gray-800 text-sm mt-1">{visionData.postureScore ?? 94} / 100 · {visionData.postureLabel || "Erguida"}</p>
               <small className="text-xs text-emerald-600 font-medium block mt-0.5">✓ Eje cráneo-vertebral alineado</small>
             </div>
 
             <div className="bg-white p-3.5 rounded-lg border border-teal-100 shadow-2xs">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Contacto Visual</span>
-              <p className="font-bold text-gray-800 text-sm mt-1">{visionData.eyeContactScore || 91} / 100 · {visionData.eyeContactLabel || "Directo"}</p>
+              <p className="font-bold text-gray-800 text-sm mt-1">{visionData.eyeContactScore ?? 91} / 100 · {visionData.eyeContactLabel || "Directo"}</p>
               <small className="text-xs text-emerald-600 font-medium block mt-0.5">✓ Mirada sostenida al tribunal</small>
             </div>
 
@@ -431,6 +463,27 @@ export default function ReportPage() {
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Gesticulación</span>
               <p className="font-bold text-gray-800 text-sm mt-1">{visionData.gesturesLabel || "Natural y Fluida"}</p>
               <small className="text-xs text-emerald-600 font-medium block mt-0.5">✓ Manos en plano con sobriedad</small>
+            </div>
+          </div>
+
+          {/* Fila de Telemetría Vocal y Oratoria */}
+          <div className="mt-3 pt-3 border-t border-teal-200/60 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white p-3.5 rounded-lg border border-teal-100 shadow-2xs">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Fluidez y Dicción</span>
+              <p className="font-bold text-gray-800 text-sm mt-1">{visionData.speechFluencyLabel || "Fluida y Elocuente"}</p>
+              <small className="text-xs text-emerald-600 font-medium block mt-0.5">
+                {visionData.isSpeechChoppy ? "⚠️ Cadencia entrecortada detectada" : "✓ Cadencia continua y articulada"}
+              </small>
+            </div>
+            <div className="bg-white p-3.5 rounded-lg border border-teal-100 shadow-2xs">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Muletillas en Exposición</span>
+              <p className="font-bold text-gray-800 text-sm mt-1">{visionData.fillerWordsCount ?? 0} registradas</p>
+              <small className="text-xs text-gray-500 font-medium block mt-0.5">Filtro de vacilaciones (&quot;este&quot;, &quot;o sea&quot;)</small>
+            </div>
+            <div className="bg-white p-3.5 rounded-lg border border-teal-100 shadow-2xs">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Trabas y Repeticiones</span>
+              <p className="font-bold text-gray-800 text-sm mt-1">{visionData.stutterCount ?? 0} detectadas</p>
+              <small className="text-xs text-gray-500 font-medium block mt-0.5">Repetición involuntaria de palabras o sílabas</small>
             </div>
           </div>
         </div>
