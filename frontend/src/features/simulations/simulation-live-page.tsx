@@ -102,10 +102,14 @@ export function SimulationLivePage() {
   const personAbsentStartRef = useRef<number | null>(null);
   const wasAbsentRef = useRef<boolean>(false);
   const lastAbsentVoiceTimeRef = useRef<number>(0);
+  const emptyFramesCountRef = useRef<number>(0);
+  const [dressSensitivity, setDressSensitivity] = useState<"normal" | "flexible">("normal");
+  const dressSensitivityRef = useRef<"normal" | "flexible">(dressSensitivity);
+  dressSensitivityRef.current = dressSensitivity;
 
   // Reactive Tribunal Observations & Voice Interventions
   const [juryObservation, setJuryObservation] = useState<{
-    type: "posture" | "dress" | "praise";
+    type: "posture" | "dress" | "praise" | "oratory";
     message: string;
   } | null>(null);
   const observationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -306,7 +310,54 @@ export function SimulationLivePage() {
     const textToSpeak = snapshot.current_question.text;
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.lang = "es-ES";
-    utterance.rate = 1.0;
+
+    const pos = snapshot.current_question.position ?? 1;
+    const speakerIdx = (pos - 1) % 3;
+    const voices = window.speechSynthesis.getVoices();
+
+    if (speakerIdx === 1) {
+      // Dra. Elena Rostova - Female voice, articulate and academic
+      utterance.pitch = 1.08;
+      utterance.rate = 1.02;
+      const femaleVoice = voices.find(
+        (v) =>
+          v.lang.startsWith("es") &&
+          (v.name.includes("Sabina") ||
+            v.name.includes("Monica") ||
+            v.name.includes("Laura") ||
+            v.name.includes("Helena") ||
+            v.name.includes("Paulina") ||
+            v.name.includes("Google español"))
+      );
+      if (femaleVoice) utterance.voice = femaleVoice;
+    } else if (speakerIdx === 2) {
+      // Ing. Carlos Mendoza - Technical male voice, steady and analytical
+      utterance.pitch = 0.98;
+      utterance.rate = 1.03;
+      const techVoice = voices.find(
+        (v) =>
+          v.lang.startsWith("es") &&
+          (v.name.includes("Pablo") ||
+            v.name.includes("Diego") ||
+            v.name.includes("Microsoft") ||
+            v.name.includes("Natural"))
+      );
+      if (techVoice) utterance.voice = techVoice;
+    } else {
+      // Dr. Roberto Méndez (President) - Deep authoritative male voice
+      utterance.pitch = 0.88;
+      utterance.rate = 0.98;
+      const presVoice = voices.find(
+        (v) =>
+          v.lang.startsWith("es") &&
+          (v.name.includes("Jorge") ||
+            v.name.includes("Raul") ||
+            v.name.includes("Alonso") ||
+            v.name.includes("Natural"))
+      );
+      if (presVoice) utterance.voice = presVoice;
+    }
+
     utterance.onstart = () => {
       setIsJuryAudioPlaying(true);
       setServerState("jury.speaking");
@@ -573,6 +624,7 @@ export function SimulationLivePage() {
               const leftHip = lm[23];
               const rightHip = lm[24];
 
+              emptyFramesCountRef.current = 0;
               setIsPersonPresent(true);
 
               if (wasAbsentRef.current) {
@@ -779,17 +831,21 @@ export function SimulationLivePage() {
 
                 // Robust Formal Attire Classification:
                 // Dark T-shirts lack buttons/collars/ties, so they MUST NOT pass as formal!
-                if (skinRatio > 0.20) {
+                const isFlexible = dressSensitivityRef.current === "flexible";
+                const contrastThreshold = isFlexible ? 6.2 : 8.5;
+                const textureThreshold = isFlexible ? 5.5 : 7.8;
+
+                if (skinRatio > 0.22) {
                   detectedDress = "⚠️ Informal (Torso / Escote descubierto)";
                   detectedScore = 35;
                   isFormal = false;
-                } else if (avgSat > 0.36) {
+                } else if (avgSat > 0.38) {
                   detectedDress = "⚠️ Informal (Prenda deportiva / Casual llamativa)";
                   detectedScore = 55;
                   isFormal = false;
-                } else if (centralContrast >= 8.5 || avgChestTexture >= 7.8) {
+                } else if (centralContrast >= contrastThreshold || avgChestTexture >= textureThreshold) {
                   // Button placket, tie, or formal collar lapel detected!
-                  if (centralContrast >= 16 && avgBright < 110) {
+                  if (centralContrast >= 15 && avgBright < 110) {
                     detectedDress = "👔 Formal (Saco formal con corbata)";
                     detectedScore = 99;
                     isFormal = true;
@@ -999,103 +1055,106 @@ export function SimulationLivePage() {
                 );
               } catch {}
             } else {
-              // Postulante ausente / Cámara vacía
-              setIsPersonPresent(false);
-              setPostureScore(0);
-              setPostureLabel("⚠️ Ausente (Nadie en cámara)");
-              setPostureStance("No detectado");
-              setDistanceLabel("Fuera de cuadro");
-              setEyeContactScore(0);
-              setEyeContactLabel("Sin contacto (Cámara vacía)");
-              setDressCode("⚠️ Cámara vacía (Sin postulante)");
-              setDressIsFormal(false);
-              setGesturesLabel("Sin sujeto detectado");
+              emptyFramesCountRef.current += 1;
+              if (emptyFramesCountRef.current >= 3) {
+                // Postulante ausente / Cámara vacía debounced
+                setIsPersonPresent(false);
+                setPostureScore(0);
+                setPostureLabel("⚠️ Ausente (Nadie en cámara)");
+                setPostureStance("No detectado");
+                setDistanceLabel("Fuera de cuadro");
+                setEyeContactScore(0);
+                setEyeContactLabel("Sin contacto (Cámara vacía)");
+                setDressCode("⚠️ Cámara vacía (Sin postulante)");
+                setDressIsFormal(false);
+                setGesturesLabel("Sin sujeto detectado");
 
-              // Render red pulsating alert on HUD canvas
-              const hud = hudCanvasRef.current;
-              if (hud && video.videoWidth > 0) {
-                hud.width = video.videoWidth;
-                hud.height = video.videoHeight;
-                const ctx = hud.getContext("2d");
-                if (ctx) {
-                  ctx.clearRect(0, 0, hud.width, hud.height);
-                  const W = hud.width;
-                  const H = hud.height;
+                // Render red pulsating alert on HUD canvas
+                const hud = hudCanvasRef.current;
+                if (hud && video.videoWidth > 0) {
+                  hud.width = video.videoWidth;
+                  hud.height = video.videoHeight;
+                  const ctx = hud.getContext("2d");
+                  if (ctx) {
+                    ctx.clearRect(0, 0, hud.width, hud.height);
+                    const W = hud.width;
+                    const H = hud.height;
 
-                  // Flashing red border
-                  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 250);
-                  ctx.save();
-                  ctx.strokeStyle = `rgba(239, 68, 68, ${pulse})`;
-                  ctx.lineWidth = 6;
-                  ctx.strokeRect(4, 4, W - 8, H - 8);
+                    // Flashing red border
+                    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 250);
+                    ctx.save();
+                    ctx.strokeStyle = `rgba(239, 68, 68, ${pulse})`;
+                    ctx.lineWidth = 6;
+                    ctx.strokeRect(4, 4, W - 8, H - 8);
 
-                  // Central alert box
-                  const boxW = Math.min(W * 0.88, 360);
-                  const boxH = 72;
-                  const boxX = (W - boxW) / 2;
-                  const boxY = (H - boxH) / 2;
+                    // Central alert box
+                    const boxW = Math.min(W * 0.88, 360);
+                    const boxH = 72;
+                    const boxX = (W - boxW) / 2;
+                    const boxY = (H - boxH) / 2;
 
-                  ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
-                  ctx.fillRect(boxX, boxY, boxW, boxH);
-                  ctx.strokeStyle = "#ef4444";
-                  ctx.lineWidth = 2;
-                  ctx.strokeRect(boxX, boxY, boxW, boxH);
+                    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+                    ctx.fillRect(boxX, boxY, boxW, boxH);
+                    ctx.strokeStyle = "#ef4444";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-                  ctx.fillStyle = "#ef4444";
-                  ctx.font = "bold 13px sans-serif";
-                  ctx.textAlign = "center";
-                  ctx.fillText("⚠️ POSTULANTE NO DETECTADO", W / 2, boxY + 28);
+                    ctx.fillStyle = "#ef4444";
+                    ctx.font = "bold 13px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.fillText("⚠️ POSTULANTE NO DETECTADO", W / 2, boxY + 28);
 
-                  ctx.fillStyle = "#cbd5e1";
-                  ctx.font = "10px sans-serif";
-                  ctx.fillText("Por favor ubíquese frente a la cámara para la evaluación", W / 2, boxY + 50);
-                  ctx.restore();
+                    ctx.fillStyle = "#cbd5e1";
+                    ctx.font = "10px sans-serif";
+                    ctx.fillText("Por favor ubíquese frente a la cámara para la evaluación", W / 2, boxY + 50);
+                    ctx.restore();
+                  }
                 }
-              }
 
-              // Absence timer & tribunal verbal alert after 3 seconds
-              const nowTs = Date.now();
-              if (personAbsentStartRef.current === null) {
-                personAbsentStartRef.current = nowTs;
-              } else if (nowTs - personAbsentStartRef.current > 3000 && !wasAbsentRef.current) {
-                wasAbsentRef.current = true;
-                setJuryObservation({
-                  type: "posture",
-                  message: "Atención del Tribunal: El postulante no se encuentra visible frente a la cámara. Por favor reincorpórese.",
-                });
-                if (nowTs - lastAbsentVoiceTimeRef.current > 25000) {
-                  lastAbsentVoiceTimeRef.current = nowTs;
-                  speakTribunalSpeech("Atención: El postulante no se encuentra visible frente a la cámara. Por favor reincorpórese.");
+                // Absence timer & tribunal verbal alert after 3 seconds
+                const nowTs = Date.now();
+                if (personAbsentStartRef.current === null) {
+                  personAbsentStartRef.current = nowTs;
+                } else if (nowTs - personAbsentStartRef.current > 3000 && !wasAbsentRef.current) {
+                  wasAbsentRef.current = true;
+                  setJuryObservation({
+                    type: "posture",
+                    message: "Atención del Tribunal: El postulante no se encuentra visible frente a la cámara. Por favor reincorpórese.",
+                  });
+                  if (nowTs - lastAbsentVoiceTimeRef.current > 25000) {
+                    lastAbsentVoiceTimeRef.current = nowTs;
+                    speakTribunalSpeech("Atención: El postulante no se encuentra visible frente a la cámara. Por favor reincorpórese.");
+                  }
                 }
-              }
 
-              try {
-                localStorage.setItem(
-                  `socratia_vision_${id}`,
-                  JSON.stringify({
-                    personPresent: false,
-                    dressCode: "⚠️ Ausente (Nadie en cámara)",
-                    dressScore: 0,
-                    isFormal: false,
-                    postureScore: 0,
-                    postureLabel: "Ausente",
-                    postureStance: "No detectado",
-                    eyeContactScore: 0,
-                    eyeContactLabel: "Sin contacto",
-                    gesturesLabel: "Sin sujeto detectado",
-                    nonverbalScore: 0,
-                    communicationScore: oratoryScoreRef.current || 85,
-                    oratoryScore: oratoryScoreRef.current || 85,
-                    stutterCount: stutterCountRef.current || 0,
-                    fillerWordsCount: fillerWordsCountRef.current || 0,
-                    speechFluencyLabel: fluencyLabelRef.current || "No evaluada",
-                    isSpeechChoppy: choppyBurstsCountRef.current >= 6,
-                  })
-                );
-              } catch {}
+                try {
+                  localStorage.setItem(
+                    `socratia_vision_${id}`,
+                    JSON.stringify({
+                      personPresent: false,
+                      dressCode: "⚠️ Ausente (Nadie en cámara)",
+                      dressScore: 0,
+                      isFormal: false,
+                      postureScore: 0,
+                      postureLabel: "Ausente",
+                      postureStance: "No detectado",
+                      eyeContactScore: 0,
+                      eyeContactLabel: "Sin contacto",
+                      gesturesLabel: "Sin sujeto detectado",
+                      nonverbalScore: 0,
+                      communicationScore: oratoryScoreRef.current || 85,
+                      oratoryScore: oratoryScoreRef.current || 85,
+                      stutterCount: stutterCountRef.current || 0,
+                      fillerWordsCount: fillerWordsCountRef.current || 0,
+                      speechFluencyLabel: fluencyLabelRef.current || "No evaluada",
+                      isSpeechChoppy: choppyBurstsCountRef.current >= 6,
+                    })
+                  );
+                } catch {}
+              }
             }
           } catch {}
-        }, 180);
+        }, 90);
       } catch (err) {
         console.warn("Live camera optional:", err);
       }
@@ -1326,6 +1385,8 @@ export function SimulationLivePage() {
             isSpeaking={isJuryAudioPlaying || serverState === "jury.speaking" || isJuryVoiceSpeaking}
             isListening={canAnswer || isRecording}
             isThinking={serverState === "jury.thinking" || sending}
+            micVolume={isRecording ? micVolume : 0}
+            activeSpeakerIndex={(snapshot.current_question?.position ?? 1) - 1}
             observation={juryObservation}
             onSpeakQuestion={speakCurrentQuestion}
             canSpeakQuestion={snapshot.status !== "COMPLETED" && !!snapshot.current_question}
@@ -1553,6 +1614,23 @@ export function SimulationLivePage() {
                 style={{ flex: 1, padding: "3px 4px", borderRadius: "4px", border: "1px solid #cbd5e1", background: !dressIsFormal ? "#b91c1c" : "#f1f5f9", color: !dressIsFormal ? "#fff" : "#475569", fontWeight: 600, cursor: "pointer" }}
               >
                 ⚠️ Informal
+              </button>
+              <button
+                type="button"
+                onClick={() => setDressSensitivity((prev) => (prev === "normal" ? "flexible" : "normal"))}
+                style={{
+                  flex: 1,
+                  padding: "3px 4px",
+                  borderRadius: "4px",
+                  border: "1px solid #94a3b8",
+                  background: dressSensitivity === "flexible" ? "#e0f2fe" : "#f8fafc",
+                  color: dressSensitivity === "flexible" ? "#0369a1" : "#475569",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+                title="Ajustar sensibilidad de detección de cuello/botones (Estricto / Tolerante)"
+              >
+                ⚙️ {dressSensitivity === "flexible" ? "Tolerante" : "Estricto"}
               </button>
               <button
                 type="button"
