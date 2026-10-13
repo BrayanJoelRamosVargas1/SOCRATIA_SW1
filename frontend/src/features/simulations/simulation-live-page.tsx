@@ -1607,7 +1607,7 @@ export function SimulationLivePage() {
               </span>
             </div>
 
-            <div style={{ position: "relative", width: "100%", height: "185px", background: "#0f172a", borderRadius: "10px", overflow: "hidden", marginBottom: "0.6rem" }}>
+            <div style={{ position: "relative", width: "100%", height: "148px", background: "#0f172a", borderRadius: "10px", overflow: "hidden", marginBottom: "0.5rem" }}>
               <video ref={liveVideoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <canvas ref={hudCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
               <div style={{
@@ -1831,16 +1831,18 @@ export function SimulationLivePage() {
             </div>
           </div>
 
-          <h2>Transcript</h2>
-          <p>{snapshot.answered_questions} respuestas confirmadas</p>
-          <ol>
-            {snapshot.transcript.map((turn) => (
-              <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}>
-                <span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span>
-                <p>{turn.content}</p>
-              </li>
-            ))}
-          </ol>
+          <h2 style={{ fontSize: "1.05rem", margin: "0 0 2px" }}>Transcript de Sustentación</h2>
+          <p style={{ margin: "2px 0 8px", fontSize: "0.68rem" }}>{snapshot.answered_questions} respuestas confirmadas</p>
+          <div style={{ maxHeight: "180px", overflowY: "auto", paddingRight: "4px" }}>
+            <ol>
+              {snapshot.transcript.map((turn) => (
+                <li key={turn.id} className={`turn-${turn.speaker.toLowerCase()}`}>
+                  <span>#{turn.sequence} · {turn.speaker === "JURY" ? "Jurado" : turn.speaker === "STUDENT" ? "Tú" : "Sistema"}</span>
+                  <p>{turn.content}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </aside>
       </section>
     </main>
