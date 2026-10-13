@@ -81,9 +81,11 @@ export function SimulationLivePage() {
   const [detectedStutters, setDetectedStutters] = useState<string[]>([]);
   const [isSpeechChoppy, setIsSpeechChoppy] = useState(false);
   const [speechCadenceLabel, setSpeechCadenceLabel] = useState("Cadencia continua y fluida");
+  const [responseMode, setResponseMode] = useState<"voice" | "text">("voice");
 
-  // Posture & Dress Smoothing Filters
+  // Posture, Gaze & Dress Smoothing Filters
   const postureEmaRef = useRef<number>(94);
+  const eyeContactEmaRef = useRef<number>(92);
   const baselineNeckRatioRef = useRef<number | null>(null);
   const calibrationFramesRef = useRef<number>(0);
   const dressHistoryRef = useRef<Array<{ dress: string; isFormal: boolean; score: number }>>([]);
@@ -718,16 +720,36 @@ export function SimulationLivePage() {
               else if (shoulderWidth > 0.62) distText = "Demasiado cerca de la cámara";
               setDistanceLabel(distText);
 
-              // 2. Dynamic Eye Contact Calculation
+              // 2. High-Precision 2D Eye Contact & Gaze Estimation (Pitch + Yaw)
               let computedEye = 92;
               let eyeText = "Directo al Tribunal";
               if (leftEye && rightEye) {
                 const eyeCenter = (leftEye.x + rightEye.x) / 2;
-                const gazeDiff = Math.abs(nose.x - eyeCenter);
-                computedEye = Math.max(30, Math.min(98, Math.round(100 - gazeDiff * 620)));
+                const eyeDistance = Math.abs(leftEye.x - rightEye.x);
+                // A. Horizontal Gaze Deviation (Yaw)
+                const yawOffset = Math.abs(nose.x - eyeCenter) / Math.max(0.04, eyeDistance);
+                const yawPenalty = Math.min(45, yawOffset * 65);
+
+                // B. Vertical Gaze Deviation (Pitch - Looking down at notes / paper)
+                const eyeLevel = (leftEye.y + rightEye.y) / 2;
+                const verticalDrop = nose.y - eyeLevel;
+                const earLevel = (leftEar && rightEar) ? (leftEar.y + rightEar.y) / 2 : eyeLevel;
+                const headTiltDown = earLevel - eyeLevel;
+                let pitchPenalty = 0;
+                let lookingDown = false;
+                if (headTiltDown > 0.035 || verticalDrop > 0.11) {
+                  pitchPenalty = Math.min(40, (verticalDrop - 0.08) * 350);
+                  lookingDown = true;
+                }
+
+                const instantEye = Math.max(25, Math.min(99, Math.round(100 - (yawPenalty + pitchPenalty))));
+                eyeContactEmaRef.current = Math.round(eyeContactEmaRef.current * 0.72 + instantEye * 0.28);
+                computedEye = eyeContactEmaRef.current;
+
                 if (computedEye >= 82) eyeText = "Directo al Tribunal";
-                else if (computedEye >= 65) eyeText = "Mirada Periférica";
-                else eyeText = "Mirada Desviada";
+                else if (lookingDown || computedEye < 65) eyeText = lookingDown ? "Leyendo notas (Baja)" : "Mirada Desviada";
+                else eyeText = "Mirada Periférica";
+
                 setEyeContactScore(computedEye);
                 setEyeContactLabel(eyeText);
               }
@@ -1393,24 +1415,28 @@ export function SimulationLivePage() {
           />
 
           <article className="live-question">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-              <span>{snapshot.status === "COMPLETED" ? "Sistema" : "Pregunta Formulada por el Tribunal"}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(45, 212, 191, 0.18)", color: "#5eead4", border: "1px solid rgba(45, 212, 191, 0.35)", padding: "4px 12px", borderRadius: "99px", fontSize: "0.74rem", fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                🏛️ {snapshot.status === "COMPLETED" ? "SISTEMA" : `PREGUNTA ${snapshot.current_question?.position ?? 1} · ${((snapshot.current_question?.position ?? 1) - 1) % 3 === 0 ? "DR. MÉNDEZ (PRESIDENTE)" : ((snapshot.current_question?.position ?? 1) - 1) % 3 === 1 ? "DRA. ROSTOVA (METODÓLOGA)" : "ING. MENDOZA (TÉCNICO)"}`}
+              </span>
               {snapshot.status !== "COMPLETED" && snapshot.current_question && (
                 <button
                   type="button"
                   className="button button-secondary"
-                  style={{ fontSize: "0.75rem", padding: "0.25rem 0.65rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                  style={{ fontSize: "0.78rem", padding: "0.35rem 0.85rem", display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 700 }}
                   onClick={speakCurrentQuestion}
                   disabled={isJuryAudioPlaying || isRecording}
                 >
-                  {isJuryAudioPlaying ? "🔊 Reproduciendo..." : "🔊 Escuchar Pregunta"}
+                  {isJuryAudioPlaying ? "🔊 Reproduciendo audio..." : "🔊 Escuchar Pregunta en Voz Alta"}
                 </button>
               )}
             </div>
-            <h1>{snapshot.status === "COMPLETED" ? "Simulación Finalizada" : (snapshot.current_question?.text ?? "Has respondido todas las preguntas.")}</h1>
+            <h1 style={{ color: "#ffffff", fontSize: "clamp(1.5rem, 2.6vw, 2.2rem)", lineHeight: 1.4, fontWeight: 600, textShadow: "0 2px 14px rgba(0,0,0,0.6)", margin: "0.85rem 0 1.25rem 0" }}>
+              {snapshot.status === "COMPLETED" ? "Simulación Finalizada" : (snapshot.current_question?.text ?? "Has respondido todas las preguntas.")}
+            </h1>
             {snapshot.status === "COMPLETED" && (
               <div style={{ marginTop: "1rem" }}>
-                <p style={{ color: "var(--text-muted, #64748b)", marginBottom: "0.85rem" }}>
+                <p style={{ color: "#cbd5e1", marginBottom: "0.85rem" }}>
                   La simulación ha concluido. El jurado evaluador ha registrado las respuestas y el análisis biomecánico.
                 </p>
                 <Link
@@ -1435,6 +1461,54 @@ export function SimulationLivePage() {
         
           {snapshot.status !== "COMPLETED" && (
             <>
+              {/* Modalidad de Respuesta: Voz o Texto */}
+              <div style={{ display: "flex", gap: "8px", margin: "0.75rem 0", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setResponseMode("voice")}
+                  style={{
+                    flex: "1 1 45%",
+                    padding: "8px 14px",
+                    borderRadius: "10px",
+                    border: responseMode === "voice" ? "2px solid #0d9488" : "1px solid rgba(255,255,255,0.18)",
+                    background: responseMode === "voice" ? "rgba(13, 148, 136, 0.25)" : "rgba(15, 23, 42, 0.65)",
+                    color: responseMode === "voice" ? "#2dd4bf" : "#94a3b8",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  🎙️ Modalidad Oral (Micrófono en Vivo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResponseMode("text")}
+                  style={{
+                    flex: "1 1 45%",
+                    padding: "8px 14px",
+                    borderRadius: "10px",
+                    border: responseMode === "text" ? "2px solid #0d9488" : "1px solid rgba(255,255,255,0.18)",
+                    background: responseMode === "text" ? "rgba(13, 148, 136, 0.25)" : "rgba(15, 23, 42, 0.65)",
+                    color: responseMode === "text" ? "#2dd4bf" : "#94a3b8",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  ⌨️ Modalidad Escrita (Respuesta por Texto)
+                </button>
+              </div>
+
               {isJuryAudioPlaying ? (
                 <div style={{
                   background: "rgba(13, 148, 136, 0.12)",
@@ -1467,43 +1541,55 @@ export function SimulationLivePage() {
                   marginBottom: "0.75rem",
                 }}>
                   <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981", display: "inline-block" }} />
-                  <span>TU TURNO DE DEFENDER: Presiona &quot;Hablar al Jurado&quot; o activa tu micrófono para emitir tu respuesta.</span>
+                  <span>TU TURNO DE DEFENDER: {responseMode === "voice" ? "Presiona 'Hablar al Jurado' para responder con tu voz." : "Redacta tu fundamentación en el área de texto inferior y envíala al tribunal."}</span>
                 </div>
               )}
 
-              <section className="voice-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', padding: '1rem', background: 'var(--surface-color)', borderRadius: '12px' }}>
-                <button className={`button ${isRecording ? 'button-danger' : isJuryAudioPlaying ? 'button-secondary' : 'button-primary'}`} type="button" disabled={!canAnswer && !isRecording && !isJuryAudioPlaying} onClick={isRecording ? stopRecording : startRecording}>
-                  {isRecording ? "⏹️ Detener Grabación y Enviar" : isJuryAudioPlaying ? "✋ Interrumpir para responder" : "🎤 Hablar al Jurado"}
-                </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.875rem', fontWeight: 500, color: isJuryAudioPlaying ? 'var(--brand-primary, #0d9488)' : isRecording ? '#e11d48' : 'var(--text-muted)' }}>{statusText}</span>
-                  {isRecording && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(225, 29, 72, 0.1)", padding: "2px 8px", borderRadius: "12px", border: "1px solid rgba(225, 29, 72, 0.3)" }}>
-                      <div style={{ width: "40px", height: "6px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
-                        <div style={{ width: `${Math.max(8, micVolume)}%`, height: "100%", background: "#e11d48", transition: "width 0.08s ease" }} />
+              {responseMode === "voice" && (
+                <section className="voice-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', padding: '1rem', background: 'var(--surface-color)', borderRadius: '12px' }}>
+                  <button className={`button ${isRecording ? 'button-danger' : isJuryAudioPlaying ? 'button-secondary' : 'button-primary'}`} type="button" disabled={!canAnswer && !isRecording && !isJuryAudioPlaying} onClick={isRecording ? stopRecording : startRecording}>
+                    {isRecording ? "⏹️ Detener Grabación y Enviar" : isJuryAudioPlaying ? "✋ Interrumpir para responder" : "🎤 Hablar al Jurado"}
+                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 500, color: isJuryAudioPlaying ? 'var(--brand-primary, #0d9488)' : isRecording ? '#e11d48' : 'var(--text-muted)' }}>{statusText}</span>
+                    {isRecording && (
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(225, 29, 72, 0.1)", padding: "2px 8px", borderRadius: "12px", border: "1px solid rgba(225, 29, 72, 0.3)" }}>
+                        <div style={{ width: "40px", height: "6px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
+                          <div style={{ width: `${Math.max(8, micVolume)}%`, height: "100%", background: "#e11d48", transition: "width 0.08s ease" }} />
+                        </div>
+                        <span style={{ fontSize: "0.68rem", color: "#e11d48", fontWeight: 700 }}>{micVolume}%</span>
                       </div>
-                      <span style={{ fontSize: "0.68rem", color: "#e11d48", fontWeight: 700 }}>{micVolume}%</span>
-                    </div>
-                  )}
-                </div>
-              </section>
+                    )}
+                  </div>
+                </section>
+              )}
             </>
           )}
 
-          <section className="answer-panel">
-            <label htmlFor="simulation-answer">Tu respuesta escrita</label>
+          <section className="answer-panel" style={{ display: responseMode === "text" || !canAnswer ? "block" : "block", border: responseMode === "text" ? "2px solid #0d9488" : "1px solid var(--border-color, #e2e8f0)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <label htmlFor="simulation-answer" style={{ fontWeight: 800, fontSize: "0.8rem", color: "#0f172a" }}>
+                {responseMode === "text" ? "📝 Tu Argumentación Escrita al Tribunal" : "Tu respuesta escrita (alternativa)"}
+              </label>
+              {responseMode === "text" && (
+                <span style={{ fontSize: "0.7rem", color: "#0f766e", background: "#ccfbf1", padding: "2px 8px", borderRadius: "6px", fontWeight: 700 }}>
+                  Modo Silencioso / Contingencia Activo
+                </span>
+              )}
+            </div>
             <textarea
               id="simulation-answer"
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
               maxLength={10000}
               disabled={snapshot.status === "COMPLETED" || snapshot.questions_exhausted || isRecording}
-              placeholder="O usa el modo texto (siempre disponible)..."
+              placeholder={responseMode === "text" ? "Redacta con rigor tu argumentación teórica y técnica para responder al jurado..." : "O escribe aquí si prefieres responder por texto..."}
+              style={{ minHeight: responseMode === "text" ? "140px" : "90px" }}
             />
             <div>
-              <small>{answer.length}/10000 · El modo texto siempre permanece disponible</small>
-              <button className="button button-secondary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>
-                {sending ? "Enviando…" : "Enviar texto"}
+              <small>{answer.length}/10000 · El modo texto siempre permanece disponible ante cualquier falla de micrófono</small>
+              <button className="button button-primary" type="button" disabled={!canAnswer || !answer.trim() || isRecording} onClick={submit}>
+                {sending ? "Enviando…" : "Enviar Respuesta al Tribunal"}
               </button>
             </div>
           </section>
