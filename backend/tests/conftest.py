@@ -344,7 +344,18 @@ def db_session() -> Session:
             db_url = "postgresql+psycopg://socratia:socratia_dev_password@db:5432/socratia_test"
         except (socket.gaierror, OSError):
             # Running directly on host (Windows/Linux local)
-            db_url = "postgresql+psycopg://socratia:socratia_dev_password@localhost:5435/socratia_test"
+            sock = socket.socket()
+            sock.settimeout(1.0)
+            try:
+                sock.connect(("127.0.0.1", 5435))
+                sock.close()
+                db_url = "postgresql+psycopg://socratia:socratia_dev_password@localhost:5435/socratia_test"
+            except (TimeoutError, ConnectionRefusedError, OSError):
+                sock.close()
+                pytest.skip(
+                    "PostgreSQL test database on localhost:5435 is not reachable. "
+                    "Start Docker Desktop or set TEST_DATABASE_URL to run database tests."
+                )
 
     # STRICT SAFETY CHECK: Prevent running against dev or prod databases!
     from sqlalchemy.engine import make_url

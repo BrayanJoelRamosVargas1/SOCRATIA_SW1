@@ -306,6 +306,9 @@ export function SimulationLivePage() {
           setIsJuryAudioPlaying(false);
           speakTurnGuidance(snapshot?.current_question?.id);
         }
+      } else if (event.type === "pong" || event.type === "heartbeat.ack") {
+        // Keep-alive acknowledgment, no UI state change needed
+        return;
       } else {
         setServerState(event.type);
       }

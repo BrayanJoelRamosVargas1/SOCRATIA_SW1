@@ -139,10 +139,10 @@ async def simulation_session(
             except json.JSONDecodeError:
                 continue
 
-            if msg_data.get("type") == "heartbeat":
+            if msg_data.get("type") in ("heartbeat", "ping"):
                 await websocket.send_json(
                     {
-                        "type": "heartbeat.ack",
+                        "type": "heartbeat.ack" if msg_data.get("type") == "heartbeat" else "pong",
                         "timestamp": datetime.now(UTC).isoformat(),
                     }
                 )
