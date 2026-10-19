@@ -90,3 +90,13 @@ async def test_unavailable_tts_returns_question_for_browser_fallback(voice_sessi
     assert result[4].answered_questions == 1
     assert result[4].current_question.position == 2
     assert result[3] is None
+
+
+@pytest.mark.asyncio
+async def test_local_batch_voice_does_not_duplicate_websocket_synthesis(voice_session, monkeypatch):
+    service, _, _, _, tts = voice_session
+    monkeypatch.setattr(module, 'get_settings', lambda: SimpleNamespace(local_tts_enabled=True))
+    result = await service.process_utterance(str(uuid4()), 'audio/webm', b'fixture audio')
+    assert result[4].current_question.position == 2
+    assert result[3] is None
+    tts.synthesize.assert_not_called()

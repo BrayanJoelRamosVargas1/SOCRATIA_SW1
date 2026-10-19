@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.core.config import get_settings
 
 from app.integrations.llm.dependencies import get_jury_routing_router
 from app.integrations.llm.jury_base import JuryAction, JuryRoutingRequest
@@ -157,7 +158,10 @@ class VoiceService:
 
         # 5. TTS for the jury question
         tts_stream = None
-        if turn and turn.content:
+        # The human video client requests bounded local batches from /speech.
+        # Do not also synthesize the entire question over the websocket: that
+        # would occupy the same CPU lock and force its batch request to fallback.
+        if turn and turn.content and not get_settings().local_tts_enabled:
             tts_request = TTSRequest(text=turn.content, speaker_index=((snapshot.current_question.position if snapshot.current_question else 1) - 1) % 3)
             try:
                 tts = get_tts_provider()
