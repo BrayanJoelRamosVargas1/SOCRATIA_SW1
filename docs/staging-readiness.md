@@ -1,5 +1,11 @@
 # Preparación del piloto — 18 de octubre de 2026
 
+> Actualización de estado: el piloto ya está publicado con HTTPS y se verificaron
+> ambos roles y el flujo PDF → presentación → PowerPoint. Los párrafos siguientes
+> conservan el registro de preparación inicial. Para el estado actual y los límites,
+> consultar [rendimiento](performance-reengineering.md) y
+> [mejoras pendientes](improvement-roadmap.md).
+
 Se recuperó la sesión de AWS y se accedió por EC2 Instance Connect a
 `socratia-staging` (`i-0c8f0a2f4ce418b0b`), en ejecución con 3/3 comprobaciones
 aprobadas y dirección `34.204.9.87`. Se verificaron aproximadamente 1,4 GB de
