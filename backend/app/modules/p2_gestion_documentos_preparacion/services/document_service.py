@@ -125,6 +125,11 @@ class DocumentService:
 
     def delete_for(self, user: User, document_id: str) -> None:
         document = DocumentPolicy.can_delete(user, self.documents.get_by_id(document_id))
+        from app.modules.p2_gestion_documentos_preparacion.models.preparation_task import PreparationTask
+        if self.db.query(PreparationTask).filter(PreparationTask.document_id==document_id,
+                PreparationTask.status.in_(["QUEUED","RUNNING"])).first():
+            raise DocumentAlreadyProcessingError
+
         if document.status not in (
             DocumentStatus.UPLOADED,
             DocumentStatus.PROCESSED,

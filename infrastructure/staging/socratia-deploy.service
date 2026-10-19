@@ -1,0 +1,11 @@
+[Unit]
+Description=Deploy Socratia public main after a new commit
+After=network-online.target docker.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/socratia
+ExecStart=/bin/bash /opt/socratia-deployment/deploy-main.sh
+TimeoutStartSec=1800
+Nice=10

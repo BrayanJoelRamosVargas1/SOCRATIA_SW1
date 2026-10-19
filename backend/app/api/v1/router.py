@@ -82,3 +82,6 @@ api_router.include_router(student_plans_router, prefix="/plans", tags=["student-
 api_router.include_router(
     student_subscriptions_router, prefix="/subscription", tags=["student-subscriptions"]
 )
+
+from app.modules.p2_gestion_documentos_preparacion.routes.task_routes import router as preparation_tasks_router
+api_router.include_router(preparation_tasks_router, prefix="/documents", tags=["preparation-tasks"])

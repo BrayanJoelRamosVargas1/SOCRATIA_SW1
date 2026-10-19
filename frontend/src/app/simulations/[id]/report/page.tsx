@@ -27,7 +27,7 @@ export default function ReportPage() {
             const simulation = await getSimulation(id);
             if (simulation.status !== "COMPLETED") throw new Error("Finaliza esta simulación antes de consultar su reporte.");
             const evaluation = await getEvaluation(id);
-            if (evaluation.status === "FAILED") throw new Error("La evaluación falló. Vuelve a la sesión para revisar su estado.");
+            if (evaluation.status === "FAILED") throw new Error(evaluation.failure_reason || "La evaluación se interrumpió. Puedes reintentar sin repetir las respuestas ya evaluadas.");
           } catch (statusError) {
             if (!(statusError instanceof ApiError && statusError.status === 404)) {if (active) {setError(statusError instanceof Error ? statusError.message : "No se pudo consultar la evaluación."); setLoading(false);} return;}
           }

@@ -56,7 +56,7 @@ export function getSimulationReport(id: string): Promise<SimulationReportRespons
   return apiRequest<SimulationReportResponse>(`/simulations/${id}/report`);
 }
 
-export function getEvaluation(id: string): Promise<{status: string}> {
-  return apiRequest<{status: string}>(`/simulations/${id}/evaluation`);
+export function getEvaluation(id: string): Promise<{status: string;failure_reason?:string|null}> {
+  return apiRequest<{status: string;failure_reason?:string|null}>(`/simulations/${id}/evaluation`);
 }
 

@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 parser = argparse.ArgumentParser()
 parser.add_argument('--postgres-bin', type=Path, default=Path('C:/Program Files/PostgreSQL/15/bin'))
 parser.add_argument('--ui', action='store_true', help='Serve an isolated UI pilot on port 8000 until stopped')
-parser.add_argument('--suite', choices=['defense','documents','release'], default='defense')
+parser.add_argument('--suite', choices=['defense','documents','release','preparation'], default='defense')
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[2]
 backend = repo/'backend'
@@ -90,6 +90,8 @@ with psycopg.connect(host='127.0.0.1',port=port,user='socratia',password=passwor
                 'tests/test_simulation_sessions.py', 'tests/test_simulation_closure.py',
                 'tests/test_voice_cancellation.py', 'tests/test_local_voice.py',
                 'tests/test_voice_session_flow.py','tests/test_gemini_transcription.py', 'tests/test_voice_pipeline.py'])
+        if args.suite == 'preparation':
+            selected = ['tests/test_preparation_tasks.py','tests/test_documents.py','tests/test_evaluation_resume.py']
         if args.suite == 'release':
             selected = [str(path.relative_to(backend)) for path in sorted((backend/'tests').glob('test_*.py'))
                 if '_real' not in path.name]

@@ -1,4 +1,7 @@
+import logging
 from datetime import datetime
+
+logger=logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from .context_selection import select_evaluation_context
@@ -54,6 +57,7 @@ class EvaluationService:
             if existing.status == EvaluationStatus.FAILED:
                 evaluation = existing
                 evaluation.status = EvaluationStatus.PROCESSING
+                evaluation.failure_reason = None
                 evaluation.started_at = datetime.now()
                 self.db.commit()
             else:
@@ -91,6 +95,8 @@ class EvaluationService:
             )
             turns = self.db.scalars(stmt_turns).all()
 
+            completed_turns={row.simulation_turn_id:row for row in self.db.scalars(
+                select(TurnEvaluation).where(TurnEvaluation.evaluation_id==evaluation.id)).all()}
             turn_evals = []
             total_score = 0.0
             count = 0
@@ -105,6 +111,12 @@ class EvaluationService:
                     sim_question = questions_map.get(question_id) if question_id else None
 
                     if not sim_question:
+                        continue
+
+                    # Successful provider calls survive a later quota/network failure.
+                    saved=completed_turns.get(turn.id)
+                    if saved is not None and saved.turn_score is not None:
+                        turn_evals.append(saved);total_score+=saved.turn_score;count+=1
                         continue
 
                     # Find parent question context if follow up
@@ -143,6 +155,7 @@ class EvaluationService:
                         evaluation_version="v1",
                     )
                     self.db.add(turn_eval)
+                    self.db.commit()
                     turn_evals.append(turn_eval)
                     total_score += result.score
                     count += 1
@@ -164,13 +177,17 @@ class EvaluationService:
 
         except Exception as e:
             self.db.rollback()
-            print("ERROR IN EVALUATION SERVICE:", e)
+            logger.warning("Evaluation failed error_type=%s",type(e).__name__)
 
             # Fetch again to avoid DetachedInstanceError
             evaluation = self.db.query(Evaluation).filter_by(id=evaluation.id).first()
             if evaluation:
                 evaluation.status = EvaluationStatus.FAILED
-                evaluation.failure_reason = str(e)
+                limited=getattr(e,"status_code",None)==429 or any(token in str(e).lower() for token in ("429","rate limit","quota"))
+                evaluation.failure_reason = (
+                    "Cuota de IA temporalmente agotada. Las respuestas ya evaluadas quedaron guardadas. Espera el reinicio del límite antes de reintentar."
+                    if limited else "La evaluación se interrumpió. Los avances guardados se reutilizarán al reintentar."
+                )
                 evaluation.completed_at = datetime.now()
                 self.db.commit()
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=Check Socratia main every five minutes
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+Persistent=false
+Unit=socratia-deploy.service
+[Install]
+WantedBy=timers.target

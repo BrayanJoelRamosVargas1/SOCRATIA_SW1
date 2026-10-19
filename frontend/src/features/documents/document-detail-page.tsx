@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
@@ -10,15 +10,12 @@ import { API_URL } from "@/lib/config";
 import { getCurrentUser } from "@/features/auth/api";
 import {
   deleteDocument,
-  generatePresentationMaterial,
-  generateQuestionBank,
   getDocument,
   getDocumentStatus,
   getPresentationMaterial,
   getQuestionBank,
-  processDocument,
-  regeneratePresentationMaterial,
 } from "@/features/documents/api";
+import { listPreparationTasks, submitPreparationTask, taskIsActive, type PreparationTask } from "./preparation-tasks";
 import { ApiError } from "@/lib/api";
 import { documentStatusLabels } from "@/types/document";
 import type {
@@ -80,12 +77,25 @@ export function DocumentDetailPage() {
   const [questionBank, setQuestionBank] = useState<QuestionBank | null>(null);
   const [presentation, setPresentation] = useState<PresentationMaterial | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(15);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratingPresentation, setIsGeneratingPresentation] = useState(false);
+  const [tasks,setTasks]=useState<PreparationTask[]>([]);
+  const [submitting,setSubmitting]=useState(false);
+  const [taskNotice,setTaskNotice]=useState("");
+  const handledTasks=useRef(new Set<string>());
+  const activeTask=tasks.find(taskIsActive);
+  const activeTaskId=activeTask?.id;
+  const busy=submitting || Boolean(activeTask);
+  const isProcessing=busy && (activeTask?.kind==="process" || document?.status!=="PROCESSED");
+  const isGenerating=busy && activeTask?.kind==="questions";
+  const isGeneratingPresentation=busy && activeTask?.kind==="presentation";
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let disposed=false;
+    void listPreparationTasks(params.id).then(value=>{
+      if(disposed)return;
+      setTasks(value);
+      if(value[0] && ["FAILED","INTERRUPTED"].includes(value[0].status))setTaskNotice("La última preparación se interrumpió. Revisa los materiales guardados antes de iniciar otra solicitud.");
+    }).catch(()=>undefined);
     Promise.all([getCurrentUser(), getDocument(params.id), getDocumentStatus(params.id)])
       .then(async ([currentUser, currentDocument, currentStatus]) => {
         setUser(currentUser);
@@ -112,6 +122,7 @@ export function DocumentDetailPage() {
           router.replace("/login");
         } else setError("No pudimos completar la consulta. Revisa tu conexión e inténtalo de nuevo.");
       });
+    return ()=>{disposed=true;};
   }, [params.id, router]);
 
   async function remove() {
@@ -124,77 +135,57 @@ export function DocumentDetailPage() {
     }
   }
 
-  async function runProcessing() {
-    if (!document || isProcessing) return;
-    setError("");
-    setIsProcessing(true);
-    setDocument((current) => (current ? { ...current, status: "PROCESSING" } : current));
-    try {
-      await processDocument(document.id);
-      const [updatedDocument, updatedStatus] = await Promise.all([
-        getDocument(document.id),
-        getDocumentStatus(document.id),
-      ]);
-      setDocument(updatedDocument);
-      setProcessing(updatedStatus);
-    } catch (caught) {
-      const [updatedDocument, updatedStatus] = await Promise.all([
-        getDocument(document.id),
-        getDocumentStatus(document.id),
-      ]);
-      setDocument(updatedDocument);
-      setProcessing(updatedStatus);
-      setError(caught instanceof ApiError ? caught.message : "No pudimos procesar el documento.");
-    } finally {
-      setIsProcessing(false);
+  useEffect(()=>{
+    if(!activeTaskId)return;
+    let stopped=false;
+    let timer:ReturnType<typeof setTimeout>;
+    async function poll(){
+      try {
+        const rows=await listPreparationTasks(params.id);
+        if(stopped)return;
+        const finished=rows.find(row=>row.id===activeTaskId && !taskIsActive(row));
+        if(finished && !handledTasks.current.has(finished.id)){
+          const [doc,status]=await Promise.all([getDocument(params.id),getDocumentStatus(params.id)]);
+          if(stopped)return;
+          setDocument(doc);setProcessing(status);
+          if(finished.status==="SUCCEEDED"){
+            setTaskNotice("Preparación completada. El resultado quedó guardado.");
+            if(finished.kind==="questions")setQuestionBank(await getQuestionBank(params.id));
+            if(finished.kind==="presentation")setPresentation(await getPresentationMaterial(params.id));
+          } else setTaskNotice(finished.status==="INTERRUPTED"
+            ? "El servidor se reinició durante la preparación. Revisa los materiales antes de reintentar: no repetimos llamadas automáticamente."
+            : "La preparación no terminó. Puede deberse a cuota o disponibilidad del proveedor. Revisa tu conexión y los materiales antes de reintentar.");
+          handledTasks.current.add(finished.id);
+          if(!stopped)setTasks(rows);
+        } else if(!finished && !stopped){setTasks(rows);timer=setTimeout(()=>void poll(),2000);}
+      } catch {
+        if(!stopped){setTaskNotice("Se perdió la conexión. La tarea sigue guardada; volveremos a consultar su estado.");timer=setTimeout(()=>void poll(),5000);}
+      }
     }
-  }
+    timer=setTimeout(()=>void poll(),1000);
+    return ()=>{stopped=true;clearTimeout(timer);};
+  },[activeTaskId,params.id]);
 
-  async function runQuestionGeneration() {
-    if (!document || isGenerating) return;
-    if (
-      questionBank &&
-      !window.confirm("Esto reemplazará el banco de preguntas actual. ¿Quieres regenerarlo?")
-    ) {
-      return;
-    }
-    setError("");
-    setIsGenerating(true);
+  async function enqueue(kind:PreparationTask["kind"],regenerate=false){
+    if(!document || busy)return;
+    setError("");setSubmitting(true);
     try {
-      setQuestionBank(await generateQuestionBank(document.id));
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : "No pudimos generar el banco de preguntas.",
-      );
-    } finally {
-      setIsGenerating(false);
-    }
+      const task=await submitPreparationTask(document.id,kind,durationMinutes,regenerate);
+      setTasks(current=>[task,...current.filter(row=>row.id!==task.id)]);
+      setTaskNotice("Solicitud guardada. Puedes salir de esta página y volver para consultar el resultado.");
+    } catch(caught){
+      setError(caught instanceof ApiError?caught.message:"No pudimos confirmar la solicitud. Consultaremos si quedó guardada.");
+      try{setTasks(await listPreparationTasks(document.id));}catch{/* Never resubmit an uncertain request automatically. */}
+    } finally {setSubmitting(false);}
   }
-
-  async function runPresentationGeneration() {
-    if (!document || isGeneratingPresentation) return;
-    if (
-      presentation &&
-      !window.confirm("Esto reemplazará el material de exposición actual. ¿Quieres continuar?")
-    ) return;
-    setError("");
-    setIsGeneratingPresentation(true);
-    try {
-      const action = presentation
-        ? regeneratePresentationMaterial
-        : generatePresentationMaterial;
-      setPresentation(await action(document.id, durationMinutes));
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : "No pudimos generar el material de exposición.",
-      );
-    } finally {
-      setIsGeneratingPresentation(false);
-    }
+  async function runProcessing(){await enqueue("process");}
+  async function runQuestionGeneration(){
+    if(questionBank && !window.confirm("Esto reemplazará el banco de preguntas actual. ¿Quieres regenerarlo?"))return;
+    await enqueue("questions",Boolean(questionBank));
+  }
+  async function runPresentationGeneration(){
+    if(presentation && !window.confirm("Esto reemplazará el material de exposición actual. ¿Quieres continuar?"))return;
+    await enqueue("presentation",Boolean(presentation));
   }
 
   if (error && !user) {
@@ -231,7 +222,7 @@ export function DocumentDetailPage() {
               <button
                 className="button button-primary"
                 type="button"
-                disabled={isProcessing}
+                disabled={busy}
                 onClick={() => void runProcessing()}
               >
                 {isProcessing
@@ -244,7 +235,7 @@ export function DocumentDetailPage() {
             <button
               className="danger-button"
               type="button"
-              disabled={isProcessing || isGenerating}
+              disabled={busy}
               onClick={() => void remove()}
             >
               Eliminar documento
@@ -253,6 +244,7 @@ export function DocumentDetailPage() {
         </header>
 
         {error && <p className="form-error document-error">{error}</p>}
+        {(activeTask || taskNotice) && <section className="workspace-notice" role="status" aria-live="polite"><div><strong>{activeTask?.status==="QUEUED"?"En cola":activeTask?"Preparación en curso":"Estado de preparación"}</strong><p>{taskNotice || "La preparación continúa en el servidor. Puedes volver a esta página más tarde."}</p></div></section>}
 
         <div className="detail-grid">
           <section className="detail-card metadata-card">
@@ -276,7 +268,7 @@ export function DocumentDetailPage() {
                 </li>
               ))}
               {document.status !== "PROCESSED" && (
-                <li className="pending"><b>→</b><div><strong>Extracción y vectorización</strong><span>{isProcessing ? "Gemini y Pinecone están trabajando…" : "Inicia el procesamiento para preparar este documento"}</span></div></li>
+                <li className="pending"><b>→</b><div><strong>Extracción y vectorización</strong><span>{isProcessing ? "Preparación en el servidor; el estado se guarda automáticamente…" : "Inicia el procesamiento para preparar este documento"}</span></div></li>
               )}
             </ol>
           </section>
@@ -296,7 +288,7 @@ export function DocumentDetailPage() {
                 <h2>{questionBank ? "Banco de preguntas" : "Documento listo para el tribunal"}</h2>
                 <p>{questionBank ? "Doce preguntas sustentadas exclusivamente en los fragmentos de este documento." : `${processing.chunk_count} fragmentos preparados para generar preguntas sobre tu investigación.`}</p>
               </div>
-              <button className="button button-primary" type="button" disabled={isGenerating} onClick={() => void runQuestionGeneration()}>
+              <button className="button button-primary" type="button" disabled={busy} onClick={() => void runQuestionGeneration()}>
                 {isGenerating ? "Generando…" : questionBank ? "Regenerar preguntas" : "Generar banco de preguntas"}
               </button>
             </header>

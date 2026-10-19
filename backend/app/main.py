@@ -1,3 +1,4 @@
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
@@ -28,6 +29,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    @application.middleware("http")
+    async def response_timing(request, call_next):
+        started=time.monotonic()
+        response=await call_next(request)
+        response.headers["Server-Timing"]=f"app;dur={(time.monotonic()-started)*1000:.1f}"
+        return response
+
     register_exception_handlers(application)
     application.include_router(api_router, prefix=settings.api_v1_prefix)
 

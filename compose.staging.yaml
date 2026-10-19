@@ -24,6 +24,7 @@ services:
     logging: *logging
 
   backend:
+    image: socratia-staging-backend
     build:
       context: ./backend
       target: backend
@@ -51,6 +52,24 @@ services:
       timeout: 5s
       retries: 20
       start_period: 30s
+    logging: *logging
+
+  preparation-worker:
+    image: socratia-staging-backend
+    restart: unless-stopped
+    env_file: ${STAGING_ENV_FILE:-.env.staging}
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://socratia:${POSTGRES_PASSWORD:?Set staging password}@db:5432/socratia
+      JWT_SECRET: ${JWT_SECRET:?Generate a staging JWT secret}
+      LOCAL_STORAGE_PATH: /data/uploads
+      VECTOR_PRIMARY_PROVIDER: pgvector
+    command: [python, -m, app.cli.preparation_worker]
+    volumes:
+      - staging_documents:/data/uploads
+    depends_on:
+      backend:
+        condition: service_healthy
     logging: *logging
 
   frontend:
