@@ -8,6 +8,20 @@ from pathlib import Path
 from app.integrations.tts.base import TTSProvider, TTSProviderError, TTSRequest
 
 
+def speech_segments(text: str, limit: int = 120) -> list[str]:
+    """Short word-aligned audio batches keep first playback bounded on CPU."""
+    chunks: list[str] = []
+    current = ""
+    for word in text.split():
+        if current and len(current) + len(word) + 1 > limit:
+            chunks.append(current)
+            current = ""
+        current = f"{current} {word}".strip()
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 class LocalTTSProvider(TTSProvider):
     name = "kokoro"
     mime_type = "audio/wav"

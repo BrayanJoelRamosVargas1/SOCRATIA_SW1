@@ -25,9 +25,13 @@ services:
 
   backend:
     image: socratia-staging-backend
+    cpus: 1.5
+    mem_limit: 900m
     build:
       context: ./backend
       target: backend
+      args:
+        INSTALL_LOCAL_VOICE: "true"
     restart: unless-stopped
     env_file: ${STAGING_ENV_FILE:-.env.staging}
     environment:
@@ -40,9 +44,13 @@ services:
       TRUST_PROXY_HEADERS: "true"
       LOCAL_STORAGE_PATH: /data/uploads
       VECTOR_PRIMARY_PROVIDER: pgvector
+      VOICE_TTS_ENABLED: "true"
+      LOCAL_TTS_ENABLED: "true"
+      LOCAL_TTS_MODEL_DIR: /data/voice-models
     command: [sh, -c, "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"]
     volumes:
       - staging_documents:/data/uploads
+      - /opt/socratia-voice/models:/data/voice-models:ro
     depends_on:
       db:
         condition: service_healthy

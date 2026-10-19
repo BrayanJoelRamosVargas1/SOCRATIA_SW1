@@ -6,8 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-local-voice.txt ./
+ARG INSTALL_LOCAL_VOICE=false
+RUN pip install --no-cache-dir -r requirements.txt && \
+    if [ "$INSTALL_LOCAL_VOICE" = "true" ]; then pip install --no-cache-dir -r requirements-local-voice.txt; fi
 
 COPY alembic.ini ./
 COPY migrations ./migrations

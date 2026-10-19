@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Response, HTTPException, status
 from pydantic import BaseModel, Field
 from app.integrations.tts.base import TTSRequest, TTSProviderError
 from app.integrations.tts.dependencies import get_tts_provider
+from app.integrations.tts.local_tts import speech_segments
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -28,8 +29,16 @@ router = APIRouter()
 Database = Annotated[Session, Depends(get_db)]
 
 
+@router.get("/voice-capabilities")
+def voice_capabilities(current_user: CurrentUser):
+    del current_user
+    settings=get_settings()
+    return {"local_audio":bool(settings.voice_tts_enabled and settings.local_tts_enabled)}
+
+
 class JurySpeechInput(BaseModel):
     text: str = Field(min_length=1, max_length=3000)
+    segment_index: int | None = Field(default=None, ge=0, le=100)
 
 
 @router.post("/simulations/{simulation_id}/speech/prewarm", status_code=204)
@@ -44,8 +53,9 @@ async def prewarm_jury_speech(simulation_id: str, current_user: CurrentUser, db:
     text = (question.prompt_text or (question.question.question if question.question else "")) if question else ""
     if question and question.source == "BANK" and text and len(text) <= 800:
         try:
-            async for _chunk in get_tts_provider().synthesize(TTSRequest(text=text, speaker_index=question.position % 3)):
-                pass
+            for segment in speech_segments(text):
+                async for _chunk in get_tts_provider().synthesize(TTSRequest(text=segment, speaker_index=question.position % 3)):
+                    pass
         except TTSProviderError:
             pass
     return Response(status_code=204)
@@ -57,18 +67,22 @@ async def jury_speech(simulation_id: str, body: JurySpeechInput, current_user: C
     question = snapshot.current_question
     if not question or snapshot.status == "COMPLETED":
         raise HTTPException(409, "No hay una pregunta activa")
-    greetings = ["", "Bienvenido de nuevo. Continuemos tu defensa desde la pregunta pendiente. ", "Bienvenido a tu defensa. Somos tu tribunal. Te haremos preguntas sobre tu investigación y escucharemos tus respuestas. Tómate un momento para organizar tus ideas. Comencemos. "]
+    greetings = ["", "Bienvenido a tu defensa. Comencemos. ", "Bienvenido de nuevo. Continuemos tu defensa desde la pregunta pendiente. ", "Bienvenido a tu defensa. Somos tu tribunal. Te haremos preguntas sobre tu investigación y escucharemos tus respuestas. Tómate un momento para organizar tus ideas. Comencemos. "]
     if body.text not in {greeting + question.text for greeting in greetings}:
         raise HTTPException(422, "La voz solo puede leer la pregunta activa")
     settings = get_settings()
     if not settings.voice_tts_enabled or not settings.local_tts_enabled:
         raise HTTPException(503, "Voz local no habilitada")
     provider = get_tts_provider()
+    segments = speech_segments(body.text)
+    if body.segment_index is not None and body.segment_index >= len(segments):
+        raise HTTPException(422, "Segmento de voz inválido")
+    text = body.text if body.segment_index is None else segments[body.segment_index]
     try:
-        data = b"".join([chunk async for chunk in provider.synthesize(TTSRequest(text=body.text, speaker_index=(question.position - 1) % 3))])
+        data = b"".join([chunk async for chunk in provider.synthesize(TTSRequest(text=text, speaker_index=(question.position - 1) % 3))])
     except TTSProviderError:
         raise HTTPException(503, "Voz local no disponible") from None
-    return Response(data, media_type=provider.mime_type, headers={"Cache-Control": "no-store"})
+    return Response(data, media_type=provider.mime_type, headers={"Cache-Control": "no-store", "X-Speech-Segments": str(len(segments))})
 
 
 @router.get("/jury-profiles", response_model=list[JuryProfileResponse])

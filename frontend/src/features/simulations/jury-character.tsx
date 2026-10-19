@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { TalkingHead } from "@/vendor/talkinghead.mjs";
+import { setJuryRendererReady } from "./jury-renderer-ready";
 
 export type SpeechMotion = {
   analyser: AnalyserNode | null;
@@ -30,6 +31,11 @@ export function JuryCharacter({ index, speaking, listening, thinking, animated, 
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setJuryRendererReady(index, ready);
+    return () => setJuryRendererReady(index, false);
+  }, [index, ready]);
 
   useEffect(() => {
     state.current = { speaking, listening, thinking, animated, motion };

@@ -11,7 +11,7 @@ const canvas={width:288,height:384,getContext:()=>context2d};
 const document={hidden:false,querySelector:selector=>selector==='video'?video:canvas,
   addEventListener(type,fn){events[type]=fn;}};
 const reduced={matches:false,addEventListener(type,fn){events.reduced=fn;}};
-const parent={};
+const parent={postMessage(){}};
 const runtime=vm.createContext({document,window:{addEventListener(type,fn){events[type]=fn;}},
   location:{origin:'https://socratia.example',search:'?index=0'},parent,URLSearchParams,
   matchMedia:()=>reduced,setTimeout(fn){timers.set(++timerId,fn);return timerId;},
@@ -35,3 +35,14 @@ assert.ok(pauses>0);
 document.hidden=false;reduced.matches=true;events.reduced();
 assert.equal(timers.size,0,'reduced motion draws a still frame');
 console.log('PASS: human startup, chroma key, origin guard, pause, hidden tab and reduced motion.');
+
+const nativeMedia={},nativeEvents={};let reads=0;
+const nativeVideo={...video,canPlayType:()=>"probably",addEventListener(type,fn){nativeMedia[type]=fn;}};
+const nativeCanvas={...canvas,getContext(){reads++;throw new Error('native path must not read pixels');}};
+const nativeDoc={hidden:false,querySelector:selector=>selector==='video'?nativeVideo:nativeCanvas,addEventListener(type,fn){nativeEvents[type]=fn;}};
+const nativeRuntime=vm.createContext({document:nativeDoc,window:{addEventListener(type,fn){nativeEvents[type]=fn;}},location:{origin:'https://socratia.example',search:'?index=2'},parent,URLSearchParams,matchMedia:()=>reduced,setTimeout(){throw new Error('no native render timer');},clearTimeout(){}});
+vm.runInContext(readFileSync(new URL('../public/vendor/dh-live/portrait.js',import.meta.url),'utf8'),nativeRuntime);
+assert.ok(nativeVideo.src.includes('daniel-fictional/listening-lite.webm'));
+assert.ok(nativeVideo.poster.includes('portrait.webp'));
+assert.equal(nativeCanvas.hidden,true);nativeMedia.loadeddata();await Promise.resolve();assert.equal(reads,0);
+console.log('PASS: native alpha videos use zero canvas readbacks and zero render timers.');

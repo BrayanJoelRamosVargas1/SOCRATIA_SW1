@@ -15,7 +15,7 @@ There are three renderer slots. Alex/Elena use upstream examples; Daniel uses
 a fictional image generated for Socratia and processed with upstream
 DINet_mini, SCRFD and FaceLandmarker checkpoints. See docs/jury-avatar-generation.md.
 Additional unused upstream examples assets3/assets5 are not selected by the player.
-MiniLive2.js has one adaptation: its animation frame handle is retained so
+MiniLive2.js adaptations: inference is capped at 15 FPS (source timing stays at 25 FPS), and its animation frame handle is retained so
 Socratia can cancel it when pausing, avoiding duplicate loops on resume.
 An optional recoloring shader from the earlier duplicate demo remains disabled.
 The MatesX mark is preserved.
@@ -32,3 +32,8 @@ On 2026-10-18, all three speaking bases (01.mp4 and combined_data.json.gz)
 were regenerated from these animated listening clips in a remote Colab T4
 runtime. Each base contains 200 frames at 25 FPS with matching facial data.
 No local model inference is required for creating these assets now.
+
+On 2026-10-19, listening-lite.webm and portrait.webp were derived from the
+existing licensed listening.mp4 clips on the staging CPU. These native alpha
+loops avoid per-frame browser canvas readbacks. Generation is reproducible with
+infrastructure/scripts/prepare_jury_idle_video.py. Source marks remain intact.

@@ -24,7 +24,7 @@ if [[ -n "$PREVIOUS" ]]; then
   git --git-dir="$MIRROR" merge-base --is-ancestor "$PREVIOUS" "$TARGET"
   # Documentation and test-only commits do not consume another production build.
   if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- \
-      backend/app backend/migrations backend/requirements.txt backend/Dockerfile backend/.dockerignore backend/alembic.ini \
+      backend/app backend/migrations backend/requirements.txt backend/requirements-local-voice.txt backend/Dockerfile backend/.dockerignore backend/alembic.ini \
       frontend/src frontend/public frontend/package.json frontend/package-lock.json frontend/next.config.ts \
       frontend/Dockerfile frontend/.dockerignore frontend/tsconfig.json frontend/postcss.config.mjs \
       frontend/scripts/copy-standalone.mjs compose.staging.yaml infrastructure/staging/Caddyfile; then

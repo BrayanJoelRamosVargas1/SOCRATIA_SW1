@@ -16,6 +16,8 @@ import { AppearanceFeedback, type AppearanceStatus } from "./appearance-feedback
 import { VisualFeedback } from "./visual-feedback";
 import { usePracticeCamera } from "./use-practice-camera";
 import {TurnEndDetector} from "./turn-end-detector";
+import {apiRequest} from "@/lib/api";
+import {waitForJuryRenderer} from "./jury-renderer-ready";
 import {juryVoice} from "./jury-voices";
 import {readSessionPreferences,saveSessionPreferences} from "./session-preferences";
 type Connection = "connecting" | "connected" | "reconnecting" | "offline";
@@ -42,6 +44,7 @@ export function SimulationLivePage() {
   const [questionPending,setQuestionPending]=useState(false);
   const [speaking,setSpeaking] = useState(false);
   const [voiceLoading,setVoiceLoading] = useState(false);
+  const localVoiceAvailable=useRef<boolean|null>(null);
   const [serverState,setServerState] = useState("");
   const [mode,setMode] = useState<"voice" | "text">("voice");
   const [appearance,setAppearance] = useState<AppearanceStatus>({state:"waiting",result:null,message:"",time:""});
@@ -128,47 +131,66 @@ export function SimulationLivePage() {
     window.speechSynthesis.speak(utterance);
     };
     if (!juryText.current || !text.endsWith(juryText.current)) { browserFallback(); return; }
+    if(localVoiceAvailable.current===false){browserFallback();return;}
     const controller = new AbortController(); speechRequest.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 45000);
     setSpeaking(true); setVoiceLoading(true); localSpeech.current = true;
     void (async () => {
+      const current = () => generation === playbackGeneration.current && mounted.current;
+      const fetchSegment = async (segment: number) => {
+        const deadline = setTimeout(() => controller.abort(), 20000);
+        try {
+          const response = await fetch(`${API_URL}/simulations/${id}/speech`, {method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,segment_index:segment}),signal:controller.signal});
+          if (!response.ok) throw new Error("local voice unavailable");
+          return {blob:await response.blob(), count:Math.max(1,Number(response.headers.get("X-Speech-Segments")) || 1)};
+        } finally { clearTimeout(deadline); }
+      };
       try {
-        const response = await fetch(`${API_URL}/simulations/${id}/speech`, {method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({text}),signal:controller.signal});
-        if (!response.ok) throw new Error("local voice unavailable");
-        const blob = await response.blob();
-        if (generation !== playbackGeneration.current || !mounted.current) return;
+        let part = await fetchSegment(0);
+        if (!current()) return;
         const context = new AudioContext(); playbackContext.current = context;
-        const buffer = await context.decodeAudioData(await blob.arrayBuffer());
-        if (generation !== playbackGeneration.current || !mounted.current) { void context.close(); return; }
-        const url = URL.createObjectURL(blob); audioUrl.current = url;
-        const player = new Audio(url); audio.current = player;
-        const analyser = context.createAnalyser(); analyser.fftSize = 256;
-        context.createMediaElementSource(player).connect(analyser); analyser.connect(context.destination);
-        speechMotion.current = {analyser,speaking:true,text,charIndex:0,startedAt:performance.now(),audioBuffer:buffer};
-        setVoiceLoading(false);
-        player.onplaying = () => {if (generation === playbackGeneration.current) speechMotion.current.startedAt = performance.now();};
-        const finish = () => { if (generation === playbackGeneration.current) {stopPlayback();setServerState("");} };
-        player.onended = finish;
-        player.onerror = () => {
-          if (generation !== playbackGeneration.current || !mounted.current) return;
-          audio.current?.pause(); audio.current = null;
-          if (audioUrl.current) { URL.revokeObjectURL(audioUrl.current); audioUrl.current = null; }
-          void playbackContext.current?.close().catch(() => undefined); playbackContext.current = null;
-          browserFallback();
-        };
-        await context.resume();
-        await player.play();
+        for(let segment=0;segment<part.count;segment++) {
+          const buffer = await context.decodeAudioData(await part.blob.arrayBuffer());
+          if (!current()) return;
+          // Prepare one next batch while this batch plays, with one bounded CPU job.
+          const next = segment+1<part.count ? fetchSegment(segment+1).then(value=>({value,error:null}),error=>({value:null,error})) : null;
+          if (audioUrl.current) URL.revokeObjectURL(audioUrl.current);
+          const url = URL.createObjectURL(part.blob); audioUrl.current = url;
+          const player = new Audio(url); audio.current = player;
+          const analyser = context.createAnalyser(); analyser.fftSize = 256;
+          context.createMediaElementSource(player).connect(analyser); analyser.connect(context.destination);
+          speechMotion.current = {analyser,speaking:true,text,charIndex:0,startedAt:performance.now(),audioBuffer:buffer};
+          if(segment===0) await waitForJuryRenderer(speakerIndex.current,6000);
+          if(!current()) return;
+          speechMotion.current.startedAt=performance.now();
+          setVoiceLoading(false);
+          player.onplaying = () => {if (current()) speechMotion.current.startedAt = performance.now();};
+          const ended = new Promise<void>((resolve,reject)=>{
+            player.onended=()=>resolve();
+            player.onerror=()=>reject(new Error("audio playback failed"));
+            controller.signal.addEventListener("abort",()=>reject(new Error("cancelled")),{once:true});
+          });
+          // Register rejection handling before autoplay can reject.
+          void ended.catch(()=>undefined);
+          await context.resume(); await player.play(); await ended;
+          if(!current()) return;
+          if(next){const result=await next;if(result.error || !result.value)throw result.error;part=result.value;}
+        }
+        if(current()){stopPlayback();setServerState("");}
       } catch {
-        if (generation === playbackGeneration.current && mounted.current) {
+        if (current()) {
+          audio.current?.pause(); audio.current=null;
           if (audioUrl.current) {URL.revokeObjectURL(audioUrl.current);audioUrl.current=null;}
           void playbackContext.current?.close().catch(()=>undefined);playbackContext.current=null;
+          speechMotion.current.audioBuffer=undefined;
           browserFallback();
         }
-      } finally { clearTimeout(timeout); if(speechRequest.current===controller)speechRequest.current=null; }
+      } finally { if(speechRequest.current===controller)speechRequest.current=null; }
     })();
   }, [id, stopPlayback]);
   useEffect(() => {
     mounted.current = true;
+    void apiRequest<{local_audio:boolean}>("/voice-capabilities").then(value=>{localVoiceAvailable.current=value.local_audio;}).catch(()=>undefined);
+    window.speechSynthesis?.getVoices();
     const preferences = readSessionPreferences(id);
     autoListenRef.current = preferences.autoListen ?? true;
     let stopped = false, retries = 0, reconnect: ReturnType<typeof setTimeout> | undefined;
@@ -183,7 +205,7 @@ export function SimulationLivePage() {
       cancelQuestion();
       spokenQuestion = question.id;
       const greeting = !introduced ? next.answered_questions === 0
-        ? "Bienvenido a tu defensa. Somos tu tribunal. Te haremos preguntas sobre tu investigación y escucharemos tus respuestas. Tómate un momento para organizar tus ideas. Comencemos. "
+        ? "Bienvenido a tu defensa. Comencemos. "
         : "Bienvenido de nuevo. Continuemos tu defensa desde la pregunta pendiente. " : "";
       introduced = true; setQuestionPending(true);
       const alreadyIntroduces = /^(buenos días|buenas tardes|buenas noches|bienvenid)/i.test(question.text.trim());

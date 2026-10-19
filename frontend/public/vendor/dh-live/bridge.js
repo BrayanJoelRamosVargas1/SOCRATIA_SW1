@@ -11,7 +11,7 @@
       endTimer = setTimeout(stop, remainingMs);
     }
   }
-  const send = (type) => parent.postMessage({type}, origin);
+  const send = (type) => parent.postMessage({type, renderer:"player"}, origin);
   function setAudio(wav) {
     const bytes = new Uint8Array(wav);
     const pointer = Module._malloc(bytes.length);

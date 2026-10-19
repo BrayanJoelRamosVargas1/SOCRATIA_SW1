@@ -17,7 +17,7 @@ let CONFIG = {
 const model_size = 184;
 let frameTimes = [];
 const VIDEO_FPS = 25;
-const FRAME_INTERVAL = 1000 / VIDEO_FPS;
+const FRAME_INTERVAL = 1000 / 15; // Socratia: bounded inference; source indexing remains 25 FPS.
 const MODULO_N = 16;
 const THRESHOLD = 128;
 
