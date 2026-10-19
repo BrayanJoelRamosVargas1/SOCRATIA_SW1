@@ -23,10 +23,10 @@
     if (index < 0) return;
     if (event.data?.type === 'socratia.ready') {
       if(event.data.renderer==='player'){playerWaiters.get(index)?.();return;}
-      ready.add(index); status.textContent = `${ready.size}/3 jurados preparados · movimiento facial ${motionReady.size}/3`;
+      ready.add(index); if(generation===0) status.textContent = `${ready.size}/3 jurados preparados · vistas ligeras`;
     }
     if (event.data?.type === 'socratia.motion-ready') {
-      motionReady.add(index); status.textContent = `${ready.size}/3 jurados preparados · movimiento facial ${motionReady.size}/3`;
+      motionReady.add(index);
     }
     if (event.data?.type === 'socratia.error') status.textContent = `Error al preparar jurado ${index + 1}`;
   });
