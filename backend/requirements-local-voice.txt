@@ -1,0 +1,4 @@
+# Optional, only needed when LOCAL_TTS_ENABLED=true. Models are separate assets.
+kokoro-onnx==0.6.1
+soundfile==0.14.0
+scipy>=1.13,<2

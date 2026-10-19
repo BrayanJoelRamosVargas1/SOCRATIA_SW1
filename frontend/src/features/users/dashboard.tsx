@@ -1,99 +1,56 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
-import { ChartIcon, DocumentIcon, MicIcon } from "@/components/ui/icons";
-import { Logo } from "@/components/ui/logo";
+import { ArrowRight, Files, Mic, ChartNoAxesCombined } from "lucide-react";
+import { AppSidebar } from "@/components/layout/app-sidebar";
 import { getCurrentUser } from "@/features/auth/api";
-import { LogoutButton } from "@/features/auth/logout-button";
+import { listDocuments } from "@/features/documents/api";
+import { listSimulations } from "@/features/simulations/api";
+import { apiRequest, ApiError } from "@/lib/api";
 import type { User } from "@/types/user";
-
+type Counts = { documents: number | null; simulations: number | null; evaluations: number | null };
 export function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    getCurrentUser()
-      .then(setUser)
-      .catch(() => router.replace("/login"));
+  const [counts, setCounts] = useState<Counts>({documents: null, simulations: null, evaluations: null});
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => {
+    try {
+      const [profile, docs, sims, history] = await Promise.allSettled([
+        getCurrentUser(),
+        listDocuments(), listSimulations(),
+        apiRequest<{summary: {evaluated_simulations: number}}>("/performance-history?page=1&page_size=1"),
+      ]);
+      if(profile.status==="rejected")throw profile.reason;
+      setUser(profile.value);
+      setCounts({documents: docs.status === "fulfilled" ? docs.value.length : null, simulations: sims.status === "fulfilled" ? sims.value.length : null, evaluations: history.status === "fulfilled" ? history.value.summary.evaluated_simulations : null});
+      if ([docs, sims, history].some(result => result.status === "rejected")) setError("No pudimos cargar todas tus estadísticas. Puedes seguir accediendo a tus documentos y simulaciones.");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) router.replace("/login");
+      else setError("No pudimos conectar con tu cuenta. Intenta nuevamente.");
+    } finally { setLoading(false); }
   }, [router]);
-
-  if (!user) {
-    return (
-      <main className="loading-screen">
-        <div className="loading-orbit" />
-        <p>Preparando tu espacio…</p>
-      </main>
-    );
-  }
-
-  const firstName = user.full_name.split(" ")[0];
-  return (
-    <main className="dashboard-layout">
-      <aside className="dashboard-sidebar">
-        <Logo />
-        <nav aria-label="Navegación principal">
-          <a className="nav-item active" href="/dashboard">Resumen</a>
-          <Link className="nav-item" href="/documents">Documentos</Link>
-          <span className="nav-item disabled">Simulaciones <small>Próximo</small></span>
-          <span className="nav-item disabled">Reportes <small>Próximo</small></span>
-        </nav>
-        <div className="sidebar-user">
-          <span className="avatar">{firstName.slice(0, 1).toUpperCase()}</span>
-          <div><strong>{user.full_name}</strong><small>{user.email}</small></div>
-        </div>
-        <LogoutButton />
-      </aside>
-
-      <section className="dashboard-content">
-        <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">Tu espacio de preparación</p>
-            <h1>Hola, {firstName}.</h1>
-            <p>Ya tienes la base lista. Tu primera práctica empieza en el siguiente sprint.</p>
-          </div>
-          <span className="status-pill"><i /> Sistema operativo</span>
-        </header>
-
-        <section className="dashboard-hero">
-          <div>
-            <span className="phase-tag">Sprint 1 completado</span>
-            <h2>Tu sala de entrenamiento está lista.</h2>
-            <p>La cuenta, las sesiones seguras y tu perfil ya funcionan sobre la arquitectura real de Socratia.</p>
-          </div>
-          <div className="score-ring"><strong>01</strong><span>incremento</span></div>
-        </section>
-
-        <div className="metric-grid">
-          <article className="metric-card">
-            <DocumentIcon className="metric-icon" />
-            <span>Documentos</span><strong>0</strong><small>Carga disponible en Sprint 2</small>
-          </article>
-          <article className="metric-card">
-            <MicIcon className="metric-icon" />
-            <span>Simulaciones</span><strong>0</strong><small>Voz disponible en Sprint 3</small>
-          </article>
-          <article className="metric-card">
-            <ChartIcon className="metric-icon" />
-            <span>Reportes</span><strong>0</strong><small>Evaluación disponible en Sprint 4</small>
-          </article>
-        </div>
-
-        <section className="roadmap-card">
-          <div className="section-heading">
-            <div><p className="eyebrow">Ruta del producto</p><h2>Lo que viene ahora</h2></div>
-            <span>Arquitectura modular</span>
-          </div>
-          <ol className="roadmap">
-            <li className="done"><b>1</b><div><strong>Identidad y plataforma base</strong><span>Auth, users, roles, Docker y PostgreSQL</span></div></li>
-            <li><b>2</b><div><strong>Preparación inteligente</strong><span>Documentos, RAG y preguntas</span></div></li>
-            <li><b>3</b><div><strong>Simulación oral</strong><span>WebSocket, STT y TTS</span></div></li>
-            <li><b>4</b><div><strong>Evaluación multimodal</strong><span>MediaPipe, criterios y reportes</span></div></li>
-          </ol>
-        </section>
-      </section>
-    </main>
-  );
+  useEffect(() => {
+    // Initial remote data fetch shares the same loader as the retry action.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+  const metrics = [
+    {label: "Documentos", value: counts.documents, href: "/documents", icon: Files, detail: "Tu material de defensa"},
+    {label: "Simulaciones", value: counts.simulations, href: "/simulations", icon: Mic, detail: "Cada práctica cuenta"},
+    {label: "Evaluaciones", value: counts.evaluations, href: "/history", icon: ChartNoAxesCombined, detail: "Revisa tu progreso"},
+  ];
+  return <main className="dashboard-layout"><AppSidebar user={user} active="dashboard" /><section className="dashboard-content" aria-busy={loading}>
+    <header className="dashboard-header"><div><p className="eyebrow">TU PRÓXIMA DEFENSA EMPIEZA AQUÍ</p><h1>{user ? `Hola, ${user.full_name.split(" ")[0]}.` : "Tu espacio de preparación"}</h1><p>Un paso más cerca de defender tus ideas con confianza.</p></div><Link href="/simulations/new" className="button button-primary"><Mic size={17} /> Nueva práctica</Link></header>
+    {error && <div className="workspace-notice" role="alert">{error}<button type="button" disabled={loading} onClick={() => { setLoading(true); setError(""); void load(); }}>Reintentar</button></div>}
+    <section className="dashboard-hero"><div><span className="phase-tag">TU TRIBUNAL VIRTUAL</span><h2>Grandes ideas. Una defensa segura.</h2><p>Prepara tu documento, ensaya las preguntas del jurado y descubre qué puedes mejorar antes del gran día.</p><div className="hero-workspace-actions"><Link href={counts.documents ? "/simulations/new" : "/documents"} className="button button-primary">{counts.documents ? "Preparar una simulación" : "Subir mi documento"}<ArrowRight size={17} /></Link><Link href="/history" className="button button-ghost">Ver mis resultados</Link></div></div></section>
+    <div className="metric-grid">{metrics.map(({icon: Icon, ...metric}) => <Link href={metric.href} key={metric.label}><article className="metric-card"><Icon className="metric-icon" size={22} /><span>{metric.label}</span><strong>{metric.value ?? "—"}</strong><small>{metric.detail} →</small></article></Link>)}</div>
+    <section className="roadmap-card"><div className="section-heading"><div><p className="eyebrow">PASO A PASO</p><h2>Tu ruta hacia una mejor defensa</h2></div><span>Avanza a tu ritmo</span></div><ol className="roadmap">
+      <li className={counts.documents ? "done" : ""}><b>1</b><div><strong><Link href="/documents">Prepara tu documento →</Link></strong><span>Sube tu tesis en PDF o Word y prepara las preguntas de tu tema.</span></div></li>
+      <li className={counts.simulations ? "done" : ""}><b>2</b><div><strong><Link href="/simulations">Ensaya con tu jurado →</Link></strong><span>Configura tu simulación y practica tus respuestas.</span></div></li>
+      <li className={counts.evaluations ? "done" : ""}><b>3</b><div><strong><Link href="/history">Aprende de cada intento →</Link></strong><span>Consulta las evaluaciones y enfoca tu próxima práctica.</span></div></li>
+    </ol></section>
+  </section></main>;
 }

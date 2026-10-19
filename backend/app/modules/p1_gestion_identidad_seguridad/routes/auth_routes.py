@@ -1,7 +1,7 @@
 from ipaddress import ip_address as parse_ip_address
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -82,6 +82,8 @@ def register(
     db: Annotated[Session, Depends(get_db)],
 ) -> AuthResponse:
     settings = get_settings()
+    if not settings.public_registration_enabled:
+        raise HTTPException(403, "El registro está cerrado durante las pruebas. Solicita una cuenta al administrador.")
     issued = AuthService(db).register(payload, client_context(request))
     set_auth_cookies(response, issued, settings)
     return AuthResponse(user=UserResponse.from_user(issued.user))

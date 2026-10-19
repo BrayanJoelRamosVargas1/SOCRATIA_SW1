@@ -1,0 +1,8 @@
+# Install only inside the remote Colab runtime, alongside its existing torch.
+gdown>=6.4
+scikit-learn
+scipy
+imageio-ffmpeg>=0.6
+kaldi-native-fbank
+opencv-python-headless>=4.10
+tqdm

@@ -1,4 +1,5 @@
 "use client";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,7 +14,7 @@ import type { Document } from "@/types/document";
 import type { JuryProfile } from "@/types/simulation";
 import type { User } from "@/types/user";
 
-const JURY_ICON = { METHODOLOGICAL: "🔬", TECHNICAL: "💻", CRITICAL: "⚠" };
+const JURY_ICON = { METHODOLOGICAL: "01", TECHNICAL: "02", CRITICAL: "03" };
 
 export function NewSimulationPage() {
   const router = useRouter();
@@ -52,25 +53,28 @@ export function NewSimulationPage() {
 
   function getDifficultyBadge(strictness: number) {
     if (strictness <= 2) {
-      return { label: "🟢 Nivel: Fácil / Formativo", color: "#166534", bg: "#dcfce7" };
+      return { label: "Formativo", color: "#166534", bg: "#dcfce7" };
     }
     if (strictness === 3) {
-      return { label: "🟡 Nivel: Intermedio / Estándar", color: "#854d0e", bg: "#fef9c3" };
+      return { label: "Intermedio", color: "#854d0e", bg: "#fef9c3" };
     }
-    return { label: "🔴 Nivel: Difícil / Tribunal Doctoral", color: "#991b1b", bg: "#fee2e2" };
+    return { label: "Exigente", color: "#991b1b", bg: "#fee2e2" };
   }
 
-  if (!user) return <main className="loading-screen"><div className="loading-orbit" /><p>Preparando configuración…</p></main>;
   return (
     <main className="dashboard-layout">
       <AppSidebar user={user} active="simulations" />
       <section className="dashboard-content simulations-content">
-        <Link className="detail-back" href="/simulations">
-          ← Simulaciones
-        </Link>
+        {!user ? (
+          <LoadingSkeleton label="Preparando configuración…"/>
+        ) : (
+          <>
+            <Link className="detail-back" href="/simulations">
+              ← Simulaciones
+            </Link>
         <header className="dashboard-header">
           <div>
-            <p className="eyebrow">CU10 · Configuración de Simulación</p>
+            <p className="eyebrow">PREPARA TU PRÁCTICA</p>
             <h1>Nueva Simulación de Defensa</h1>
             <p>Selecciona tu tesis de grado, el tribunal evaluador y la rigurosidad socrática.</p>
           </div>
@@ -83,7 +87,8 @@ export function NewSimulationPage() {
               <option value="">Selecciona un documento procesado</option>
               {documents.map((item) => (
                 <option value={item.id} key={item.id}>
-                  📄 {item.original_name}
+
+                  {item.original_name}
                 </option>
               ))}
             </select>
@@ -105,6 +110,7 @@ export function NewSimulationPage() {
                     type="button"
                     key={jury.id}
                     className={`jury-option ${isSelected ? "selected" : ""}`}
+                    aria-pressed={isSelected}
                     onClick={() => setJuryId(jury.id)}
                     style={{ position: "relative" }}
                   >
@@ -126,7 +132,7 @@ export function NewSimulationPage() {
                     <strong>{jury.name}</strong>
                     <p>{jury.description}</p>
                     <small>
-                      Rigurosidad: {jury.strictness}/5 · Interrupción: {jury.interruption_level.toLowerCase()} · Enfoque: {jury.focus_type.toLowerCase()}
+                      Rigurosidad: {jury.strictness}/5 · Interrupción: {{LOW:"baja",MEDIUM:"media",HIGH:"alta"}[jury.interruption_level]} · Enfoque: {{METHODOLOGICAL:"metodológico",TECHNICAL:"técnico",CRITICAL:"crítico"}[jury.focus_type]}
                     </small>
                   </button>
                 );
@@ -158,6 +164,8 @@ export function NewSimulationPage() {
             {saving ? "Creando sala…" : "Continuar a Calibración de Hardware →"}
           </button>
         </section>
+        </>
+        )}
       </section>
     </main>
   );

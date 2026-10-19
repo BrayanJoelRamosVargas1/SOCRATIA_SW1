@@ -1,14 +1,19 @@
 "use client";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { BarChart3, Clock, FileText, ChevronLeft, ChevronRight, Activity } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { getCurrentUser } from "@/features/auth/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, ApiError } from "@/lib/api";
+import type { User } from "@/types/user";
 
 type SimulationStatus = "DRAFT" | "READY" | "ACTIVE" | "COMPLETED" | "ABORTED" | "ERROR";
 type EvaluationStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
@@ -63,34 +68,44 @@ const statusLabel = (status: string | null) => {
 };
 
 export function HistoryPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<PerformanceHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     let active = true;
-    apiRequest<PerformanceHistoryResponse>(`/performance-history?page=${page}&page_size=10`)
-      .then((res) => {
-        if (active) setData(res);
+    Promise.all([
+      getCurrentUser(),
+      apiRequest<PerformanceHistoryResponse>(`/performance-history?page=${page}&page_size=10`),
+    ])
+      .then(([currentUser, res]) => {
+        if (active) {
+          setUser(currentUser);
+          setData(res);
+        }
       })
       .catch((err) => {
         console.error("Error fetching history", err);
+        if (err instanceof ApiError && err.status === 401) {
+          router.replace("/login");
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [page]);
+  }, [page, router]);
 
-  if (loading && !data) {
-    return <div className="p-8 text-center">Cargando historial...</div>;
-  }
-
-  if (!data) {
-    return <div className="p-8 text-center text-red-500">Error al cargar historial</div>;
-  }
-
-  const { summary, items, total_pages } = data;
+  const summary = data?.summary || {
+    total_simulations: 0,
+    evaluated_simulations: 0,
+    latest_score: null,
+    best_score: null,
+  };
+  const items = data?.items || [];
+  const total_pages = data?.total_pages || 1;
   
   // Extract completed evaluations in chronological order for the chart
   const evaluatedItems = [...items]
@@ -98,10 +113,26 @@ export function HistoryPage() {
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Historial de Desempeño</h1>
-      </div>
+    <main className="dashboard-layout">
+      <AppSidebar user={user} active="history" />
+      <section className="dashboard-content history-content">
+        <header className="dashboard-header mb-6">
+          <div>
+            <p className="eyebrow">TU PROGRESO</p>
+            <h1 className="text-3xl font-bold tracking-tight">Historial de Desempeño</h1>
+            <p className="text-muted-foreground mt-1">
+              Consulta tus defensas previas, evolución de puntaje y actas oficiales de evaluación.
+            </p>
+          </div>
+        </header>
+
+        {loading && !data ? (
+          <LoadingSkeleton label="Cargando historial y reportes…"/>
+        ) : !data ? (
+          <div className="p-8 text-center text-red-500">Error al cargar historial</div>
+        ) : (
+
+        <div className="space-y-8">
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Card>
@@ -270,6 +301,9 @@ export function HistoryPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+        </div>
+        )}
+      </section>
+    </main>
   );
 }

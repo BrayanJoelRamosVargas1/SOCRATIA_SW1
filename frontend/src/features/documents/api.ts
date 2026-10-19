@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api";
+import { apiRequest, apiUpload } from "@/lib/api";
 import type {
   Document,
   DocumentProcessingResult,
@@ -19,10 +19,10 @@ export function getDocumentStatus(documentId: string): Promise<ProcessingStatus>
   return apiRequest<ProcessingStatus>(`/documents/${documentId}/status`);
 }
 
-export function uploadDocument(file: File): Promise<Document> {
+export function uploadDocument(file: File,onProgress?:(percent:number)=>void): Promise<Document> {
   const form = new FormData();
   form.append("file", file);
-  return apiRequest<Document>("/documents", { method: "POST", body: form });
+  return apiUpload<Document>("/documents",form,onProgress);
 }
 
 export function processDocument(documentId: string): Promise<DocumentProcessingResult> {

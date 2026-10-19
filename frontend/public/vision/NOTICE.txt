@@ -1,0 +1,4 @@
+MediaPipe Tasks Vision 1.0.1, vendored from the installed @mediapipe/tasks-vision npm package.
+Copyright Google LLC. Apache License 2.0; see LICENSE-MediaPipe.txt.
+Source: https://github.com/google-ai-edge/mediapipe
+The camera worker adapter is part of Socratia.

@@ -1,0 +1,17 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Validación del detector independiente</title><body style="font:18px system-ui;padding:28px"><h1>Detección fuera del hilo de la interfaz</h1><p>Prueba puntual con imágenes sintéticas. No activa cámara ni micrófono.</p><button id="start">Preparar detector</button><div id="cases"></div><pre id="output" aria-live="polite"></pre><script>
+const output=document.querySelector('#output'),start=document.querySelector('#start');
+let worker;
+start.onclick=()=>{start.disabled=true;output.textContent='Preparando modelos locales…';worker=new Worker('/vision/camera-worker.js');
+worker.onmessage=async({data})=>{
+ if(data.type==='ready'){
+ output.textContent='Detector listo: '+JSON.stringify(data)+'\n';
+ for(const [id,name] of ['front','eyes_left','empty'].entries()){
+ const button=document.createElement('button');button.textContent=name;document.querySelector('#cases').append(button);
+ button.onclick=async()=>{document.querySelectorAll('#cases button').forEach(b=>b.disabled=true);let bitmap;if(name==='empty'){const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;const context=canvas.getContext('2d');context.fillStyle='#183038';context.fillRect(0,0,640,480);bitmap=await createImageBitmap(canvas);}else bitmap=await createImageBitmap(await(await fetch('/fixtures/'+name+'.png')).blob());worker.postMessage({type:'frame',id,name,bitmap,timestamp:performance.now()},[bitmap]);};
+ }
+ }else if(data.type==='result'){
+ output.textContent+=JSON.stringify({case:data.id,faces:data.face?.faceLandmarks.length,poses:data.pose?.landmarks.length,elapsed:Math.round(data.elapsed)})+'\n';document.querySelectorAll('#cases button').forEach(b=>b.disabled=false);
+ }else output.textContent+=JSON.stringify(data)+'\n';
+};worker.onerror=event=>{output.textContent+='Worker error: '+event.message;};worker.postMessage({type:'init'});};
+window.addEventListener('pagehide',()=>worker?.terminate());
+</script></body></html>

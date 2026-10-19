@@ -232,3 +232,20 @@ def test_delete_document_cascades_presentation(client: TestClient, db_session: S
     assert client.delete(f"/api/v1/documents/{document_id}").status_code == 204
     assert db_session.scalar(select(func.count()).select_from(PresentationMaterial)) == 0
     assert db_session.scalar(select(func.count()).select_from(PresentationSlide)) == 0
+
+def test_export_downloads_real_powerpoint_and_rejects_other_owner(client: TestClient) -> None:
+    from pptx import Presentation
+
+    document_id = processed(client, "export-owner@example.com")
+    generated = client.post(f"/api/v1/documents/{document_id}/presentation/generate", json={"duration_minutes": 15})
+    assert generated.status_code == 200
+    response = client.get(f"/api/v1/documents/{document_id}/presentation/export")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store"
+    assert "presentationml.presentation" in response.headers["content-type"]
+    deck = Presentation(BytesIO(response.content))
+    assert len(deck.slides) == len(generated.json()["slides"])
+    assert deck.slides[0].notes_slide.notes_text_frame.text
+    client.post("/api/v1/auth/logout")
+    register(client, "export-other@example.com")
+    assert client.get(f"/api/v1/documents/{document_id}/presentation/export").status_code == 404

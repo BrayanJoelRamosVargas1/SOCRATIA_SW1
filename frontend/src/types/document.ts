@@ -1,4 +1,7 @@
-export type DocumentStatus = "UPLOADED" | "PROCESSING" | "PROCESSED" | "ERROR";
+export type DocumentStatus = "UPLOADED" | "PROCESSING" | "QUEUED" | "EXTRACTING" | "CHUNKING" | "EMBEDDING" | "RETRYING" | "SWITCHING_PROVIDER" | "INDEXING" | "PROCESSED" | "DEGRADED" | "ERROR";
+export const documentStatusLabels: Record<DocumentStatus,string> = {
+  UPLOADED:"Cargado", PROCESSING:"Procesando", QUEUED:"En cola", EXTRACTING:"Leyendo documento", CHUNKING:"Preparando contenido", EMBEDDING:"Analizando contenido", RETRYING:"Reintentando", SWITCHING_PROVIDER:"Cambiando servicio", INDEXING:"Guardando índice", PROCESSED:"Listo para practicar", DEGRADED:"Requiere revisión", ERROR:"Error de procesamiento",
+};
 
 export type Document = {
   id: string;

@@ -12,6 +12,9 @@ from app.integrations.vector_db.router import VectorStoreRouter
 def get_vector_store_provider(db: Session = Depends(get_db)) -> VectorStoreProvider:
     settings = get_settings()
 
+    if settings.vector_primary_provider == "pgvector":
+        return PgVectorStoreProvider(db=db)
+
     # We use get_secret_value() if it's a SecretStr, else the raw string
     api_key = (
         settings.pinecone_api_key.get_secret_value()

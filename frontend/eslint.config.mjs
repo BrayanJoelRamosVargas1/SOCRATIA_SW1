@@ -5,6 +5,7 @@ import nextTypescript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  // Third-party licensed runtimes; application adapters are linted normally.
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "src/vendor/**", "public/vision/**", "public/vendor/dh-live/js/**"]),
 ]);
 

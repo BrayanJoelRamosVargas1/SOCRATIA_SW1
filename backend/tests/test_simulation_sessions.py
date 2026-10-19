@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -216,3 +217,32 @@ def test_wrong_question_and_serialized_competing_answer_are_rejected(
         == 1
     )
     assert snapshot["payload"]["turn_state"] == SimulationTurnState.WAITING_STUDENT.value
+
+
+@pytest.mark.parametrize("elapsed_minutes,expected_status", [(1, "ACTIVE"), (16, "COMPLETED")])
+def test_answer_respects_elapsed_time_with_non_utc_database_timezone(
+    client: TestClient, db_session: Session, elapsed_minutes: int, expected_status: str
+) -> None:
+    from app.modules.p1_gestion_identidad_seguridad.models.user import User
+    from app.modules.p3_gestion_simulacion.models import Simulation
+    from app.modules.p3_gestion_simulacion.services.session_service import SessionService
+
+    simulation_id = ready_simulation(client, f"timezone-{elapsed_minutes}@example.com")
+    initial = start(client, simulation_id)
+    simulation = db_session.get(Simulation, simulation_id)
+    simulation.started_at = (datetime.now(UTC) - timedelta(minutes=elapsed_minutes)).astimezone(
+        timezone(timedelta(hours=-4))
+    )
+    db_session.commit()
+    db_session.expire_all()
+    owner = db_session.get(User, simulation.user_id)
+    _, snapshot = SessionService(db_session).accept_answer(
+        owner,
+        simulation_id,
+        message_id=str(uuid4()),
+        question_id=initial["current_question"]["id"],
+        content="La metodología se contrasta con la evidencia y sus limitaciones.",
+    )
+    assert snapshot.status == expected_status
+    if expected_status == "ACTIVE":
+        assert snapshot.current_question.position == 2

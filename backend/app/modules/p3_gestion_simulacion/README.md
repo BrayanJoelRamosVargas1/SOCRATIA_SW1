@@ -26,6 +26,7 @@ por voz durante una práctica.
 - CU13: perfiles metodológico, técnico y crítico con bootstrap idempotente.
 - CU14: comprobación local de cámara, nivel de micrófono y detección de persona.
 - Máquina de estados explícita y selección congelada de preguntas BANK/FOLLOW_UP.
-- El backend sólo recibe booleanos de disponibilidad; no almacena frames ni audio.
+- Calibración recibe booleanos de disponibilidad; no almacena frames ni audio.
+- La revisión opcional de vestimenta recibe una captura efímera, la remite al proveedor visual y devuelve las prendas observadas. Requiere autenticación y propiedad de la simulación; no conserva la imagen. Presencia, mirada y postura se analizan localmente. Ver `docs/simulation-visual-feedback.md`.
 
 P3-B añadirá inicio, motor de sesión, turnos y WebSocket sin modificar esta frontera.

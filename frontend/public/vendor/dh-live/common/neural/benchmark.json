@@ -1,0 +1,78 @@
+{
+  "files": [
+    {
+      "file": "kokoro-v1.0.onnx",
+      "sha256": "6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb"
+    },
+    {
+      "file": "voices-v1.0.bin",
+      "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
+    },
+    {
+      "file": "es_ES-sharvard-medium.onnx",
+      "sha256": "40febfb1679c69a4505ff311dc136e121e3419a13a290ef264fdf43ddedd0fb1"
+    },
+    {
+      "file": "es_ES-sharvard-medium.onnx.json",
+      "sha256": "7438c9b699c72b0c3388dae1b68d3f364dc66a2150fe554a1c11f03372957b2c"
+    }
+  ],
+  "results": [
+    {
+      "engine": "kokoro",
+      "voice": "em_alex",
+      "run": 0,
+      "seconds": 7.0,
+      "audio_seconds": 8.064
+    },
+    {
+      "engine": "kokoro",
+      "voice": "em_alex",
+      "run": 1,
+      "seconds": 3.799,
+      "audio_seconds": 8.064
+    },
+    {
+      "engine": "kokoro",
+      "voice": "ef_dora",
+      "run": 0,
+      "seconds": 3.832,
+      "audio_seconds": 7.936
+    },
+    {
+      "engine": "kokoro",
+      "voice": "ef_dora",
+      "run": 1,
+      "seconds": 4.415,
+      "audio_seconds": 7.936
+    },
+    {
+      "engine": "kokoro",
+      "voice": "em_santa",
+      "run": 0,
+      "seconds": 3.885,
+      "audio_seconds": 8.021
+    },
+    {
+      "engine": "kokoro",
+      "voice": "em_santa",
+      "run": 1,
+      "seconds": 4.403,
+      "audio_seconds": 8.021
+    },
+    {
+      "engine": "piper",
+      "voice": "sharvard",
+      "run": 0,
+      "seconds": 2.277,
+      "audio_seconds": 7.303
+    },
+    {
+      "engine": "piper",
+      "voice": "sharvard",
+      "run": 1,
+      "seconds": 0.301,
+      "audio_seconds": 7.326
+    }
+  ]
+}

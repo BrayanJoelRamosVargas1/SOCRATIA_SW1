@@ -1,0 +1,201 @@
+{
+  "date": "2026-10-18",
+  "policy": "Delete only branches fully included in main after publishing. Preserve newly advanced or unmerged branches. These commits remain reachable from main. Restore with git branch <name> <commit>.",
+  "branches": [
+    {
+      "ref": "refs/heads/feature/auth-ux-security",
+      "commit": "40612f7450690ea4044251befe377e8c6e0d4800",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/cu09-ai-settings",
+      "commit": "a956ed86258d2eb1d1f3552d0891289865e9b310",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/document-processing",
+      "commit": "ebce04f20eaa1870f87ffb1bf9e31b621541096c",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/documents",
+      "commit": "2af35fad031013137572cbcd068e5c869f0ae054",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/evaluation-p4",
+      "commit": "e6419bdafb9af26baaf17aa41c8fdff4a33a0cd1",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/login-protection",
+      "commit": "6471ac2a5859429c0ee1860b611b54768c84a0a0",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/password-recovery",
+      "commit": "d323cd7032e22a67eb40059ba88cd27820d5949d",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/presentation-material",
+      "commit": "a569072ddda05f113ebdccc770e0ef6b4bafbb60",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/question-bank-rag",
+      "commit": "261f229bbffacced6d8e06e94ed2522a2ac95a81",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/simulation-configuration",
+      "commit": "488f04815a86422ac6bb99ee7fbd17f89e0bdaac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/simulation-session-engine",
+      "commit": "7218267e0228ba64c04c906abc4a178697528157",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/vector-store-resilience",
+      "commit": "6cc0213cefd9439b5f405e73c730023ef7b036ce",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/feature/voice-pipeline",
+      "commit": "f4ca6a286b6a2e45610be7c5b5efb6ab30293692",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/hotfix/embedding-resilience-v2",
+      "commit": "733ac37f35756c87f76773b23637b99970e41db4",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/main",
+      "commit": "5eb7176d0672f5759d6ba85fbe549582577a6fa7",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/refactor/modular-use-case-packages",
+      "commit": "65293ee03fd177051b26c16495f154c5295188e5",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/team/acosta-osorio-berthol",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/team/acosta-osorio-lin-fernanda",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/team/fuentes-daniela-aleajandra",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/team/luna-perez-jose-david",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/team/perez-guizada-edwin-josue",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/heads/team/ramos-vargas-brayan-joel",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/auth-ux-security",
+      "commit": "40612f7450690ea4044251befe377e8c6e0d4800",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/document-processing",
+      "commit": "ebce04f20eaa1870f87ffb1bf9e31b621541096c",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/documents",
+      "commit": "2af35fad031013137572cbcd068e5c869f0ae054",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/login-protection",
+      "commit": "6471ac2a5859429c0ee1860b611b54768c84a0a0",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/password-recovery",
+      "commit": "d323cd7032e22a67eb40059ba88cd27820d5949d",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/presentation-material",
+      "commit": "a569072ddda05f113ebdccc770e0ef6b4bafbb60",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/question-bank-rag",
+      "commit": "261f229bbffacced6d8e06e94ed2522a2ac95a81",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/simulation-configuration",
+      "commit": "488f04815a86422ac6bb99ee7fbd17f89e0bdaac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/feature/voice-pipeline",
+      "commit": "d1ca0cab9b5c074ca6b4de816fd3892c3a957f31",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/main",
+      "commit": "b97b08cbda8c35f3f03395310404915c76fbbb38",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/refactor/modular-use-case-packages",
+      "commit": "65293ee03fd177051b26c16495f154c5295188e5",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/team/acosta-osorio-berthol",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/team/acosta-osorio-lin-fernanda",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/team/fuentes-daniela-aleajandra",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/team/luna-perez-jose-david",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/team/perez-guizada-edwin-josue",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    },
+    {
+      "ref": "refs/remotes/origin/team/ramos-vargas-brayan-joel",
+      "commit": "248ac7c00d21dfb49daa790484f75561d79af1ac",
+      "included_in_release_history": true
+    }
+  ]
+}

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 
@@ -168,26 +167,6 @@ export default function AdminAISettingsPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      {/* Navigation Links */}
-      <nav className="flex flex-wrap gap-4 text-sm font-medium mb-6 pb-4 border-b">
-        <Link href="/admin/dashboard" className="text-gray-600 hover:text-blue-600">
-          Supervisión
-        </Link>
-        <Link href="/admin/users" className="text-gray-600 hover:text-blue-600">
-          Usuarios
-        </Link>
-        <Link href="/admin/jury-profiles" className="text-gray-600 hover:text-blue-600">
-          Perfiles de Jurado
-        </Link>
-        <Link href="/admin/plans" className="text-gray-600 hover:text-blue-600">
-          Planes SaaS
-        </Link>
-        <Link href="/admin/subscriptions" className="text-gray-600 hover:text-blue-600">
-          Suscripciones
-        </Link>
-        <span className="text-blue-600 font-bold">Parámetros de IA</span>
-      </nav>
-
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
         <div>

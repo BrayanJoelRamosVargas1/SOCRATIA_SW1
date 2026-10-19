@@ -13,6 +13,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    public_registration_enabled: bool = True
+    evaluation_context_max_chars: int = Field(default=12000, ge=3000, le=60000)
+    evaluation_max_retries: int = Field(default=1, ge=1, le=3)
+    voice_tts_enabled: bool = True
+    local_tts_enabled: bool = False
+    local_tts_model_dir: str = "/data/voice-models"
+
     app_name: str = "Socratia API"
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
@@ -83,6 +90,7 @@ class Settings(BaseSettings):
     question_circuit_breaker_threshold: int = Field(default=3, ge=1, le=20)
     question_circuit_breaker_recovery_seconds: int = Field(default=60, ge=5, le=3600)
     gemini_question_model: str = "gemini-1.5-flash"
+    vision_model: str = "gemini-3.1-flash-lite"
     groq_question_model: str = "openai/gpt-oss-20b"
     groq_question_max_context_chars: int = Field(default=10000, ge=3000, le=60000)
 

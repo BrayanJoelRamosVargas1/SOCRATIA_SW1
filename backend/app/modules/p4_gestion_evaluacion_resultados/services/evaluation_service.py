@@ -1,5 +1,8 @@
 from datetime import datetime
 
+from app.core.config import get_settings
+from .context_selection import select_evaluation_context
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -78,7 +81,7 @@ class EvaluationService:
                 .order_by(DocumentChunk.chunk_index)
             )
             chunks = self.db.scalars(chunks_stmt).all()
-            context_text = "\n\n".join([c.content for c in chunks])
+            chunk_texts = [c.content for c in chunks]
 
             # Process turns
             stmt_turns = (
@@ -115,10 +118,10 @@ class EvaluationService:
                             expected_points = sim_question.question.expected_answer_points
 
                     # Evaluate turn
+                    question_text = sim_question.prompt_text or (sim_question.question.question if sim_question.question else "N/A")
+                    context_text = select_evaluation_context(chunk_texts, question_text, expected_points, get_settings().evaluation_context_max_chars)
                     result = await self.evaluator.evaluate_turn(
-                        question=sim_question.prompt_text or sim_question.question.question
-                        if sim_question.question
-                        else "N/A",
+                        question=question_text,
                         student_response=turn.content,
                         context_text=context_text,
                         expected_points=expected_points,

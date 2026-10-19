@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.integrations.tts.dependencies import get_tts_provider
 from app.core.database import get_db
 from app.core.exceptions import DomainError
 from app.core.security import decode_access_token
@@ -103,6 +104,8 @@ async def simulation_session(
         while True:
             # We can receive json or bytes
             message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                raise WebSocketDisconnect(message.get("code", 1000))
             if "bytes" in message:
                 if not current_utterance_id:
                     await websocket.send_json(
@@ -139,6 +142,9 @@ async def simulation_session(
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(msg_data, dict):
+                continue
+
             if msg_data.get("type") in ("heartbeat", "ping"):
                 await websocket.send_json(
                     {
@@ -146,6 +152,14 @@ async def simulation_session(
                         "timestamp": datetime.now(UTC).isoformat(),
                     }
                 )
+                continue
+
+            if msg_data.get("type") == "voice.utterance.cancel":
+                if msg_data.get("message_id") == current_utterance_id:
+                    current_utterance_id = None
+                    current_mime_type = None
+                    audio_buffer.clear()
+                    await websocket.send_json({"type": "voice.cancelled"})
                 continue
 
             # Guard 12/12
@@ -275,8 +289,8 @@ async def simulation_session(
                                         "type": "tts.started",
                                         "payload": {
                                             "turn_id": snapshot.last_sequence,
-                                            "mime_type": "audio/mpeg",
-                                            "provider": "elevenlabs",
+                                            "mime_type": get_tts_provider().mime_type,
+                                            "provider": get_tts_provider().name,
                                         },
                                     }
                                 )

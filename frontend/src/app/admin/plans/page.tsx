@@ -154,7 +154,7 @@ export default function AdminPlansPage() {
       {loading ? (
         <p className="text-gray-500">Cargando planes...</p>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden border">
+        <div className="bg-white rounded-lg shadow overflow-x-auto border">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>

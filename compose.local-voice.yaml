@@ -1,0 +1,16 @@
+# Optional local CPU voice overlay. No additional public service or API key.
+services:
+  backend:
+    image: socratia-backend-local-voice
+    build:
+      context: .
+      dockerfile: infrastructure/staging/Dockerfile.local-voice
+      args:
+        BASE_IMAGE: socratia-backend
+    environment:
+      VOICE_TTS_ENABLED: "true"
+      LOCAL_TTS_ENABLED: "true"
+      LOCAL_TTS_MODEL_DIR: /data/voice-models
+    volumes:
+      - ./backend/migrations:/app/migrations:ro
+      - ${SOCRATIA_VOICE_MODELS:?Set the directory containing downloaded voice models}:/data/voice-models:ro

@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 class TTSRequest:
     text: str
     voice_id: str | None = None
+    speaker_index: int = 0
 
 
 class TTSProviderError(Exception):
@@ -17,6 +18,7 @@ class TTSProviderError(Exception):
 
 
 class TTSProvider(ABC):
+    mime_type = "audio/mpeg"
     @property
     @abstractmethod
     def name(self) -> str: ...

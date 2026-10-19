@@ -1,6 +1,7 @@
 import logging
 from collections.abc import AsyncIterator
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.integrations.llm.dependencies import get_jury_routing_router
@@ -31,9 +32,20 @@ class VoiceService:
         Process the voice utterance: STT -> LLM Router -> TTS.
         Returns: (transcribed_text, fallback_used, jury_action, tts_stream, snapshot)
         """
+        # Authorize before consulting transcripts or calling external providers.
+        snapshot = self.session_service.get_snapshot(self.user, self.simulation_id)
+        from app.modules.p3_gestion_simulacion.models.voice_utterance import (
+            VoiceUtterance,
+            VoiceUtteranceStatus,
+        )
+        existing = self.db.scalar(select(VoiceUtterance).where(
+            VoiceUtterance.simulation_id == self.simulation_id,
+            VoiceUtterance.client_utterance_id == message_id,
+            VoiceUtterance.status == VoiceUtteranceStatus.COMPLETED,
+        ))
+        if existing is not None:
+            return existing.raw_transcript or "", existing.stt_fallback_used, None, None, snapshot
         stt = get_stt_router()
-        llm = get_jury_routing_router(db=self.db)
-        tts = get_tts_provider()
 
         # 1. STT
         logger.info("VOICE_PROCESSING: Starting STT for message %s", message_id)
@@ -46,11 +58,6 @@ class VoiceService:
 
         logger.info("VOICE_PROCESSING: STT complete (%s). Text: %s", stt_latency, transcribed_text)
 
-        from app.modules.p3_gestion_simulacion.models.voice_utterance import (
-            VoiceUtterance,
-            VoiceUtteranceStatus,
-        )
-
         utterance_record = VoiceUtterance(
             simulation_id=self.simulation_id,
             client_utterance_id=message_id,
@@ -61,8 +68,6 @@ class VoiceService:
             stt_latency_ms=stt_latency,
             stt_provider=stt.primary.name if not fallback_used else "gemini",
         )
-        self.db.add(utterance_record)
-
         try:
             snapshot = self.session_service.get_snapshot(self.user, self.simulation_id)
         except Exception:
@@ -73,6 +78,8 @@ class VoiceService:
             return transcribed_text, fallback_used, None, None, snapshot
 
         # 2. Persist the answer
+        # Commit the transcript with its accepted answer, never beforehand.
+        self.db.add(utterance_record)
         accepted, snapshot_after = self.session_service.accept_answer(
             self.user,
             self.simulation_id,
@@ -82,6 +89,8 @@ class VoiceService:
             input_mode=SimulationTurnInputMode.VOICE,
             route_automatically=False,
         )
+        if accepted.duplicate or snapshot_after.status == "COMPLETED":
+            return transcribed_text, fallback_used, None, None, snapshot_after
 
         # 3. Jury LLM Router
         logger.info("VOICE_PROCESSING: Starting LiveJuryRouter")
@@ -110,6 +119,7 @@ class VoiceService:
         )
 
         try:
+            llm = get_jury_routing_router(db=self.db)
             llm_result = await llm.route(llm_request)
             decision = llm_result.decision
             action = decision.action.value
@@ -148,8 +158,9 @@ class VoiceService:
         # 5. TTS for the jury question
         tts_stream = None
         if turn and turn.content:
-            tts_request = TTSRequest(text=turn.content)
+            tts_request = TTSRequest(text=turn.content, speaker_index=((snapshot.current_question.position if snapshot.current_question else 1) - 1) % 3)
             try:
+                tts = get_tts_provider()
                 tts_stream = tts.synthesize(tts_request)
             except Exception as e:
                 logger.error("TTS generation failed: %s", str(e))

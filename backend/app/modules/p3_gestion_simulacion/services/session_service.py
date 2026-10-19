@@ -176,7 +176,7 @@ class SessionService:
         # Check time limit
         time_exceeded = (
             simulation.started_at
-            and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds()
+            and (now - _utc(simulation.started_at)).total_seconds()
             >= simulation.planned_duration_minutes * 60
         )
 
@@ -277,7 +277,7 @@ class SessionService:
         now = datetime.now(UTC)
         time_exceeded = (
             simulation.started_at
-            and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds()
+            and (now - _utc(simulation.started_at)).total_seconds()
             >= simulation.planned_duration_minutes * 60
         )
         if time_exceeded:
@@ -332,7 +332,7 @@ class SessionService:
         now = datetime.now(UTC)
         time_exceeded = (
             simulation.started_at
-            and (now - simulation.started_at.replace(tzinfo=UTC)).total_seconds()
+            and (now - _utc(simulation.started_at)).total_seconds()
             >= simulation.planned_duration_minutes * 60
         )
 

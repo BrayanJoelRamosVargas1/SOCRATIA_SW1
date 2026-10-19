@@ -1,0 +1,6 @@
+ARG BASE_IMAGE=socratia-backend
+FROM ${BASE_IMAGE}
+COPY backend/requirements-local-voice.txt /tmp/requirements-local-voice.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-local-voice.txt
+COPY backend/migrations /app/migrations
+COPY backend/app /app/app

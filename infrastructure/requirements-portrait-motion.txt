@@ -1,0 +1,12 @@
+# Offline asset creation only. Do not add these to the AWS app image.
+numpy>=2.0
+torch>=2.5
+opencv-python>=4.10
+onnx>=1.16
+onnxruntime>=1.20
+omegaconf>=2.3
+torchgeometry==0.1.2
+ffmpeg-python==0.2.0
+imageio-ffmpeg>=0.6
+pillow>=11
+tqdm>=4.66

@@ -38,7 +38,7 @@ class Evaluator:
 
             self.model = model or settings.groq_question_model
             api_key = settings.groq_api_key.get_secret_value() if settings.groq_api_key else ""
-            raw_client = AsyncGroq(api_key=api_key)
+            raw_client = AsyncGroq(api_key=api_key, max_retries=0, timeout=45)
             self.client = instructor.from_groq(raw_client, mode=instructor.Mode.TOOLS)
             self._init_error = None
         else:
@@ -92,6 +92,7 @@ class Evaluator:
                     {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
+                max_retries=settings.evaluation_max_retries,
                 max_tokens=2048,
                 temperature=self.temperature,
             )
@@ -102,6 +103,7 @@ class Evaluator:
                 return self.client.chat.completions.create(
                     model=self.model,
                     response_model=TurnEvaluationResult,
+                    max_retries=settings.evaluation_max_retries,
                     messages=[
                         {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
                         {"role": "user", "content": prompt},

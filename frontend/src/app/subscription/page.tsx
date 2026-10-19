@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { getCurrentUser } from "@/features/auth/api";
 import { apiRequest } from "@/lib/api";
+import type { User } from "@/types/user";
 
 interface Plan {
   id: string;
@@ -32,6 +36,8 @@ interface SubscriptionData {
 }
 
 export default function StudentSubscriptionPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,28 +50,57 @@ export default function StudentSubscriptionPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const loadData = async () => {
+  const refreshData = async () => {
     try {
-      setLoading(true);
-      const [plansRes, subRes] = await Promise.all([
+      setActionLoading(true);
+      const [userData, plansRes, subRes] = await Promise.all([
+        getCurrentUser(),
         apiRequest<Plan[]>("/plans"),
         apiRequest<SubscriptionData>("/subscription"),
       ]);
+      setUser(userData);
       setPlans(plansRes);
       setSubData(subRes);
       setError(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al cargar datos de suscripción";
+      const msg = err instanceof Error ? err.message : "Error al actualizar suscripción";
       setError(msg);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-  }, []);
+    let active = true;
+    Promise.all([
+      getCurrentUser(),
+      apiRequest<Plan[]>("/plans"),
+      apiRequest<SubscriptionData>("/subscription"),
+    ])
+      .then(([userData, plansRes, subRes]) => {
+        if (!active) return;
+        setUser(userData);
+        setPlans(plansRes);
+        setSubData(subRes);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        const msg = err instanceof Error ? err.message : "Error al cargar datos de suscripción";
+        if (msg.includes("401") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("no autenticado")) {
+          router.replace("/login");
+          return;
+        }
+        setError(msg);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const handleSubscribe = async () => {
     if (!selectedPlanToSubscribe) return;
@@ -76,7 +111,7 @@ export default function StudentSubscriptionPage() {
         body: JSON.stringify({ plan_id: selectedPlanToSubscribe.id }),
       });
       setSelectedPlanToSubscribe(null);
-      await loadData();
+      await refreshData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al confirmar suscripción";
       alert(msg);
@@ -94,7 +129,7 @@ export default function StudentSubscriptionPage() {
         body: JSON.stringify({ plan_id: selectedPlanToChange.id }),
       });
       setSelectedPlanToChange(null);
-      await loadData();
+      await refreshData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al cambiar de plan";
       alert(msg);
@@ -110,7 +145,7 @@ export default function StudentSubscriptionPage() {
         method: "POST",
       });
       setShowCancelConfirm(false);
-      await loadData();
+      await refreshData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al cancelar suscripción";
       alert(msg);
@@ -122,13 +157,16 @@ export default function StudentSubscriptionPage() {
   const currentPlanId = subData?.subscription?.status === "ACTIVE" ? subData.subscription.plan_id : null;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Mi Suscripción</h1>
-        <p className="text-gray-600 mt-1">
-          Gestiona el plan académico para tus defensas y simulaciones.
-        </p>
-      </div>
+    <main className="dashboard-layout">
+      <AppSidebar user={user} active="subscription" />
+      <section className="dashboard-content subscription-content">
+        <div className="mb-8">
+          <p className="eyebrow">CU03 · Planes Académicos</p>
+          <h1 className="text-3xl font-bold">Mi Suscripción</h1>
+          <p className="text-gray-600 mt-1">
+            Gestiona el plan académico para tus defensas y simulaciones.
+          </p>
+        </div>
 
       {/* Banner de Política de Suscripción Única */}
       {subData?.subscription && subData.subscription.status === "ACTIVE" && (
@@ -469,6 +507,7 @@ export default function StudentSubscriptionPage() {
           </div>
         </div>
       )}
-    </div>
+      </section>
+    </main>
   );
 }

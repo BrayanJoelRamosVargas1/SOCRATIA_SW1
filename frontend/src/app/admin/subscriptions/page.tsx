@@ -10,6 +10,8 @@ interface Plan {
   is_active: boolean;
 }
 
+interface UserOption { id: string; full_name: string; email: string; }
+
 interface Subscription {
   id: string;
   user_id: string;
@@ -34,6 +36,23 @@ export default function AdminSubscriptionsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createUserId, setCreateUserId] = useState("");
   const [createPlanId, setCreatePlanId] = useState("");
+  const [userSearch,setUserSearch] = useState("");
+  const [userOptions,setUserOptions] = useState<UserOption[]>([]);
+  const [searchingUsers,setSearchingUsers] = useState(false);
+  const [userSearchError,setUserSearchError] = useState("");
+  useEffect(() => {
+    if (!showCreateModal) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSearchingUsers(true); setUserSearchError("");
+      try {
+        const response = await apiRequest<{items:UserOption[]}>(`/admin/users?size=20&is_active=true&search=${encodeURIComponent(userSearch)}`);
+        if (active) setUserOptions(response.items);
+      } catch {if (active) {setUserOptions([]); setUserSearchError("No pudimos consultar usuarios. Vuelve a buscar.");}}
+      finally {if (active) setSearchingUsers(false);}
+    },250);
+    return () => {active=false; clearTimeout(timer);};
+  },[showCreateModal,userSearch]);
 
   const [showChangeModal, setShowChangeModal] = useState(false);
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
@@ -169,7 +188,7 @@ export default function AdminSubscriptionsPage() {
       {loading ? (
         <p className="text-gray-500">Cargando suscripciones...</p>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden border">
+        <div className="bg-white rounded-lg shadow overflow-x-auto border">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -258,15 +277,15 @@ export default function AdminSubscriptionsPage() {
             <h2 className="text-xl font-bold mb-4">Asignar Suscripción a Usuario</h2>
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">ID del Usuario</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="UUID del usuario"
-                  value={createUserId}
-                  onChange={(e) => setCreateUserId(e.target.value)}
-                  className="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-mono"
-                />
+                <label htmlFor="subscription-user-search" className="block text-sm font-medium text-gray-700">Buscar usuario</label>
+                <input id="subscription-user-search" type="search" placeholder="Nombre o correo electrónico" value={userSearch} onChange={event => {setUserSearch(event.target.value); setCreateUserId("");}} className="mt-1 block w-full border rounded-md px-3 py-2 text-sm" />
+                <label htmlFor="subscription-user" className="block text-sm font-medium text-gray-700 mt-3">Usuario</label>
+                <select id="subscription-user" required value={createUserId} disabled={searchingUsers} onChange={event => setCreateUserId(event.target.value)} className="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+                  <option value="">{searchingUsers ? "Buscando…" : "Selecciona un usuario"}</option>
+                  {userOptions.map(user => <option key={user.id} value={user.id}>{user.full_name} · {user.email}</option>)}
+                </select>
+                {userSearchError && <p role="alert" className="form-error">{userSearchError}</p>}
+                {!searchingUsers && !userSearchError && userOptions.length === 0 && <p className="text-sm text-gray-500 mt-2">No hay usuarios activos para esta búsqueda.</p>}
               </div>
 
               <div>

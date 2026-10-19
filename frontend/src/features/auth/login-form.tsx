@@ -19,9 +19,14 @@ export function LoginForm() {
     setLoading(true);
     setError("");
     const data = new FormData(event.currentTarget);
+    const email = String(data.get("email") || "").trim().toLowerCase();
     try {
-      await login({ email: String(data.get("email")), password });
-      router.replace("/dashboard");
+      const user = await login({ email, password });
+      if (user.roles?.includes("Administrator")) {
+        router.replace("/admin/dashboard");
+      } else {
+        router.replace("/dashboard");
+      }
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "No pudimos iniciar sesión.");
     } finally {

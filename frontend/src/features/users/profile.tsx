@@ -1,4 +1,5 @@
 "use client";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -71,16 +72,7 @@ export function ProfilePage() {
     }
   };
 
-  if (!user) {
-    return (
-      <main className="loading-screen">
-        <div className="loading-orbit" />
-        <p>Cargando perfil...</p>
-      </main>
-    );
-  }
-
-  const initials = user.full_name
+  const initials = user?.full_name
     ? user.full_name
         .split(" ")
         .map((n) => n[0])
@@ -89,19 +81,23 @@ export function ProfilePage() {
         .toUpperCase()
     : "US";
 
-  const isAdmin = user.roles.includes("Administrator");
+  const isAdmin = Boolean(user?.roles?.includes("Administrator"));
 
   return (
     <main className="dashboard-layout">
       <AppSidebar user={user} active="profile" />
       <section className="dashboard-content">
-        <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">CU02 · Identidad y Perfil</p>
-            <h1>Perfil Académico</h1>
-            <p>Gestiona tu información personal y verifica el estado de tu suscripción para defensas.</p>
-          </div>
-        </header>
+        {!user ? (
+          <LoadingSkeleton label="Cargando perfil…"/>
+        ) : (
+          <>
+            <header className="dashboard-header">
+              <div>
+                <p className="eyebrow">TU CUENTA</p>
+                <h1>Perfil Académico</h1>
+                <p>Gestiona tu información personal y verifica el estado de tu suscripción para defensas.</p>
+              </div>
+            </header>
 
         {/* Profile Identity Card */}
         <div className="bg-white rounded-2xl border p-6 mt-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 max-w-4xl">
@@ -118,7 +114,7 @@ export function ProfilePage() {
                   {isAdmin ? "🛡️ Administrador" : "🎓 Postulante Académico"}
                 </span>
                 <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-                  ✓ Cuenta Verificada
+                  ✓ Cuenta activa
                 </span>
               </div>
               <p className="text-sm text-gray-500 mt-0.5">{user.email}</p>
@@ -241,6 +237,8 @@ export function ProfilePage() {
             </div>
           </form>
         </section>
+        </>
+        )}
       </section>
     </main>
   );

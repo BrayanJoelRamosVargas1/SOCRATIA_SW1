@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const entries = new Map();
+const storage = {getItem:key=>entries.get(key)??null,setItem:(key,value)=>entries.set(key,value)};
+const context = {exports:{},window:{sessionStorage:storage}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../src/features/simulations/session-preferences.ts',import.meta.url),'utf8'),
+  {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,context);
+const {readSessionPreferences:read,saveSessionPreferences:save}=context.exports;
+save('session-a',{mode:'text',cameraEnabled:false,autoListen:false,appearanceContinuous:false});
+assert.equal(read('session-a').mode,'text');
+assert.equal(read('session-a').cameraEnabled,false);
+assert.equal(read('session-a').autoListen,false);
+assert.equal(read('session-a').appearanceContinuous,false,'disabled cloud snapshots remain disabled after a reload');
+assert.equal(Object.keys(read('session-b')).length,0,'another defense must not inherit these choices');
+save('session-a',{mode:'voice'});
+assert.equal(read('session-a').cameraEnabled,false,'changing mode preserves the camera choice');
+entries.set('socratia.defense.preferences.v1:session-a','{"mode":"invalid","cameraEnabled":"false","token":"secret"}');
+assert.equal(Object.keys(read('session-a')).length,0,'unrecognized fields and wrong types are ignored');
+entries.set('socratia.defense.preferences.v1:session-a','broken json');
+assert.equal(Object.keys(read('session-a')).length,0);
+context.window.sessionStorage={getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}};
+assert.doesNotThrow(()=>save('session-a',{mode:'text'}));
+assert.equal(Object.keys(read('session-a')).length,0);
+console.log('PASS: reload preferences, session isolation, malformed data and blocked storage.');

@@ -1,4 +1,5 @@
 "use client";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -35,17 +36,28 @@ export function SimulationDetailPage() {
     }
   }
 
-  if (!user || !simulation) return <main className="loading-screen"><div className="loading-orbit" /><p>Abriendo preparación…</p></main>;
-  const checks = [["Documento", simulation.document.name, true], ["Banco de preguntas", `${simulation.question_count} preguntas disponibles`, simulation.question_count === 12], ["Jurado", simulation.jury_profile.name, true], ["Cámara", simulation.camera_ready ? "Lista" : "Pendiente", simulation.camera_ready], ["Micrófono", simulation.microphone_ready ? "Listo" : "Pendiente", simulation.microphone_ready], ["Visión", simulation.vision_ready ? "Persona detectada" : "Pendiente", simulation.vision_ready]] as const;
-  const active = simulation.status === "ACTIVE";
-  const completed = simulation.status === "COMPLETED";
+  const active = simulation?.status === "ACTIVE";
+  const completed = simulation?.status === "COMPLETED";
+  const checks = simulation ? [
+    ["Documento", simulation.document.name, true],
+    ["Banco de preguntas", `${simulation.question_count} preguntas disponibles`, simulation.question_count > 0],
+    ["Jurado", simulation.jury_profile.name, true],
+    ["Cámara", simulation.camera_ready ? "Lista" : "Pendiente", simulation.camera_ready],
+    ["Micrófono", simulation.microphone_ready ? "Listo" : "Pendiente", simulation.microphone_ready],
+    ["Visión", simulation.vision_ready ? "Persona detectada" : "Pendiente", simulation.vision_ready],
+  ] as const : [];
+
   return (
     <main className="dashboard-layout">
       <AppSidebar user={user} active="simulations" />
       <section className="dashboard-content simulations-content">
-        <Link className="detail-back" href="/simulations">
-          ← Simulaciones
-        </Link>
+        {!user || !simulation ? (
+          <LoadingSkeleton label="Abriendo preparación…"/>
+        ) : (
+          <>
+            <Link className="detail-back" href="/simulations">
+              ← Simulaciones
+            </Link>
         <header className="dashboard-header">
           <div>
             <p className="eyebrow">Preparación de simulación</p>
@@ -138,6 +150,8 @@ export function SimulationDetailPage() {
             )}
           </div>
         </section>
+        </>
+        )}
       </section>
     </main>
   );

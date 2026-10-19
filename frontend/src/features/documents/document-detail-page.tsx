@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { API_URL } from "@/lib/config";
 import { getCurrentUser } from "@/features/auth/api";
 import {
   deleteDocument,
@@ -18,6 +20,7 @@ import {
   regeneratePresentationMaterial,
 } from "@/features/documents/api";
 import { ApiError } from "@/lib/api";
+import { documentStatusLabels } from "@/types/document";
 import type {
   Document,
   ProcessingStatus,
@@ -68,14 +71,6 @@ const CATEGORY_LABELS: Record<QuestionCategory, string> = {
   CRITICAL: "Críticas",
 };
 
-const ANALYSIS_MESSAGES = [
-  "Recuperando objetivos y metodología",
-  "Analizando arquitectura y decisiones técnicas",
-  "Contrastando resultados y evidencia",
-  "Detectando limitaciones, riesgos y supuestos",
-  "Construyendo preguntas de tribunal",
-];
-
 export function DocumentDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -88,7 +83,6 @@ export function DocumentDetailPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPresentation, setIsGeneratingPresentation] = useState(false);
-  const [analysisMessage, setAnalysisMessage] = useState(0);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -98,36 +92,27 @@ export function DocumentDetailPage() {
         setDocument(currentDocument);
         setProcessing(currentStatus);
         if (currentDocument.status === "PROCESSED") {
-          try {
-            setQuestionBank(await getQuestionBank(params.id));
-          } catch (caught) {
-            if (!(caught instanceof ApiError && caught.status === 404)) throw caught;
-          }
-          try {
-            const material = await getPresentationMaterial(params.id);
+          await Promise.all([
+            getQuestionBank(params.id).then(setQuestionBank).catch(caught => {
+              if (!(caught instanceof ApiError && caught.status === 404)) throw caught;
+            }),
+            getPresentationMaterial(params.id).then(material => {
             setPresentation(material);
             setDurationMinutes(material.duration_minutes);
-          } catch (caught) {
-            if (!(caught instanceof ApiError && caught.status === 404)) throw caught;
-          }
+            }).catch(caught => {
+              if (!(caught instanceof ApiError && caught.status === 404)) throw caught;
+            }),
+          ]);
         }
       })
       .catch((caught) => {
         if (caught instanceof ApiError && caught.status === 404) {
           setError("El documento no existe o no pertenece a tu cuenta.");
-        } else {
+        } else if (caught instanceof ApiError && caught.status === 401) {
           router.replace("/login");
-        }
+        } else setError("No pudimos completar la consulta. Revisa tu conexión e inténtalo de nuevo.");
       });
   }, [params.id, router]);
-
-  useEffect(() => {
-    if (!isGenerating) return;
-    const interval = window.setInterval(() => {
-      setAnalysisMessage((current) => (current + 1) % ANALYSIS_MESSAGES.length);
-    }, 1800);
-    return () => window.clearInterval(interval);
-  }, [isGenerating]);
 
   async function remove() {
     if (!document || !window.confirm(`¿Eliminar “${document.original_name}”?`)) return;
@@ -174,7 +159,6 @@ export function DocumentDetailPage() {
       return;
     }
     setError("");
-    setAnalysisMessage(0);
     setIsGenerating(true);
     try {
       setQuestionBank(await generateQuestionBank(document.id));
@@ -224,20 +208,15 @@ export function DocumentDetailPage() {
       </main>
     );
   }
-  if (!user || !document || !processing) {
-    return (
-      <main className="loading-screen">
-        <div className="loading-orbit" />
-        <p>Abriendo documento…</p>
-      </main>
-    );
-  }
-
   return (
     <main className="dashboard-layout">
       <AppSidebar user={user} active="documents" />
       <section className="dashboard-content document-detail-content">
-        <Link className="detail-back" href="/documents">← Mis documentos</Link>
+        {!user || !document || !processing ? (
+          <LoadingSkeleton label="Abriendo tu documento y materiales…" rows={2}/>
+        ) : (
+          <>
+            <Link className="detail-back" href="/documents">← Mis documentos</Link>
         <header className="detail-header">
           <div className={`file-mark detail-file-mark ${document.file_type.toLowerCase()}`}>
             {document.file_type}
@@ -277,18 +256,18 @@ export function DocumentDetailPage() {
 
         <div className="detail-grid">
           <section className="detail-card metadata-card">
-            <p className="eyebrow">Metadata</p>
+            <p className="eyebrow">Información del documento</p>
             <dl>
               <div><dt>Tipo</dt><dd>{document.file_type}</dd></div>
               <div><dt>Tamaño</dt><dd>{formatBytes(document.file_size)}</dd></div>
-              <div><dt>Estado</dt><dd><span className={`document-status status-${document.status.toLowerCase()}`}><i />{document.status === "UPLOADED" ? "Cargado" : document.status}</span></dd></div>
-              <div><dt>Chunks</dt><dd>{processing.chunk_count}</dd></div>
+              <div><dt>Estado</dt><dd><span className={`document-status status-${document.status.toLowerCase()}`}><i />{documentStatusLabels[document.status]}</span></dd></div>
+              <div><dt>Fragmentos preparados</dt><dd>{processing.chunk_count}</dd></div>
               <div><dt>Identificador</dt><dd className="document-id">{document.id}</dd></div>
             </dl>
           </section>
 
           <section className="detail-card processing-card">
-            <div className="section-heading"><div><p className="eyebrow">Trazabilidad</p><h2>Estado de procesamiento</h2></div><span className="phase-tag light">CU09</span></div>
+            <div className="section-heading"><div><p className="eyebrow">Trazabilidad</p><h2>Estado de procesamiento</h2></div><span className="phase-tag light">Procesamiento</span></div>
             <ol className="processing-timeline">
               {processing.history.map((step) => (
                 <li key={step.id} className={step.status === "ERROR" ? "failed" : "complete"}>
@@ -305,17 +284,17 @@ export function DocumentDetailPage() {
 
         {document.status !== "PROCESSED" ? (
           <section className="next-stage-card">
-            <span>RAG</span>
-            <div><p className="eyebrow">Siguiente capacidad</p><h2>Este documento alimentará tu banco de preguntas.</h2><p>Primero procésalo para dejar sus chunks disponibles en Pinecone.</p></div>
+            <span>01</span>
+            <div><p className="eyebrow">Siguiente capacidad</p><h2>Este documento alimentará tu banco de preguntas.</h2><p>Procesa el documento para preparar preguntas basadas en su contenido.</p></div>
           </section>
         ) : (
           <>
           <section className="question-bank-workspace">
             <header className="question-bank-header">
               <div>
-                <p className="eyebrow">CU10 · RAG documental</p>
+                <p className="eyebrow">PREGUNTAS DE TU INVESTIGACIÓN</p>
                 <h2>{questionBank ? "Banco de preguntas" : "Documento listo para el tribunal"}</h2>
-                <p>{questionBank ? "Doce preguntas sustentadas exclusivamente en los fragmentos de este documento." : `${processing.chunk_count} chunks están indexados y listos para recuperar evidencia.`}</p>
+                <p>{questionBank ? "Doce preguntas sustentadas exclusivamente en los fragmentos de este documento." : `${processing.chunk_count} fragmentos preparados para generar preguntas sobre tu investigación.`}</p>
               </div>
               <button className="button button-primary" type="button" disabled={isGenerating} onClick={() => void runQuestionGeneration()}>
                 {isGenerating ? "Generando…" : questionBank ? "Regenerar preguntas" : "Generar banco de preguntas"}
@@ -324,8 +303,7 @@ export function DocumentDetailPage() {
 
             {isGenerating && (
               <div className="question-analysis" aria-live="polite">
-                <div className="loading-orbit" />
-                <div><strong>Generando preguntas críticas…</strong><span>{ANALYSIS_MESSAGES[analysisMessage]}</span></div>
+                <LoadingSkeleton label="Generando preguntas basadas en tu documento…" rows={1}/>
               </div>
             )}
 
@@ -364,7 +342,7 @@ export function DocumentDetailPage() {
           <section className="presentation-workspace">
             <header className="question-bank-header presentation-header">
               <div>
-                <p className="eyebrow">CU11 · Preparación de exposición</p>
+                <p className="eyebrow">PREPARA TU EXPOSICIÓN</p>
                 <h2>{presentation ? presentation.title : "Convierte tu documento en una defensa"}</h2>
                 <p>Indica cuánto tiempo tienes y Socratia distribuirá la evidencia en una estructura presentable.</p>
               </div>
@@ -381,13 +359,14 @@ export function DocumentDetailPage() {
 
             {isGeneratingPresentation && (
               <div className="question-analysis" aria-live="polite">
-                <div className="loading-orbit" />
-                <div><strong>Diseñando tu exposición…</strong><span>Distribuyendo evidencia, guion y tiempos</span></div>
+                <LoadingSkeleton label="Preparando el contenido, guion y tiempos de tu exposición…" rows={1}/>
               </div>
             )}
 
             {presentation && !isGeneratingPresentation && (
               <>
+                <p><a className="button button-primary" href={`${API_URL}/documents/${document.id}/presentation/export`} download>Descargar PowerPoint</a></p>
+                <p>Diapositivas editables y notas del expositor. Las imágenes extraíbles del PDF aparecen como anexo con su página de origen.</p>
                 <div className="question-bank-meta presentation-meta">
                   <span><b>{presentation.duration_minutes} min</b> exposición</span>
                   <span><b>{presentation.slides.length}</b> diapositivas</span>
@@ -410,6 +389,8 @@ export function DocumentDetailPage() {
             )}
           </section>
           </>
+        )}
+        </>
         )}
       </section>
     </main>

@@ -6,13 +6,16 @@ import { useRouter } from "next/navigation";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { DocumentIcon } from "@/components/ui/icons";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { getCurrentUser } from "@/features/auth/api";
 import { deleteDocument, listDocuments, uploadDocument } from "@/features/documents/api";
 import { ApiError } from "@/lib/api";
+import { documentStatusLabels } from "@/types/document";
 import type { Document } from "@/types/document";
 import type { User } from "@/types/user";
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -34,6 +37,7 @@ export function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress,setUploadProgress]=useState(0);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,12 +47,15 @@ export function DocumentsPage() {
         setUser(currentUser);
         setDocuments(items);
       })
-      .catch(() => router.replace("/login"))
+      .catch((caught) => {
+        if (caught instanceof ApiError && caught.status === 401) router.replace("/login");
+        else setError("No pudimos cargar esta sección. Revisa tu conexión e inténtalo de nuevo.");
+      })
       .finally(() => setLoading(false));
   }, [router]);
 
   async function handleFile(file: File | undefined) {
-    if (!file) return;
+    if (!file || uploading) return;
     setError("");
     const extension = file.name.toLowerCase().split(".").pop();
     if (!extension || !["pdf", "docx"].includes(extension)) {
@@ -56,12 +63,13 @@ export function DocumentsPage() {
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
-      setError("El archivo supera el límite de 20 MB.");
+      setError("El archivo supera el límite de 10 MB del piloto.");
       return;
     }
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const document = await uploadDocument(file);
+      const document = await uploadDocument(file,setUploadProgress);
       setDocuments((current) => [document, ...current]);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "No pudimos cargar el documento.");
@@ -92,17 +100,18 @@ export function DocumentsPage() {
     }
   }
 
-  if (loading || !user) {
-    return <main className="loading-screen"><div className="loading-orbit" /><p>Cargando documentos…</p></main>;
-  }
-
   return (
     <main className="dashboard-layout">
       <AppSidebar user={user} active="documents" />
       <section className="dashboard-content documents-content">
-        <header className="dashboard-header documents-header">
+        {!user && error && <div className="workspace-notice" role="alert">{error} <button type="button" onClick={() => window.location.reload()}>Reintentar</button></div>}
+        {(loading || !user) && !error ? (
+          <LoadingSkeleton label="Preparando tus documentos…"/>
+        ) : !user ? null : (
+          <>
+            <header className="dashboard-header documents-header">
           <div>
-            <p className="eyebrow">P2 · Preparación</p>
+            <p className="eyebrow">TU INVESTIGACIÓN</p>
             <h1>Mis documentos</h1>
             <p>Tu investigación empieza aquí. Sube el material que Socratia utilizará para prepararte.</p>
           </div>
@@ -118,8 +127,9 @@ export function DocumentsPage() {
         >
           <div className="upload-icon"><DocumentIcon /></div>
           <div>
-            <h2>{uploading ? "Guardando tu documento…" : "Arrastra tu PDF o DOCX"}</h2>
-            <p>Validamos el tipo y guardamos el archivo de forma persistente. Máximo 20 MB.</p>
+            <h2>{uploading ? uploadProgress<100 ? `Subiendo documento · ${uploadProgress}%` : "Transferencia completa · validando y guardando…" : "Arrastra tu PDF o DOCX"}</h2>
+            <p>Validamos el tipo y guardamos el archivo de forma persistente. Máximo 10 MB en este piloto.</p>
+            {uploading && <progress aria-label="Transferencia del documento" max={100} value={uploadProgress} style={{width:"100%"}}/>}
           </div>
           <label className="button button-primary upload-button">
             {uploading ? "Cargando…" : "Seleccionar archivo"}
@@ -149,7 +159,7 @@ export function DocumentsPage() {
                     <span className={`file-mark ${document.file_type.toLowerCase()}`}>{document.file_type}</span>
                     <span className="document-name"><strong>{document.original_name}</strong><small>{formatBytes(document.file_size)} · {formatDate(document.created_at)}</small></span>
                   </Link>
-                  <span className={`document-status status-${document.status.toLowerCase()}`}><i />{document.status === "UPLOADED" ? "Cargado" : document.status}</span>
+                  <span className={`document-status status-${document.status.toLowerCase()}`}><i />{documentStatusLabels[document.status]}</span>
                   <Link className="row-action" href={`/documents/${document.id}`}>Ver detalle →</Link>
                   <button className="row-delete" type="button" onClick={() => void remove(document)} aria-label={`Eliminar ${document.original_name}`}>Eliminar</button>
                 </article>
@@ -157,6 +167,8 @@ export function DocumentsPage() {
             </div>
           )}
         </section>
+        </>
+        )}
       </section>
     </main>
   );

@@ -1,0 +1,91 @@
+name: socratia-staging
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: socratia
+      POSTGRES_USER: socratia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique staging database password}
+    volumes:
+      - staging_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U socratia -d socratia"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *logging
+
+  backend:
+    build:
+      context: ./backend
+      target: backend
+    restart: unless-stopped
+    env_file: ${STAGING_ENV_FILE:-.env.staging}
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://socratia:${POSTGRES_PASSWORD:?Set staging password}@db:5432/socratia
+      JWT_SECRET: ${JWT_SECRET:?Generate a staging JWT secret}
+      COOKIE_SECURE: "true"
+      CORS_ORIGINS: https://${PUBLIC_DOMAIN:?Set the staging domain}
+      FRONTEND_URL: https://${PUBLIC_DOMAIN:?Set the staging domain}
+      TRUST_PROXY_HEADERS: "true"
+      LOCAL_STORAGE_PATH: /data/uploads
+      VECTOR_PRIMARY_PROVIDER: pgvector
+    command: [sh, -c, "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"]
+    volumes:
+      - staging_documents:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    logging: *logging
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: /api/v1
+        NEXT_PUBLIC_APPEARANCE_AUTO: "false"
+        NEXT_PUBLIC_APPEARANCE_INTERVAL_SECONDS: "60"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging: *logging
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set the staging domain}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/staging/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/public:/srv/public:ro
+      - staging_caddy_data:/data
+      - staging_caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    logging: *logging
+
+volumes:
+  staging_postgres:
+  staging_documents:
+  staging_caddy_data:
+  staging_caddy_config:

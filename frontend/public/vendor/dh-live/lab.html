@@ -1,0 +1,9 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Socratia · prueba de jurado humano</title>
+<style>body{background:#10232b;color:#dce9e6;font:16px system-ui;margin:24px}main{display:flex;gap:16px}article{flex:1;min-width:0}article[data-speaking="true"] iframe{outline:3px solid #9cdbbf}iframe{width:100%;height:440px;border:1px solid #36555c;border-radius:16px}button{padding:12px;margin:10px 6px 10px 0}#status{color:#9cdbbf}</style></head><body>
+<h1>Jurado humano · prueba local</h1><p>Tres rostros y voces diferentes. Daniel es un personaje ficticio creado para Socratia; Alex y Elena son ejemplos de DH_live. Audio español local, sin llamadas a APIs.</p>
+<p><label>Voces <select id="engine"><option value="kokoro">Kokoro · tres voces españolas</option><option value="piper">Piper · comparación de velocidad</option><option value="system">Voces anteriores de Windows</option></select></label></p><p id="status" role="status">Preparando tres personajes…</p><main>
+<article><iframe src="player.html?index=0" title="Jurado 1 · Alex"></iframe><button data-index="0">Hablar · jurado 1</button></article>
+<article><iframe src="player.html?index=1" title="Jurado 2 · Elena"></iframe><button data-index="1">Hablar · jurado 2</button></article>
+<article><iframe src="player.html?index=2" title="Jurado 3 · Daniel"></iframe><button data-index="2">Hablar · jurado 3</button></article>
+</main><button id="pause">Pausar movimientos</button><button id="stop">Detener voz</button><script src="lip-audio.js?v=20261018-3"></script><script src="lab.js?v=20261018-3"></script></body></html>
+

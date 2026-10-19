@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const cache=new Map();
+function load(name){if(cache.has(name))return cache.get(name);const exports={};cache.set(name,exports);vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../src/features/simulations/${name}.ts`,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:path=>load(path.replace('./',''))});return exports;}
+const {measureExposure,EMPTY_QUALITY}=load('camera-quality');
+const {EMPTY_FACE,EMPTY_SIGNALS}=load('practice-signals');
+const {getObservations,ObservationTracker}=load('coach-observations');
+const pixels=level=>new Uint8ClampedArray(Array.from({length:16*16*4},(_,i)=>i%4===3 ? 255 : level));
+assert.equal(measureExposure(pixels(10),16,16).lighting,'dim');
+assert.equal(measureExposure(pixels(255),16,16).lighting,'bright');
+assert.equal(measureExposure(pixels(140),16,16).lighting,'usable');
+assert.equal(measureExposure(new Uint8ClampedArray(0),16,16).lighting,'unknown');
+const face=Array.from({length:455},()=>({x:.5,y:.5}));
+face[10]={x:.5,y:.25};face[152]={x:.5,y:.75};face[234]={x:.25,y:.5};face[454]={x:.75,y:.5};
+const backlit=pixels(200);for(let y=4;y<=12;y++)for(let x=4;x<=12;x++)for(let c=0;c<3;c++)backlit[(y*16+x)*4+c]=50;
+assert.equal(measureExposure(backlit,16,16,face).lighting,'backlit');
+const input={presence:'present',face:{...EMPTY_FACE,detected:true,direction:'away',reason:'eyes_away',eyes:'open'},pose:EMPTY_SIGNALS,torsoTilt:null,status:'ready',appearance:{state:'waiting',result:null,message:'',time:''},quality:{...EMPTY_QUALITY,freshness:'live',faces:1,lighting:'usable'}};
+let tracker=new ObservationTracker();const gaze=getObservations(input);
+assert.equal(tracker.update(gaze,0).length,0);
+assert.equal(tracker.update(gaze,1499).length,0);
+assert.equal(tracker.update(gaze,1500).some(x=>x.id==='gaze'),true);
+assert.equal(tracker.update([],1501).length,0);
+assert.equal(tracker.update(gaze,1600).length,0,'Resolved warning must start a new persistence window');
+const blink=getObservations({...input,face:{...input.face,direction:'unknown',eyes:'closed'}});
+tracker=new ObservationTracker();assert.equal(tracker.update(blink,0).length,0);assert.equal(tracker.update([],200).length,0,'A blink must not become a warning');
+const multi=getObservations({...input,quality:{...input.quality,faces:2}});
+assert.equal(multi.some(x=>x.id==='multiple'),true);assert.equal(multi.some(x=>x.id==='gaze'),false,'Do not assign gaze from multiple faces');
+const stale=getObservations({...input,quality:{...EMPTY_QUALITY,freshness:'stale'}});
+assert.equal(stale.length,1);assert.equal(stale[0].id,'stale');
+const clothing={person_present:true,upper_body_visible:true,presentation:'formal'};
+assert.equal(getObservations({...input,appearance:{state:'error',result:clothing}}).some(x=>x.id==='clothing-error'),true);
+assert.equal(getObservations({...input,status:'off'}).length,0);
+console.log('PASS: exposure, backlight, unknown pixels, sustained warnings, blink rejection, stale camera and multi-face isolation.');
+
+const {TurnEndDetector}=load('turn-end-detector');
+let end=new TurnEndDetector(0);
+for(let t=100;t<=1000;t+=100)assert.equal(end.update(.06,t),'listening');
+assert.equal(end.update(0,4999),'listening');assert.equal(end.update(0,5000),'submit');
+end=new TurnEndDetector(0);assert.equal(end.update(0,19999),'listening');assert.equal(end.update(0,20000),'empty');
+end=new TurnEndDetector(0);end.update(.1,100);assert.equal(end.update(0,20000),'empty','An isolated sound must not submit a response');
+console.log('PASS: turn ending waits four seconds after sustained sound and rejects empty/click-only recordings.');
+
+end=new TurnEndDetector(0);for(let t=100;t<=1000;t+=100)end.update(.05,t);end.pause(10000);assert.equal(end.update(0,13999),'listening');assert.equal(end.update(0,14000),'submit');
+console.log('PASS: opening a confirmation dialog pauses silence submission and gives a fresh four-second response window.');
+
+end=new TurnEndDetector(0);
+assert.equal(end.hasSpeech,false);
+for(let t=80;t<=640;t+=80)end.update(.06,t);
+assert.equal(end.hasSpeech,true,'80ms sampling must accumulate enough sound for an answer');
+assert.equal(end.update(0,4639),'listening');
+assert.equal(end.update(0,4640),'submit');
+end=new TurnEndDetector(0);
+end.update(.8,80);
+assert.equal(end.hasSpeech,false,'a click must not become a response at the hard recording limit');
+console.log('PASS: low-frequency microphone sampling and hard-limit silence guard.');

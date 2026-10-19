@@ -1,0 +1,40 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Socratia · detección real controlada</title>
+<style>body{background:#10232b;color:#e4f1ed;font:16px system-ui;margin:24px}button,select{padding:10px;margin:6px}canvas{max-width:100%;height:auto;border-radius:12px}table{border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #456}#status{color:#9cdbbf}</style>
+<h1>Detección real · imágenes sintéticas</h1><p>MediaPipe local. Una medición por clic; cámara y micrófono apagados. No se envían capturas a servicios externos.</p>
+<button id="load">Cargar detectores</button><label>Escenario <select id="scenario"><option value="front">Frente</option><option value="eyes_left">Ojos a la izquierda</option><option value="eyes_right">Ojos a la derecha</option><option value="eyes_down">Ojos hacia abajo</option><option value="head_side">Cabeza girada</option><option value="absent">Sin persona</option></select></label><button id="measure" disabled>Medir escenario</button>
+<p id="status" role="status">Detectores sin cargar</p><canvas id="frame" width="640" height="480"></canvas>
+<table><thead><tr><th>Escenario</th><th>Presencia</th><th>Mirada</th><th>Tiempo</th><th>Comprobación</th></tr></thead><tbody id="results"></tbody></table>
+<script type="module">
+import {FilesetResolver,FaceLandmarker,PoseLandmarker} from '/vision.mjs';
+import {measureFace,measurePose,presenceFromSignals} from '/signals.js';
+const canvas=document.querySelector('#frame'),ctx=canvas.getContext('2d'),status=document.querySelector('#status'),rows=[];
+let face,pose,reference=null;
+document.querySelector('#load').onclick=async()=>{
+  document.querySelector('#load').disabled=true;status.textContent='Cargando modelos locales…';
+  try{
+    const files=await FilesetResolver.forVisionTasks('/vision/wasm');
+    face=await FaceLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'/vision/models/face.task'},runningMode:'IMAGE',numFaces:2,outputFaceBlendshapes:true,minFaceDetectionConfidence:.5});
+    pose=await PoseLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'/vision/models/pose.task'},runningMode:'IMAGE',numPoses:1,minPoseDetectionConfidence:.5});
+    document.querySelector('#measure').disabled=false;status.textContent='Modelos reales preparados · empieza con Frente';
+  }catch{status.textContent='No se pudieron cargar los detectores';document.querySelector('#load').disabled=false;}
+};
+document.querySelector('#measure').onclick=async()=>{
+  const button=document.querySelector('#measure');button.disabled=true;
+  const scenario=document.querySelector('#scenario').value;
+  try{
+    ctx.fillStyle='#ccc';ctx.fillRect(0,0,640,480);
+    if(scenario!=='absent'){const image=new Image();image.src='/fixtures/'+scenario+'.png';await image.decode();ctx.drawImage(image,0,0,640,480);}
+    const start=performance.now(),facial=face.detect(canvas),body=pose.detect(canvas);
+    let f=measureFace(facial.faceLandmarks[0]??[],facial.faceBlendshapes[0]?.categories??[],4/3,reference);
+    if(scenario==='front'&&f.gaze){reference=f.gaze;f=measureFace(facial.faceLandmarks[0]??[],facial.faceBlendshapes[0]?.categories??[],4/3,reference);}
+    const p=measurePose(body.landmarks[0]??[],4/3),presence=presenceFromSignals(p,f),elapsed=Math.round(performance.now()-start);
+    const passed=scenario==='absent'?presence==='absent':scenario==='front'?presence==='present'&&f.detected:presence==='present'&&f.direction==='away';
+    rows.push({scenario,presence,gaze:f.direction,faces:facial.faceLandmarks.length,elapsed_ms:elapsed,passed});
+    const tr=document.createElement('tr');for(const value of [scenario,presence,f.direction,elapsed+' ms',passed?'Correcto':'Revisar']){const td=document.createElement('td');td.textContent=value;tr.append(td);}document.querySelector('#results').append(tr);
+    await fetch('/results',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:'synthetic-fixtures',cases:rows})});
+    status.textContent=passed?'Medición completada · '+scenario:'Revisar resultado · '+scenario;
+  }catch{status.textContent='Falló la medición de este escenario';}
+  finally{button.disabled=false;}
+};
+window.addEventListener('pagehide',()=>{face?.close();pose?.close();});
+</script></html>
