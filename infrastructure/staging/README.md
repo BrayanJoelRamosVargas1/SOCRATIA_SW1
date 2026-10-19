@@ -1,10 +1,12 @@
 # Piloto privado de Socratia
 
-Estado al 2026-10-18: fuentes y configuración transferidas a EC2; construcción
-iniciada en el servidor. La publicación todavía requiere confirmar arranque,
-certificado HTTPS y pruebas completas. Ver `docs/staging-readiness.md` para la
-evidencia y los pendientes actuales; los costes y la factura histórica de abajo
-no representan el consumo actual.
+Estado al 2026-10-18: piloto publicado con HTTPS en
+https://socratia.34.204.9.87.sslip.io . Se verificaron el acceso de ambos roles,
+subida y procesamiento de un PDF ficticio, generación de presentación y descarga
+de PowerPoint. Esto no valida todavía concurrencia ni una defensa completa con
+cámara física. Ver `docs/performance-reengineering.md` y
+`docs/improvement-roadmap.md` para evidencia y pendientes; los costes y la factura
+histórica de abajo no representan el consumo actual.
 
 ## Preparación
 
@@ -28,6 +30,10 @@ El piloto de una sola máquina no proporciona alta disponibilidad. El piloto usa
 
 ## Verificación realizada
 
+- Suite de entrega: 269 pruebas backend aprobadas con PostgreSQL temporal y
+  proveedores simulados; no equivale a una prueba de carga ni a validar IA real.
+- Comprobaciones frontend: lint y TypeScript, caché privada de navegación,
+  renovación de sesión, progreso de subida y ciclo de vida del Worker de cámara.
 - Imágenes de backend y frontend construidas; frontend actualizado a Next 16.4.1 y compilación de TypeScript correcta.
 - `npm audit --omit=dev`: cero vulnerabilidades reportadas; permanecen cinco avisos altos en dependencias de desarrollo de ESLint (no se aplicó una bajada incompatible de versión).
 - Base nueva con migraciones y backend saludables; `/health` del backend y `/login` del frontend devolvieron HTTP 200 desde la red interna de contenedores.
