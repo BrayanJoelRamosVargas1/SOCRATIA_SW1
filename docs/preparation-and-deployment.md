@@ -31,6 +31,9 @@ claves de GitHub ni de AWS en el controlador. El controlador estable se instala
 fuera del checkout, en `/opt/socratia-deployment/deploy-main.sh`; su unidad systemd
 consulta main cada cinco minutos, sin builds cuando el commit no cambió. Las ramas
 secundarias no despliegan. Solo admite avances de historial, no force pushes.
+Los commits de documentación o pruebas sin cambios de ejecución actualizan la
+referencia sin reconstruir imágenes. El instalador debe crear `/opt/socratia-git`
+con propietario ubuntu e inicializarlo como repositorio bare con el remoto público.
 
 La publicación bloquea ejecuciones simultáneas, crea un pg_dump comprimido en el
 disco cifrado existente, conserva etiquetas de imágenes anteriores, construye en
@@ -62,3 +65,17 @@ Falta el ensayo de restauración en un servidor aislado, medir p50/p95 con defen
 reales de 1/2/5 usuarios y contrastar cámara física. Estas mejoras no se declaran
 terminadas por el hecho de pasar pruebas con proveedores simulados. Las cuotas
 específicas de Gemini y Groq necesitan la sesión del propietario del proyecto.
+
+## Evidencia del 19 de octubre
+
+- 275 pruebas generales de backend aprobadas; 24 pruebas enfocadas de documentos,
+  ejecución de las tres tareas con proveedores aislados y recuperación de evaluación.
+- En AWS se comprobó una tarea de procesamiento sin llamadas de IA sobre un PDF
+  ficticio ya procesado: mismo identificador antes y después de completarse al
+  repetir la clave; espera observada 3,1 segundos y ejecución del worker 24 ms.
+- Treinta lecturas de `/health`, diez con concurrencia HTTP 1, 2 y 5: p50 de
+  197/197/205 ms y p95 de 613/602/635 ms desde el cliente. Incluyen red/conexión;
+  no miden defensas completas, pintura del navegador ni garantizan cinco alumnos.
+- La primera comprobación inmediatamente tras reiniciar encontró un 502 temporal;
+  se amplió la espera de salud del controlador. Las verificaciones posteriores
+  públicas y de cola fueron satisfactorias. Esto no equivale a despliegue sin cortes.

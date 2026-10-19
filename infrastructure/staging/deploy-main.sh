@@ -22,6 +22,17 @@ PREVIOUS=$(cat "$STATE/deployed-commit" 2>/dev/null || true)
 [[ ! -f "$STATE/failed-commit" || "$(cat "$STATE/failed-commit")" != "$TARGET" ]] || exit 1
 if [[ -n "$PREVIOUS" ]]; then
   git --git-dir="$MIRROR" merge-base --is-ancestor "$PREVIOUS" "$TARGET"
+  # Documentation and test-only commits do not consume another production build.
+  if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- \
+      backend/app backend/migrations backend/requirements.txt backend/Dockerfile backend/.dockerignore backend/alembic.ini \
+      frontend/src frontend/public frontend/package.json frontend/package-lock.json frontend/next.config.ts \
+      frontend/Dockerfile frontend/.dockerignore frontend/tsconfig.json frontend/postcss.config.mjs \
+      frontend/scripts/copy-standalone.mjs compose.staging.yaml infrastructure/staging/Caddyfile; then
+    printf '%s\n' "$TARGET" > "$STATE/deployed-commit"
+    printf '{"commit":"%s","runtime_unchanged_from":"%s","source":"public GitHub main"}\n' "$TARGET" "$PREVIOUS" > "$ROOT/RELEASE.json"
+    printf 'METADATA_ONLY %s\n' "$TARGET"
+    exit 0
+  fi
 fi
 cd "$ROOT"
 COMPOSE=(sudo docker compose --env-file .env.staging -f compose.staging.yaml)
@@ -51,8 +62,8 @@ for attempt in $(seq 1 40); do
   sleep 3
 done
 "${COMPOSE[@]}" up -d --no-deps frontend preparation-worker proxy
-curl --fail --silent --retry 6 --retry-delay 3 --max-time 15 https://socratia.34.204.9.87.sslip.io/login >/dev/null
-curl --fail --silent --max-time 10 https://socratia.34.204.9.87.sslip.io/health >/dev/null
+curl --fail --silent --retry 8 --retry-all-errors --retry-delay 3 --retry-max-time 90 --max-time 15 https://socratia.34.204.9.87.sslip.io/login >/dev/null
+curl --fail --silent --retry 8 --retry-all-errors --retry-delay 3 --retry-max-time 90 --max-time 10 https://socratia.34.204.9.87.sslip.io/health >/dev/null
 printf '%s\n' "$TARGET" > "$STATE/deployed-commit"
 printf '{"commit":"%s","deployed_at":"%s","source":"public GitHub main"}\n' "$TARGET" "$(date -u +%FT%TZ)" > "$ROOT/RELEASE.json"
 trap - ERR

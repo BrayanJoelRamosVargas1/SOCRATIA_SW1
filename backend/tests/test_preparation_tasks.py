@@ -58,3 +58,26 @@ def test_conflicting_key_and_parallel_kinds_rejected(client,db_session):
 def test_preparation_requires_processed_document(client):
     register(client,"unprocessed@example.com");doc=upload(client)
     assert client.post(f"/api/v1/documents/{doc}/tasks",json=request("presentation")).status_code==409
+
+
+def test_worker_executes_all_preparation_kinds_with_isolated_providers(client,db_session,monkeypatch,embedding_provider,vector_store,storage_provider,question_router,presentation_router):
+    import app.integrations.embeddings.dependencies as embedding_deps
+    import app.integrations.vector_db.dependencies as vector_deps
+    import app.integrations.storage.dependencies as storage_deps
+    import app.integrations.llm.dependencies as llm_deps
+    from app.cli.preparation_worker import execute_task
+    monkeypatch.setattr(embedding_deps,"get_embedding_provider",lambda:embedding_provider)
+    monkeypatch.setattr(vector_deps,"get_vector_store_provider",lambda db:vector_store)
+    monkeypatch.setattr(storage_deps,"get_storage_provider",lambda:storage_provider)
+    monkeypatch.setattr(llm_deps,"get_question_generation_router",lambda:question_router)
+    monkeypatch.setattr(llm_deps,"get_presentation_generation_router",lambda:presentation_router)
+    register(client,"fullworker@example.com");doc=upload(client);url=f"/api/v1/documents/{doc}/tasks"
+    for kind in ("process","questions","presentation"):
+        queued=client.post(url,json=request(kind))
+        assert queued.status_code==202
+        assert run_one(db_session,execute_task)
+        assert client.get(url).json()[0]["status"]=="SUCCEEDED"
+    assert client.get(f"/api/v1/documents/{doc}").json()["status"]=="PROCESSED"
+    assert client.get(f"/api/v1/documents/{doc}/questions").status_code==200
+    assert client.get(f"/api/v1/documents/{doc}/presentation").status_code==200
+    assert client.get("/health").headers["server-timing"].startswith("app;dur=")

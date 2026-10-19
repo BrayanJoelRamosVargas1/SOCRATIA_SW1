@@ -31,11 +31,14 @@ revisar mantenimiento, licencia de modelos y datos, consumo y contrato de API.
 
 ## Próximas mejoras, con criterios verificables
 
-1. **Trabajos persistentes para documentos e IA.** El piloto todavía procesa
-   solicitudes largas de forma síncrona. Guardar un trabajo con identificador,
-   estados reales, resultado y error recuperables; deduplicar por archivo y tarea.
-   Criterio: recargar o cortar la conexión no duplica consumo ni pierde el resultado.
-2. **Medición por etapa.** Registrar tiempos de subida, extracción, recuperación,
+1. **Trabajos persistentes para documentos e IA.** Implementados en la entrega del
+   19 de octubre para procesamiento, preguntas y presentaciones. Hay identificador,
+   estados reales, deduplicación y consulta al volver a la página. Una interrupción
+   de servidor no repite automáticamente llamadas externas de resultado incierto.
+   La evaluación conserva respuestas ya terminadas para reintentos posteriores.
+   Falta convertir también la evaluación completa en un trabajo independiente.
+2. **Medición por etapa.** Las tareas registran duración y HTTP publica Server-Timing.
+   Falta registrar tiempos separados de extracción, recuperación,
    generación y primera voz sin texto privado. Medir p50/p95 con 1, 2 y 5 usuarios
    ficticios antes de ampliar capacidad. No hay todavía una cifra fiable de
    concurrencia soportada ni un porcentaje general de aceleración.
