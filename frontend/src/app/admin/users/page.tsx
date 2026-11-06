@@ -300,8 +300,8 @@ export default function AdminUsersPage() {
               className="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-700"
             >
               <option value="">Todos los roles</option>
-              <option value="Administrator">Administrator (Gobierno)</option>
-              <option value="student">student (Estudiante)</option>
+              <option value="Administrator">Administrador</option>
+              <option value="student">Estudiante</option>
             </select>
 
             <select
@@ -402,7 +402,7 @@ export default function AdminUsersPage() {
                               }`}
                             >
                               {isRoleAdmin ? <Shield className="w-3 h-3 text-purple-600" /> : <GraduationCap className="w-3 h-3 text-teal-600" />}
-                              <span>{r}</span>
+                              <span>{isRoleAdmin ? "Administrador" : "Estudiante"}</span>
                             </span>
                           );
                         })}
@@ -424,7 +424,7 @@ export default function AdminUsersPage() {
                     </td>
 
                     <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
-                      {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
+                      {u.created_at ? new Date(u.created_at).toLocaleDateString("es-BO") : "—"}
                     </td>
 
                     <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -543,7 +543,7 @@ export default function AdminUsersPage() {
                   >
                     <Shield className={`w-4 h-4 mt-0.5 ${editForm.roles.includes("Administrator") ? "text-purple-600" : "text-slate-400"}`} />
                     <div>
-                      <p className="font-bold text-xs text-slate-900">Administrator</p>
+                      <p className="font-bold text-xs text-slate-900">Administrador</p>
                       <p className="text-[10px] text-slate-500">Acceso a consola de gobierno</p>
                     </div>
                   </button>

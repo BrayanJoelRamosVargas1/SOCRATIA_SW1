@@ -119,7 +119,7 @@ export function ProfilePage() {
               </div>
               <p className="text-sm text-gray-500 mt-0.5">{user.email}</p>
               <p className="text-xs text-gray-400 mt-1">
-                Registrado desde: {user.created_at ? new Date(user.created_at).toLocaleDateString() : "2026"}
+                Registrado desde: {user.created_at ? new Date(user.created_at).toLocaleDateString("es-BO") : "2026"}
               </p>
             </div>
           </div>
@@ -151,7 +151,7 @@ export function ProfilePage() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1 max-w-xl">
-                {subData?.plan?.description || "Activa un plan para procesar tesis ilimitadas y habilitar jurados virtuales con telemetría biomecánica."}
+                {subData?.plan?.description || "Consulta los límites de tu plan para preparar documentos y practicar con el jurado virtual."}
               </p>
               {subData?.plan && (
                 <div className="flex items-center gap-4 mt-3 text-xs text-slate-300">

@@ -26,7 +26,7 @@ def get_current_user(
     if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
+            detail="Debes iniciar sesión para continuar",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -35,7 +35,7 @@ def get_current_user(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired credentials",
+            detail="Las credenciales son incorrectas o han vencido",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
@@ -43,7 +43,7 @@ def get_current_user(
     if user is None or not user.is_active or user.auth_version != claims.auth_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired credentials",
+            detail="Las credenciales son incorrectas o han vencido",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
@@ -56,7 +56,7 @@ def get_admin_user(user: CurrentUser) -> User:
     if not any(role.name == "Administrator" for role in user.roles):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrator access required",
+            detail="Se requiere acceso de administrador",
         )
     return user
 

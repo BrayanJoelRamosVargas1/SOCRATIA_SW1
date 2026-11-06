@@ -229,14 +229,14 @@ export default function AdminSubscriptionsPage() {
                             : "bg-red-100 text-red-800"
                         }`}
                       >
-                        {sub.status}
+                        {({ACTIVE:"Activa",CANCELLED:"Cancelada",EXPIRED:"Vencida"})[sub.status]}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-xs text-gray-600">
-                      <div>Inicio: {new Date(sub.started_at).toLocaleDateString()}</div>
+                      <div>Inicio: {new Date(sub.started_at).toLocaleDateString("es-BO")}</div>
                       {sub.cancelled_at && (
                         <div className="text-red-600">
-                          Cancelado: {new Date(sub.cancelled_at).toLocaleDateString()}
+                          Cancelado: {new Date(sub.cancelled_at).toLocaleDateString("es-BO")}
                         </div>
                       )}
                     </td>

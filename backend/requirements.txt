@@ -20,3 +20,4 @@ groq>=0.11,<1.0
 google-genai>=2.0,<3.0
 
 instructor
+langdetect==1.0.9

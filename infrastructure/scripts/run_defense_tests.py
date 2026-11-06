@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 parser = argparse.ArgumentParser()
 parser.add_argument('--postgres-bin', type=Path, default=Path('C:/Program Files/PostgreSQL/15/bin'))
 parser.add_argument('--ui', action='store_true', help='Serve an isolated UI pilot on port 8000 until stopped')
-parser.add_argument('--suite', choices=['defense','documents','release','preparation'], default='defense')
+parser.add_argument('--suite', choices=['defense','documents','release','preparation','spanish'], default='defense')
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[2]
 backend = repo/'backend'
@@ -92,11 +92,15 @@ with psycopg.connect(host='127.0.0.1',port=port,user='socratia',password=passwor
                 'tests/test_voice_session_flow.py','tests/test_gemini_transcription.py', 'tests/test_voice_pipeline.py'])
         if args.suite == 'preparation':
             selected = ['tests/test_preparation_tasks.py','tests/test_documents.py','tests/test_evaluation_resume.py']
+        if args.suite == 'spanish':
+            selected = ['tests/test_spanish_content.py']
         if args.suite == 'release':
             selected = [str(path.relative_to(backend)) for path in sorted((backend/'tests').glob('test_*.py'))
                 if '_real' not in path.name]
             selected += ['tests/modules/p4_gestion_evaluacion_resultados']
-        result = subprocess.run([str(python), '-m', 'pytest',
+        # A cancelled run must never reuse a previous successful XML report.
+        (output/(args.suite+'-tests.xml')).unlink(missing_ok=True)
+        result = subprocess.run([str(python), '-m', 'pytest', '-o', 'addopts=',
             *selected, '-q', '-ra', f'--junitxml={output / (args.suite+"-tests.xml")}'], cwd=backend, env=env, **flags)
     (output/('ui-run.json' if args.ui else args.suite+'-run.json')).write_text(json.dumps({'exit_code':result.returncode,
         'isolated_database':True,'external_providers':'test doubles','cluster_directory':str(root)},indent=2))

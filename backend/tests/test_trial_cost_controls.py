@@ -58,10 +58,14 @@ def test_paid_tts_can_be_disabled_even_with_a_configured_key(monkeypatch):
 async def test_evaluator_has_single_structured_attempt_and_output_bound():
     from app.modules.p4_gestion_evaluacion_resultados.services.evaluator import Evaluator
     evaluator = Evaluator.__new__(Evaluator)
-    create = AsyncMock(return_value="evaluated")
+    from app.modules.p4_gestion_evaluacion_resultados.schemas.evaluation import TurnEvaluationResult
+    evaluated = TurnEvaluationResult(classification="PRECISE", score=90,
+        strengths=["La respuesta presenta evidencia del documento."], weaknesses=[],
+        missing_points=[], contradictions=[], evidence=["a"])
+    create = AsyncMock(return_value=evaluated)
     evaluator.client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
     evaluator.model = "test-model"
     evaluator.temperature = 0
-    assert await evaluator.evaluate_turn("q", "a", "evidence") == "evaluated"
+    assert await evaluator.evaluate_turn("q", "a", "evidence") is evaluated
     assert create.call_args.kwargs["max_retries"] == 1
     assert create.call_args.kwargs["max_tokens"] == 2048

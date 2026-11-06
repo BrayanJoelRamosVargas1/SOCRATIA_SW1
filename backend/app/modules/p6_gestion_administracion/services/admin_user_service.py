@@ -47,7 +47,7 @@ class AdminUserService:
     def get_user(self, user_id: str) -> User:
         user = self.user_repo.get_by_id(user_id)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el usuario")
         return user
 
     def update_user(
@@ -78,7 +78,7 @@ class AdminUserService:
                 if other_admins_count == 0:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Cannot disable or change role of the last active administrator",
+                        detail="No puedes desactivar ni cambiar el rol del último administrador activo",
                     )
 
         if "full_name" in changes and changes["full_name"] is not None:
@@ -89,7 +89,7 @@ class AdminUserService:
             existing = self.user_repo.get_by_email(email)
             if existing and existing.id != user.id:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Este correo ya está registrado"
                 )
             user.email = email
 

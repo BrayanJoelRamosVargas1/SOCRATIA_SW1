@@ -139,5 +139,5 @@ def test_report_not_completed_sim(client: TestClient, db_session: Session, test_
 
     response = client.get(f"/api/v1/simulations/{sim.id}/report")
     assert response.status_code == 400
-    assert "not completed" in response.json()["detail"]
+    assert "todavía no ha terminado" in response.json()["detail"]
     app.dependency_overrides.clear()

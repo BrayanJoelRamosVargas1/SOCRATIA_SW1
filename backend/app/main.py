@@ -48,7 +48,7 @@ def create_app() -> FastAPI:
         except SQLAlchemyError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database unavailable",
+                detail="La base de datos no está disponible",
             ) from exc
         return {"status": "ok", "service": "socratia-api"}
 

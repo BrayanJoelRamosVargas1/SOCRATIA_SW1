@@ -26,7 +26,7 @@ class AdminJuryProfileService:
         profile = self.juries.get(profile_id)
         if not profile:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Jury profile not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el perfil del jurado"
             )
         return profile
 
@@ -35,7 +35,7 @@ class AdminJuryProfileService:
         existing = self.db.scalar(select(JuryProfile).where(JuryProfile.name == data.name))
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Jury profile name already exists"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Ya existe un jurado con este nombre"
             )
 
         profile = JuryProfile(
@@ -60,7 +60,7 @@ class AdminJuryProfileService:
             if existing:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Jury profile name already exists",
+                    detail="Ya existe un jurado con este nombre",
                 )
             profile.name = data.name
 
@@ -89,7 +89,7 @@ class AdminJuryProfileService:
         if has_simulations:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete jury profile because it has associated simulations. You can deactivate it instead.",
+                detail="No se puede eliminar este jurado porque tiene simulaciones asociadas. Puedes desactivarlo.",
             )
 
         self.juries.delete(profile)

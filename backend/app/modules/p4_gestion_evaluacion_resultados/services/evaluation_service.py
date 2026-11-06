@@ -51,7 +51,7 @@ class EvaluationService:
             if existing.status == EvaluationStatus.PROCESSING:
                 from fastapi import HTTPException
 
-                raise HTTPException(status_code=409, detail="Evaluation is already processing.")
+                raise HTTPException(status_code=409, detail="La evaluación ya está en proceso.")
             if existing.status == EvaluationStatus.COMPLETED:
                 return existing
             if existing.status == EvaluationStatus.FAILED:
@@ -76,7 +76,7 @@ class EvaluationService:
             stmt = select(Simulation).where(Simulation.id == simulation_id)
             simulation = self.db.execute(stmt).scalar_one_or_none()
             if not simulation:
-                raise ValueError("Simulation not found")
+                raise ValueError("No se encontró la simulación")
 
             # Fetch Context (tenant isolation by document_id)
             chunks_stmt = (

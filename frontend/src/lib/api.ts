@@ -6,7 +6,7 @@ type ApiErrorPayload = {
     message?: string;
     fields?: Array<{ field: string; message: string }>;
   };
-  detail?: string;
+  detail?: unknown;
 };
 
 export class ApiError extends Error {
@@ -23,12 +23,25 @@ export class ApiError extends Error {
 async function parseError(response: Response): Promise<ApiError> {
   let payload: ApiErrorPayload = {};
   try {
-    payload = (await response.json()) as ApiErrorPayload;
+    const parsed:unknown = await response.json();
+    if(parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload=parsed as ApiErrorPayload;
   } catch {
     // The fallback below handles empty and non-JSON responses.
   }
+  const candidate = payload.error?.message ?? payload.detail;
+  const defaults: Record<number,string> = {
+    401:"Tu sesión terminó. Inicia sesión nuevamente.",403:"No tienes permiso para realizar esta acción.",
+    404:"No se encontró el recurso solicitado.",405:"Esta acción no está disponible.",
+    409:"La solicitud entra en conflicto con el estado actual. Actualiza la página.",
+    422:"Revisa los datos enviados.",429:"Se alcanzó el límite de solicitudes. Espera un momento y vuelve a intentar.",
+    500:"El servidor no pudo completar la solicitud.",502:"No pudimos conectar con el servicio. Inténtalo nuevamente.",
+    503:"El servicio no está disponible temporalmente.",504:"El servicio tardó demasiado en responder.",
+  };
+  const english = /^(denied|not |invalid |missing |incorrect |unauthor|forbidden|internal server|request |field required|value error|input should|database |method not|too many|service unavailable|unprocessable|bad gateway|gateway timeout|failed |an error|could not|network error|(?:gemini|groq) (?:returned|is |failed|rejected|could))/i;
+  const message = typeof candidate === "string" && candidate.trim() && !english.test(candidate.trim())
+    ? candidate : defaults[response.status] ?? "No se pudo completar la solicitud.";
   return new ApiError(
-    payload.error?.message ?? payload.detail ?? "No se pudo completar la solicitud.",
+    message,
     response.status,
     payload.error?.code,
   );
@@ -40,11 +53,15 @@ async function execute<T>(path: string, options: RequestInit): Promise<T> {
   if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await fetch(`${API_URL}${path}`, {
+  let response: Response;
+  try { response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
     credentials: "include",
-  });
+  }); } catch(error) {
+    if(error instanceof Error && error.name === "AbortError") throw error;
+    throw new ApiError("No pudimos conectar con el servidor. Revisa tu conexión e inténtalo nuevamente.",0,"network_error");
+  }
   if (!response.ok) {
     throw await parseError(response);
   }

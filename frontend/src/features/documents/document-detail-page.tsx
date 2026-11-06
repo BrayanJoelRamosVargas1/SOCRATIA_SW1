@@ -49,7 +49,7 @@ const STAGE_NAMES: Record<string, string> = {
   UPLOAD: "Documento recibido",
   EXTRACTION: "Texto extraído",
   CHUNKING: "Contenido fragmentado",
-  EMBEDDING: "Embeddings generados",
+  EMBEDDING: "Representaciones del contenido generadas",
   VECTOR_STORE: "Vectores indexados",
   COMPLETE: "Documento listo",
 };
@@ -304,7 +304,7 @@ export function DocumentDetailPage() {
                 <div className="question-bank-meta">
                   <span><b>12</b> preguntas</span>
                   <span><b>{questionBank.provider_used}</b> proveedor</span>
-                  <span><b>{questionBank.fallback_used ? "Sí" : "No"}</b> fallback</span>
+                  <span><b>{questionBank.fallback_used ? "Sí" : "No"}</b> servicio alternativo</span>
                   {questionBank.latency_ms !== null && <span><b>{(questionBank.latency_ms / 1000).toFixed(1)} s</b> generación</span>}
                 </div>
                 <div className="question-category-grid">
@@ -363,7 +363,7 @@ export function DocumentDetailPage() {
                   <span><b>{presentation.duration_minutes} min</b> exposición</span>
                   <span><b>{presentation.slides.length}</b> diapositivas</span>
                   <span><b>~{presentation.target_word_count}</b> palabras objetivo</span>
-                  <span><b>{presentation.provider_used}</b> {presentation.fallback_used ? "fallback" : "primario"}</span>
+                  <span><b>{presentation.provider_used}</b> {presentation.fallback_used ? "servicio alternativo" : "servicio principal"}</span>
                 </div>
                 <div className="slide-list">
                   {presentation.slides.map((slide) => (

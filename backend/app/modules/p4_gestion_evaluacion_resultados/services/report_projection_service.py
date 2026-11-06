@@ -33,13 +33,13 @@ class ReportProjectionService:
         simulation = db.scalar(stmt)
 
         if not simulation:
-            raise HTTPException(status_code=404, detail="Simulation not found")
+            raise HTTPException(status_code=404, detail="No se encontró la simulación")
 
         if simulation.user_id != user_id:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            raise HTTPException(status_code=403, detail="No tienes permiso para realizar esta acción")
 
         if simulation.status != SimulationStatus.COMPLETED:
-            raise HTTPException(status_code=400, detail="Simulation is not completed")
+            raise HTTPException(status_code=400, detail="La simulación todavía no ha terminado")
 
         eval_stmt = (
             select(Evaluation)
@@ -49,17 +49,18 @@ class ReportProjectionService:
         evaluation = db.scalar(eval_stmt)
 
         if not evaluation:
-            raise HTTPException(status_code=404, detail="Evaluation not found")
+            raise HTTPException(status_code=404, detail="No se encontró la evaluación")
 
         if evaluation.status != EvaluationStatus.COMPLETED:
-            raise HTTPException(status_code=400, detail="Evaluation is not completed")
+            raise HTTPException(status_code=400, detail="La evaluación todavía no ha terminado")
 
         # Map turns to question-answer pairs
         # A question is asked by JURY, answered by STUDENT
 
         # We need to map simulation_question_id to its QUESTION and ANSWER turns
         question_turns = {
-            t.simulation_question_id: t for t in simulation.turns if t.turn_type == "QUESTION"
+            t.simulation_question_id: t for t in simulation.turns
+            if t.speaker == "JURY" and t.turn_type in {"QUESTION", "FOLLOW_UP"}
         }
         answer_turns = {
             t.simulation_question_id: t for t in simulation.turns if t.turn_type == "ANSWER"
@@ -100,9 +101,9 @@ class ReportProjectionService:
         if simulation.started_at and simulation.finished_at:
             duration = (simulation.finished_at - simulation.started_at).total_seconds() / 60.0
 
-        doc_title = "Untitled"
+        doc_title = "Documento sin título"
         if simulation.document:
-            doc_title = getattr(simulation.document, "original_name", None) or getattr(simulation.document, "title", "Untitled")
+            doc_title = getattr(simulation.document, "original_name", None) or getattr(simulation.document, "title", "Documento sin título")
 
         return SimulationReportResponse(
             simulation_id=simulation.id,

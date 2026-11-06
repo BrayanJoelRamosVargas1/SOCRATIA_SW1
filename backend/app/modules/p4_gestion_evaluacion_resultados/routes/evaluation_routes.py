@@ -24,12 +24,12 @@ async def evaluate_simulation(
     sim_repo = SimulationRepository(db)
     simulation = sim_repo.get(id)
     if not simulation or simulation.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Simulation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la simulación")
 
     if simulation.status not in ["COMPLETED", "ABORTED", "ERROR"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Simulation must be completed before evaluation",
+            detail="Finaliza la simulación antes de evaluarla",
         )
 
     service = EvaluationService(db)
@@ -46,12 +46,12 @@ def get_evaluation(
     sim_repo = SimulationRepository(db)
     simulation = sim_repo.get(id)
     if not simulation or simulation.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Simulation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la simulación")
 
     service = EvaluationService(db)
     evaluation = service.repository.get_by_simulation_id(id)
     if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la evaluación")
 
     return evaluation
 

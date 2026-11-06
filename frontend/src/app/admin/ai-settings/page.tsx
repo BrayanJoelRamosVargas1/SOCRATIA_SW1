@@ -182,7 +182,7 @@ export default function AdminAISettingsPage() {
             </span>
             {settings.updated_at && (
               <span className="text-xs text-gray-500">
-                Última mod: {new Date(settings.updated_at).toLocaleString()}
+                Última mod: {new Date(settings.updated_at).toLocaleString("es-BO")}
               </span>
             )}
           </div>
@@ -446,10 +446,10 @@ export default function AdminAISettingsPage() {
             </div>
           </div>
 
-          {/* Section 4: Resiliencia y Fallback */}
+          {/* Section 4: Resiliencia y Servicio alternativo */}
           <div className="bg-white border rounded-xl p-6 shadow-sm">
             <div className="border-b pb-3 mb-6">
-              <h2 className="text-xl font-semibold text-gray-800">4. Resiliencia y Conmutación por Error (Fallback)</h2>
+              <h2 className="text-xl font-semibold text-gray-800">4. Continuidad del servicio</h2>
               <p className="text-xs text-gray-500 mt-1">
                 Políticas de continuidad del servicio ante fallos transitorios o límites de tasa de los proveedores.
               </p>
@@ -465,7 +465,7 @@ export default function AdminAISettingsPage() {
               />
               <label htmlFor="fallback_toggle" className="cursor-pointer">
                 <span className="text-sm font-semibold text-gray-800 block">
-                  Habilitar Proveedor de Respaldo Secundario (Fallback Activo)
+                  Usar otro servicio si el principal falla
                 </span>
                 <span className="text-xs text-gray-500 block mt-1">
                   Si ocurre un error de red o timeout en el proveedor principal (o si el Circuit Breaker se abre),

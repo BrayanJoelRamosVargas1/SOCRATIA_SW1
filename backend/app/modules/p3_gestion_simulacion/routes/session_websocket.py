@@ -75,7 +75,7 @@ async def simulation_session(
         return
     user = _authenticated_user(websocket, db)
     if user is None:
-        await websocket.close(code=4401, reason="Authentication required")
+        await websocket.close(code=4401, reason="Debes iniciar sesión para continuar")
         return
     try:
         snapshot = SessionService(db).get_snapshot(user, simulation_id)

@@ -53,7 +53,10 @@ class GeminiJuryRoutingProvider(JuryRoutingProvider):
         for attempt in range(self.max_attempts):
             try:
                 raw = await self._request(request)
-                return JuryRoutingDecision.model_validate_json(raw)
+                decision = JuryRoutingDecision.model_validate_json(raw)
+                from app.core.spanish import require_spanish
+                require_spanish(decision.follow_up_question or "")
+                return decision
             except (ValidationError, ValueError):
                 last_error = JuryRoutingProviderError(
                     "Gemini returned an invalid jury routing decision",

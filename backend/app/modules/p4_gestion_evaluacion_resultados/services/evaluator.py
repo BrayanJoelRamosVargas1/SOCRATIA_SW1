@@ -70,17 +70,17 @@ class Evaluator:
                 f"{getattr(self, '_init_error', 'client was not initialized')}"
             )
 
-        prompt = f"Question: {question}\n\n"
+        prompt = f"Pregunta: {question}\n\n"
         if expected_points:
             prompt += (
-                "Expected Points (from parent if follow-up):\n- "
+                "Puntos esperados (de la pregunta original si es una repregunta):\n- "
                 + "\n- ".join(expected_points)
                 + "\n\n"
             )
 
-        prompt += f"Authorized Context (DO NOT use external knowledge):\n{context_text}\n\n"
-        prompt += f"Student Response:\n{student_response}\n\n"
-        prompt += "Evaluate the student response strictly based on the provided context."
+        prompt += f"Contexto autorizado (no utilices conocimiento externo):\n{context_text}\n\n"
+        prompt += f"Respuesta del postulante:\n{student_response}\n\n"
+        prompt += "Evalúa la respuesta exclusivamente con el contexto proporcionado y redacta toda la retroalimentación en español."
 
         import inspect
 
@@ -113,4 +113,6 @@ class Evaluator:
 
             response = await anyio.to_thread.run_sync(sync_create)
 
+        from app.core.spanish import require_spanish
+        require_spanish(*response.strengths, *response.weaknesses, *response.missing_points, *response.contradictions)
         return response

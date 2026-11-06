@@ -26,7 +26,7 @@ class SubscriptionService:
         sub = db.get(Subscription, sub_id)
         if not sub:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró la suscripción"
             )
         return sub
 
@@ -42,7 +42,7 @@ class SubscriptionService:
         if active_subs.scalars().first():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User already has an active subscription. Cannot have 2 active subscriptions.",
+                detail="El usuario ya tiene una suscripción activa. No puede tener dos a la vez.",
             )
 
     @staticmethod
@@ -50,16 +50,16 @@ class SubscriptionService:
         # Check user exists
         user = db.get(User, data.user_id)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el usuario")
 
         # Check plan exists and active
         plan = db.get(Plan, data.plan_id)
         if not plan:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el plan")
         if not plan.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Plan is inactive and cannot be assigned",
+                detail="El plan está inactivo y no puede asignarse",
             )
 
         # Enforce invariant
@@ -79,7 +79,7 @@ class SubscriptionService:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="User already has an active subscription or concurrent modification detected.",
+                detail="El usuario ya tiene una suscripción activa o se modificó al mismo tiempo. Actualiza la página.",
             ) from err
         return new_sub
 
@@ -107,12 +107,12 @@ class SubscriptionService:
                 plan = db.get(Plan, data.plan_id)
                 if not plan:
                     raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found"
+                        status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el plan"
                     )
                 if not plan.is_active:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Plan is inactive and cannot be assigned",
+                        detail="El plan está inactivo y no puede asignarse",
                     )
                 sub.plan_id = plan.id
                 sub.price_at_subscription = plan.price
@@ -124,7 +124,7 @@ class SubscriptionService:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="User already has an active subscription or concurrent modification detected.",
+                detail="El usuario ya tiene una suscripción activa o se modificó al mismo tiempo. Actualiza la página.",
             ) from err
         return sub
 
@@ -153,11 +153,11 @@ class SubscriptionService:
 
         plan = db.get(Plan, plan_id)
         if not plan:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el plan")
         if not plan.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Plan is inactive and cannot be selected",
+                detail="El plan está inactivo y no puede seleccionarse",
             )
 
         new_sub = Subscription(
@@ -174,7 +174,7 @@ class SubscriptionService:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="User already has an active subscription or concurrent modification detected.",
+                detail="El usuario ya tiene una suscripción activa o se modificó al mismo tiempo. Actualiza la página.",
             ) from err
         return new_sub
 
@@ -184,21 +184,21 @@ class SubscriptionService:
         if not active_sub:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active subscription found to change",
+                detail="No tienes una suscripción activa para cambiar",
             )
         if active_sub.plan_id == new_plan_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot change to the same plan currently active",
+                detail="Ya tienes activo este plan",
             )
 
         new_plan = db.get(Plan, new_plan_id)
         if not new_plan:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el plan")
         if not new_plan.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Plan is inactive and cannot be selected",
+                detail="El plan está inactivo y no puede seleccionarse",
             )
 
         active_sub.status = SubscriptionStatus.CANCELLED
@@ -218,7 +218,7 @@ class SubscriptionService:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="User already has an active subscription or concurrent modification detected.",
+                detail="El usuario ya tiene una suscripción activa o se modificó al mismo tiempo. Actualiza la página.",
             ) from err
         return new_sub
 
@@ -228,7 +228,7 @@ class SubscriptionService:
         if not active_sub:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active subscription found to cancel",
+                detail="No tienes una suscripción activa para cancelar",
             )
 
         active_sub.status = SubscriptionStatus.CANCELLED

@@ -86,7 +86,7 @@ def test_02_get_ai_settings_student_forbidden(client: TestClient, db_session: Se
     create_student_and_login(client, db_session)
     resp = client.get("/api/v1/admin/ai-settings")
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "Administrator access required"
+    assert resp.json()["detail"] == "Se requiere acceso de administrador"
 
 
 # 3. GET anonymous unauthorized

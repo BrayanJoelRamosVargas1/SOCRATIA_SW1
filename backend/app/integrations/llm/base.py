@@ -154,10 +154,12 @@ def validate_question_bank(
     bank: GeneratedQuestionBank,
     request: QuestionGenerationRequest,
 ) -> GeneratedQuestionBank:
+    from app.core.spanish import require_spanish
     allowed_ids = request.allowed_chunk_ids
     if not allowed_ids:
         raise ValueError("question generation context cannot be empty")
     for question in bank.questions:
+        require_spanish(question.question, " ".join(question.expected_answer_points))
         if not set(question.source_chunk_ids).issubset(allowed_ids):
             raise ValueError("question references chunks outside the supplied context")
     return bank

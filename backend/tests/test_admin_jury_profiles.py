@@ -137,7 +137,7 @@ def test_admin_cannot_delete_used_profile(admin_client, client):
     # 4. Try to delete the used jury profile
     delete_resp = admin_client.delete(f"/api/v1/admin/jury-profiles/{used_profile_id}")
     assert delete_resp.status_code == status.HTTP_400_BAD_REQUEST
-    assert "associated simulations" in delete_resp.json()["detail"]
+    assert "simulaciones asociadas" in delete_resp.json()["detail"]
 
 
 def test_admin_can_delete_unused_profile(admin_client):

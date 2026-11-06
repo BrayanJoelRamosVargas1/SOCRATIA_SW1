@@ -1,6 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
@@ -262,7 +263,7 @@ class SessionService:
         ):
             raise InvalidTurnError
 
-        parent = self.db.query(SimulationQuestion).filter_by(id=parent_question_id).first()
+        parent = self.db.query(SimulationQuestion).filter_by(id=parent_question_id, simulation_id=simulation.id).first()
         if not parent:
             raise InvalidTurnError
 
@@ -285,25 +286,21 @@ class SessionService:
             self.db.commit()
             return None, self._snapshot(simulation)
 
-        new_q = SimulationQuestion(
-            simulation_id=simulation.id,
-            position=parent.position,  # Follow up shares same position or we handle it otherwise. Actually position has unique constraint! We'll just assign position as max + 1? No, position is ordered. Let's just give it a high position temporarily, or better: position=max_position + 1
-        )
-        # We need a proper way to add follow ups.
-        # Wait, since position is unique per simulation_id, we need to shift others or just use a float?
-        # SimulationQuestion.position is Integer.
-        # Let's shift remaining questions down by 1.
-        self.db.query(SimulationQuestion).filter(
+        # Descending updates preserve the immediate unique position constraint.
+        # A bulk position+1 update can collide with the next existing row.
+        remaining = self.db.scalars(select(SimulationQuestion).where(
             SimulationQuestion.simulation_id == simulation.id,
             SimulationQuestion.position > parent.position,
-        ).update({"position": SimulationQuestion.position + 1})
-
-        new_q.position = parent.position + 1
-        new_q.source = SimulationQuestionSource.FOLLOW_UP
-        new_q.status = SimulationQuestionStatus.PENDING
-        new_q.prompt_text = text
-        new_q.parent_question_id = parent.id
-        new_q.follow_up_depth = parent.follow_up_depth + 1
+        ).order_by(SimulationQuestion.position.desc()).with_for_update(of=SimulationQuestion)).all()
+        for existing in remaining:
+            existing.position += 1
+            self.db.flush([existing])
+        new_q = SimulationQuestion(
+            simulation_id=simulation.id, position=parent.position + 1,
+            source=SimulationQuestionSource.FOLLOW_UP,
+            status=SimulationQuestionStatus.PENDING, prompt_text=text,
+            parent_question_id=parent.id, follow_up_depth=parent.follow_up_depth + 1,
+        )
 
         self.db.add(new_q)
         self.db.flush()
@@ -312,6 +309,7 @@ class SessionService:
         simulation.turn_state = SimulationTurnState.WAITING_STUDENT
 
         self.db.commit()
+        self.db.expire(simulation, ["questions", "turns"])
         snapshot = self._snapshot(simulation)
         return turn, snapshot
 

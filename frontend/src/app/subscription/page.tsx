@@ -221,7 +221,7 @@ export default function StudentSubscriptionPage() {
                     <div>
                       Inicio:{" "}
                       <strong className="text-gray-800">
-                        {new Date(subData.subscription.started_at).toLocaleDateString()}
+                        {new Date(subData.subscription.started_at).toLocaleDateString("es-BO")}
                       </strong>
                     </div>
                   </div>
@@ -373,7 +373,7 @@ export default function StudentSubscriptionPage() {
                   <tbody className="divide-y divide-gray-200">
                     {subData.history.map((hist) => (
                       <tr key={hist.id}>
-                        <td className="px-4 py-3">{new Date(hist.started_at).toLocaleDateString()}</td>
+                        <td className="px-4 py-3">{new Date(hist.started_at).toLocaleDateString("es-BO")}</td>
                         <td className="px-4 py-3">
                           <span
                             className={`px-2 py-0.5 rounded-full font-medium ${
@@ -389,7 +389,7 @@ export default function StudentSubscriptionPage() {
                           ${Number(hist.price_at_subscription).toFixed(2)}
                         </td>
                         <td className="px-4 py-3 text-gray-500">
-                          {hist.cancelled_at ? new Date(hist.cancelled_at).toLocaleDateString() : "—"}
+                          {hist.cancelled_at ? new Date(hist.cancelled_at).toLocaleDateString("es-BO") : "—"}
                         </td>
                       </tr>
                     ))}

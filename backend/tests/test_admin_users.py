@@ -140,7 +140,7 @@ def test_admin_protect_last_active_admin(client: TestClient, db_session: Session
 
     resp = client.patch(f"/api/v1/admin/users/{admin_id}", json={"is_active": False})
     assert resp.status_code == 400
-    assert "last active administrator" in resp.json()["detail"]
+    assert "último administrador activo" in resp.json()["detail"]
 
 
 def test_admin_payload_with_forbidden_fields_rejected(

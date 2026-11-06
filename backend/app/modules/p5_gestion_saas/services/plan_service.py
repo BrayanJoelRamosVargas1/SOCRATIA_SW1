@@ -67,7 +67,7 @@ class PlanService:
     def get_plan(db: Session, plan_id: str) -> Plan:
         plan = db.get(Plan, plan_id)
         if not plan:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el plan")
         return plan
 
     @staticmethod
@@ -76,7 +76,7 @@ class PlanService:
         existing = db.execute(select(Plan).where(Plan.name == data.name))
         if existing.scalars().first():
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Plan name already exists"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Ya existe un plan con este nombre"
             )
 
         new_plan = Plan(**data.model_dump())
@@ -93,7 +93,7 @@ class PlanService:
             existing = db.execute(select(Plan).where(Plan.name == data.name))
             if existing.scalars().first():
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Plan name already exists"
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Ya existe un plan con este nombre"
                 )
 
         update_data = data.model_dump(exclude_unset=True)

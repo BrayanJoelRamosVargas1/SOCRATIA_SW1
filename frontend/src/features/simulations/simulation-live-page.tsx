@@ -371,7 +371,7 @@ export function SimulationLivePage() {
         }
         stopMedia(); setNotice("Respuesta enviada al alcanzar dos minutos de grabación.");
       },120000);
-    } catch (err) {autoListenRef.current=false;setAutoListen(false);stopMedia(false); stream?.getTracks().forEach(track => track.stop()); setError(err instanceof DOMException && err.name==="NotAllowedError" ? "Permiso de micrófono denegado. Habilítalo en el navegador o responde por texto." : err instanceof DOMException && err.name==="NotFoundError" ? "No se encontró un micrófono. Conecta uno o responde por texto." : err instanceof DOMException && err.name==="NotReadableError" ? "No se pudo abrir el micrófono. Revisa si otra aplicación lo está usando." : err instanceof Error ? err.message : "No pudimos iniciar el micrófono.");}
+    } catch (err) {autoListenRef.current=false;setAutoListen(false);stopMedia(false); stream?.getTracks().forEach(track => track.stop()); setError(err instanceof DOMException && err.name==="NotAllowedError" ? "Permiso de micrófono denegado. Habilítalo en el navegador o responde por texto." : err instanceof DOMException && err.name==="NotFoundError" ? "No se encontró un micrófono. Conecta uno o responde por texto." : err instanceof DOMException && err.name==="NotReadableError" ? "No se pudo abrir el micrófono. Revisa si otra aplicación lo está usando." : err instanceof DOMException ? "No pudimos iniciar el micrófono. Revisa los permisos del navegador o responde por texto." : err instanceof Error ? err.message : "No pudimos iniciar el micrófono.");}
     finally {startingRecording.current = false;}
   }
   const beginAutomaticTurn=useEffectEvent(()=>void startRecording());

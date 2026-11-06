@@ -128,6 +128,8 @@ def validate_presentation(
     presentation: GeneratedPresentation,
     request: PresentationGenerationRequest,
 ) -> GeneratedPresentation:
+    from app.core.spanish import require_spanish
+    require_spanish(presentation.title)
     if not request.allowed_chunk_ids:
         raise ValueError("presentation context cannot be empty")
     if presentation.total_duration_minutes != request.duration_minutes:
@@ -142,6 +144,7 @@ def validate_presentation(
     if not requested_seconds * 0.9 <= total_seconds <= requested_seconds * 1.1:
         raise ValueError("estimated presentation duration is outside the 10 percent tolerance")
     for slide in presentation.slides:
+        require_spanish(slide.title, slide.objective, slide.speaker_notes, " ".join(slide.bullet_points))
         if not set(slide.source_chunk_ids).issubset(request.allowed_chunk_ids):
             raise ValueError("slide references chunks outside the supplied context")
     return presentation
