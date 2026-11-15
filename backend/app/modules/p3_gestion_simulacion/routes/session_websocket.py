@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.integrations.tts.dependencies import get_tts_provider
@@ -63,6 +64,14 @@ async def _send_snapshot(websocket: WebSocket, snapshot: SessionSnapshot) -> Non
         )
 
 
+def _identity_still_active(db: Session, user: User) -> bool:
+    # Read columns explicitly: the long-lived Session can cache an old User.
+    expected_version = user.auth_version
+    row = db.execute(select(User.is_active, User.auth_version).where(User.id == user.id)).first()
+    db.commit()
+    return row is not None and row[0] and row[1] == expected_version
+
+
 @router.websocket("/ws/simulations/{simulation_id}")
 async def simulation_session(
     websocket: WebSocket,
@@ -71,7 +80,7 @@ async def simulation_session(
 ) -> None:
     settings = get_settings()
     if websocket.headers.get("origin") not in settings.cors_origin_list:
-        await websocket.close(code=4403, reason="Origin not allowed")
+        await websocket.close(code=4403, reason="Origen no permitido")
         return
     user = _authenticated_user(websocket, db)
     if user is None:
@@ -81,7 +90,7 @@ async def simulation_session(
         snapshot = SessionService(db).get_snapshot(user, simulation_id)
     except DomainError:
         db.rollback()
-        await websocket.close(code=4403, reason="Session unavailable")
+        await websocket.close(code=4403, reason="Sesión no disponible")
         return
 
     await manager.connect(simulation_id, websocket)
@@ -106,13 +115,18 @@ async def simulation_session(
             message = await websocket.receive()
             if message.get("type") == "websocket.disconnect":
                 raise WebSocketDisconnect(message.get("code", 1000))
+            # Check control messages (including utterance.end), not every audio
+            # chunk. No transcription or answer is accepted without this check.
+            if "bytes" not in message and not _identity_still_active(db, user):
+                await websocket.close(code=4401, reason="Tu acceso terminó. Inicia sesión nuevamente.")
+                break
             if "bytes" in message:
                 if not current_utterance_id:
                     await websocket.send_json(
                         {
                             "type": "error",
                             "code": "NO_ACTIVE_UTTERANCE",
-                            "message": "Binary frame received without active voice.utterance.start",
+                            "message": "Inicia una respuesta oral antes de enviar audio.",
                         }
                     )
                     continue
@@ -122,7 +136,7 @@ async def simulation_session(
                         {
                             "type": "error",
                             "code": "UTTERANCE_TOO_LARGE",
-                            "message": "Maximum audio size exceeded",
+                            "message": "El audio supera el tamaño permitido. Graba una respuesta más corta.",
                         }
                     )
                     # We discard it
@@ -216,7 +230,7 @@ async def simulation_session(
                             {
                                 "type": "error",
                                 "code": "INVALID_MIME_TYPE",
-                                "message": f"Unsupported audio format: {start_msg.payload.mime_type}",
+                                "message": "El formato de audio no es compatible. Prueba otro navegador.",
                             }
                         )
                         continue

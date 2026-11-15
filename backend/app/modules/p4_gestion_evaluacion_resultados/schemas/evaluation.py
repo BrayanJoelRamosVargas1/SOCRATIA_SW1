@@ -15,6 +15,7 @@ class TurnEvaluationResult(BaseModel):
         description="Clasificación de la respuesta del usuario respecto a la pregunta y el contexto."
     )
     score: float = Field(
+        ge=0, le=100, allow_inf_nan=False,
         description="Puntaje de 0 a 100 asignado al turno de acuerdo a la precisión y completitud."
     )
     strengths: list[str] = Field(description="Puntos fuertes de la respuesta del estudiante.")

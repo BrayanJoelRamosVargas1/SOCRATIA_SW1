@@ -45,6 +45,12 @@ class EvaluationService:
             )
 
     async def evaluate_simulation(self, simulation_id: str) -> Evaluation:
+        # Serialize acquisition before any provider call, including failed retries.
+        simulation = self.db.scalar(select(Simulation).where(
+            Simulation.id == simulation_id).with_for_update(of=Simulation))
+        if simulation is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="No se encontró la simulación")
         # Idempotency check
         existing = self.repository.get_by_simulation_id(simulation_id)
         if existing:
@@ -70,6 +76,10 @@ class EvaluationService:
                 started_at=datetime.now(),
             )
             self.repository.create(evaluation)
+
+        # Publish PROCESSING before releasing the row lock or invoking external AI.
+        evaluation.status = EvaluationStatus.PROCESSING
+        self.db.commit()
 
         try:
             # Fetch Simulation

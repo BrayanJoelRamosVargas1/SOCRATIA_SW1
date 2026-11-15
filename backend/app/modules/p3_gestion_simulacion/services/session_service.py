@@ -363,7 +363,7 @@ class SessionService:
             return self._snapshot(simulation)
 
         if simulation.status != SimulationStatus.ACTIVE:
-            raise InvalidTurnError("Simulation is not active")
+            raise InvalidTurnError("La simulación no está activa.")
 
         now = datetime.now(UTC)
         self._close_simulation(simulation, now)

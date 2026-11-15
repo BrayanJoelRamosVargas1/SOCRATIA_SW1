@@ -4,7 +4,9 @@ An interrupted external call is never automatically replayed: its outcome may
 already have consumed quota. A new explicit request is required after review.
 """
 import logging
+import signal
 import time
+from threading import Event
 from datetime import UTC,datetime
 from sqlalchemy import select,text,update
 from app.main import app  # registers all model metadata; does not start an API server
@@ -68,7 +70,34 @@ def run_one(db,executor=execute_task):
     logger.info("Preparation finished task=%s state=%s elapsed_ms=%s",task_id,state,elapsed)
     return True
 
+def worker_loop(stop, session_factory=SessionLocal, runner=run_one):
+    """Finish active work, but never claim another task after shutdown is requested."""
+    while not stop.is_set():
+        try:
+            with session_factory() as db:
+                worked = runner(db)
+            if not worked:
+                stop.wait(2)
+        except Exception:
+            logger.exception("Preparation worker database error")
+            stop.wait(5)
+
+
 def main():
+    stop = Event()
+    previous = {}
+    def request_shutdown(signum, frame):
+        stop.set()
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        previous[signum] = signal.signal(signum, request_shutdown)
+    try:
+        run_worker(stop)
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def run_worker(stop):
     # Session advisory lock prevents a second worker from marking live work interrupted.
     with engine.connect() as lock:
         if not lock.scalar(text("SELECT pg_try_advisory_lock(:key)"),{"key":LOCK_ID}):
@@ -76,12 +105,7 @@ def main():
         lock.commit()
         with SessionLocal() as db:recover_interrupted(db)
         try:
-            while True:
-                try:
-                    with SessionLocal() as db:worked=run_one(db)
-                    if not worked:time.sleep(2)
-                except Exception:
-                    logger.exception("Preparation worker database error");time.sleep(5)
+            worker_loop(stop)
         finally:
             lock.execute(text("SELECT pg_advisory_unlock(:key)"),{"key":LOCK_ID});lock.commit()
 

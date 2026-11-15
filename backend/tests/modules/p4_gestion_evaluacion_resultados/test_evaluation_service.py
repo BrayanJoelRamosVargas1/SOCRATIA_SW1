@@ -13,12 +13,12 @@ from app.modules.p4_gestion_evaluacion_resultados.services.evaluation_service im
 
 @pytest.mark.asyncio
 async def test_evaluate_simulation_not_found(db_session: Session):
+    from fastapi import HTTPException
     service = EvaluationService(db_session)
-    # the code assumes simulation exists, if not it might raise ValueError
-    try:
+    with pytest.raises(HTTPException) as error:
         await service.evaluate_simulation("non_existent_id")
-    except Exception as e:
-        assert "not found" in str(e).lower() or True  # depending on specific implementation
+    assert error.value.status_code == 404
+    assert error.value.detail == "No se encontró la simulación"
 
 
 @pytest.mark.asyncio

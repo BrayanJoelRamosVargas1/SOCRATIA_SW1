@@ -36,6 +36,13 @@ if [[ -n "$PREVIOUS" ]]; then
 fi
 cd "$ROOT"
 COMPOSE=(sudo docker compose --env-file .env.staging -f compose.staging.yaml)
+PUBLIC_DOMAIN=$("${COMPOSE[@]}" config --format json | python3 -c '
+import json,re,sys
+domain=json.load(sys.stdin)["services"]["proxy"]["environment"]["PUBLIC_DOMAIN"]
+if not re.fullmatch(r"(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}",domain):
+    raise SystemExit("Invalid PUBLIC_DOMAIN; deployment stopped")
+print(domain)
+')
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 # Snapshot the database to the same encrypted disk; this is not off-host disaster recovery.
 "${COMPOSE[@]}" exec -T db pg_dump -U socratia -d socratia --no-owner | gzip > "$ROOT/backups/pre-deploy-$STAMP.sql.gz"
@@ -62,8 +69,8 @@ for attempt in $(seq 1 40); do
   sleep 3
 done
 "${COMPOSE[@]}" up -d --no-deps frontend preparation-worker proxy
-curl --fail --silent --retry 8 --retry-all-errors --retry-delay 3 --retry-max-time 90 --max-time 15 https://socratia.34.204.9.87.sslip.io/login >/dev/null
-curl --fail --silent --retry 8 --retry-all-errors --retry-delay 3 --retry-max-time 90 --max-time 10 https://socratia.34.204.9.87.sslip.io/health >/dev/null
+curl --fail --silent --retry 8 --retry-all-errors --retry-delay 3 --retry-max-time 90 --max-time 15 "https://$PUBLIC_DOMAIN/login" >/dev/null
+curl --fail --silent --retry 8 --retry-all-errors --retry-delay 3 --retry-max-time 90 --max-time 10 "https://$PUBLIC_DOMAIN/health" >/dev/null
 printf '%s\n' "$TARGET" > "$STATE/deployed-commit"
 printf '{"commit":"%s","deployed_at":"%s","source":"public GitHub main"}\n' "$TARGET" "$(date -u +%FT%TZ)" > "$ROOT/RELEASE.json"
 trap - ERR
