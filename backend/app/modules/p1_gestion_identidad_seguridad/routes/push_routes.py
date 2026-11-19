@@ -1,5 +1,8 @@
 import base64
 import hashlib
+import time
+from collections import OrderedDict
+from threading import Lock
 from urllib.parse import urlsplit
 from fastapi import APIRouter, HTTPException, Depends, Response
 from pydantic import BaseModel, Field, ConfigDict
@@ -11,6 +14,31 @@ from app.modules.p1_gestion_identidad_seguridad.policies.current_user import Cur
 from app.modules.p1_gestion_identidad_seguridad.models.push_subscription import PushSubscription
 
 router = APIRouter()
+_test_usage = OrderedDict()
+_test_lock = Lock()
+
+
+@router.post("/test")
+def test_notification(user: CurrentUser, db: Session = Depends(get_db)):
+    """An explicit, bounded probe; provider acceptance is not device receipt."""
+    s = get_settings()
+    if not (s.push_public_key and s.push_private_key):
+        raise HTTPException(503, "Los avisos no están configurados")
+    with _test_lock:
+        now = time.monotonic()
+        if now - _test_usage.get(user.id, -60) < 60:
+            raise HTTPException(429, "Espera un minuto antes de enviar otro aviso")
+        _test_usage[user.id] = now
+        _test_usage.move_to_end(user.id)
+        while len(_test_usage) > 1024:
+            _test_usage.popitem(last=False)
+    from app.modules.p1_gestion_identidad_seguridad.services.push_service import deliver_push
+    result = deliver_push(db, user.id, {
+        "title": "Socratia · aviso de prueba",
+        "body": "Los avisos están activos. Puedes volver a tu preparación.",
+        "url": "/documents", "tag": "socratia-push-test",
+    })
+    return result
 
 
 class PushInput(BaseModel):

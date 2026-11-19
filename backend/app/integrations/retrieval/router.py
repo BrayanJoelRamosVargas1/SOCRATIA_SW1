@@ -86,7 +86,8 @@ class RetrievalRouter:
                     results = []
                     for i, match in enumerate(matches, start=1):
                         primary_name = getattr(
-                            self.vector_router.primary, "provider_name", "pinecone"
+                            getattr(self.vector_router, "primary", self.vector_router),
+                            "provider_name", "pinecone"
                         )
                         mode = (
                             RetrievalMode.VECTOR_PRIMARY

@@ -11,6 +11,8 @@ from app.integrations.vector_db.base import (
 
 
 class PgVectorStoreProvider(VectorStoreProvider):
+    provider_name = "pgvector"
+
     def __init__(self, db: Session):
         self.db = db
 

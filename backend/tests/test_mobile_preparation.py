@@ -36,10 +36,52 @@ def test_push_supports_browser_keys():
     validate_subscription(subscription())
 
 
+def test_direct_pgvector_results_are_not_discarded_as_lexical_fallback(monkeypatch):
+    from app.integrations.retrieval.router import RetrievalRouter
+    from app.integrations.retrieval.base import RetrievalMode, FallbackReason
+    from app.integrations.vector_db.pgvector_provider import PgVectorStoreProvider
+    from app.integrations.vector_db.base import VectorSearchResult
+    vectors = PgVectorStoreProvider(db=None)
+    vectors.query = Mock(return_value=[VectorSearchResult("chunk", "Evidencia", .9, {"text": "Evidencia"}, "pgvector")])
+    lexical = SimpleNamespace(search=Mock(side_effect=AssertionError("Unexpected lexical fallback")))
+    embeddings = SimpleNamespace(embed_queries_for_document=Mock(return_value=[[.1]]))
+    router = RetrievalRouter(embeddings, vectors, lexical)
+    monkeypatch.setattr(router, "_has_any_vector_route", lambda _: True)
+    profile = SimpleNamespace(id="profile", chunk_set_id="set", vector_namespace="ns", vector_index="idx", dimension=1)
+    doc = SimpleNamespace(id="doc", user_id="owner", embedding_profiles=[profile], active_embedding_profile_id="profile")
+    matches, reason = router.retrieve_for_document(doc, "owner", "evidencia", 3)
+    assert reason == FallbackReason.NONE
+    assert matches[0].retrieval_mode == RetrievalMode.VECTOR_PRIMARY
+    assert matches[0].content == "Evidencia"
+    lexical.search.assert_not_called()
+
+
+def test_push_probe_is_authenticated_owner_scoped_and_bounded(client, monkeypatch):
+    from pydantic import SecretStr
+    from app.core.config import get_settings
+    import pywebpush
+    assert client.post("/api/v1/push/test").status_code == 401
+    monkeypatch.setattr(get_settings(), "push_public_key", "public")
+    monkeypatch.setattr(get_settings(), "push_private_key", SecretStr("private"))
+    register(client, "probeowner@example.com")
+    assert client.post("/api/v1/push/subscriptions", json=subscription().model_dump()).status_code == 204
+    register(client, "probeoutsider@example.com")
+    calls = []
+    monkeypatch.setattr(pywebpush, "webpush", lambda **kw: calls.append(kw))
+    assert client.post("/api/v1/push/test").json() == {"accepted": 0, "failed": 0}
+    assert not calls
+    # Log back in as the owner; only their endpoint receives the generic probe.
+    assert client.post("/api/v1/auth/login", json={"email": "probeowner@example.com", "password": "secure-question-bank-password"}).status_code == 200
+    assert client.post("/api/v1/push/test").json() == {"accepted": 1, "failed": 0}
+    assert len(calls) == 1
+    assert client.post("/api/v1/push/test").status_code == 429
+    assert len(calls) == 1
+
+
 def test_questions_pdf_preserves_spanish_and_excludes_answers():
     question = SimpleNamespace(
         category="METHODOLOGICAL",
-        question="Â¿CÃ³mo validÃ³ la metodologÃ­a y sus limitaciones?",
+        question="¿Cómo validó la metodología y sus limitaciones?",
         expected_answer_points=["SECRETO INTERNO"],
     )
     raw = export_questions(
@@ -47,7 +89,7 @@ def test_questions_pdf_preserves_spanish_and_excludes_answers():
     )
     pdf = PdfReader(BytesIO(raw))
     text = "".join(page.extract_text() for page in pdf.pages)
-    assert len(pdf.pages) > 1 and "metodologÃ­a" in text and "Pregunta 24" in text
+    assert len(pdf.pages) > 1 and "metodología" in text and "Pregunta 24" in text
     assert "SECRETO INTERNO" not in text
 
 
@@ -70,7 +112,7 @@ def test_push_and_help_require_authentication(client):
 
 def test_help_is_spanish_and_no_automatic_provider_call(client, monkeypatch):
     register(client, "guide@example.com")
-    result = client.post("/api/v1/help/ask", json={"question": "CÃ³mo descargar preguntas"}).json()
+    result = client.post("/api/v1/help/ask", json={"question": "Cómo descargar preguntas"}).json()
     assert result["engine"] == "guia_local" and "PDF" in result["answer"]
 
 
@@ -138,7 +180,7 @@ def test_push_is_owner_scoped_and_failure_does_not_expose_documents(
     run_one(db_session, lambda *_: None)
     assert len(calls) == 1 and calls[0]["timeout"] == 5
     import json
-    assert "Tu preparaciÃ³n estÃ¡ lista" in json.loads(calls[0]["data"])["body"]
+    assert "Tu preparación está lista" in json.loads(calls[0]["data"])["body"]
     assert "PRIVATE" not in calls[0]["data"]
     assert client.request("DELETE", "/api/v1/push/subscriptions", json=body).status_code == 204
 

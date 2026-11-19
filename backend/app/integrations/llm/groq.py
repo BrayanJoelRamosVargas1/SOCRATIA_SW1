@@ -56,11 +56,16 @@ class GroqQuestionGenerationProvider:
                 raw = self._request(request)
                 bank = GeneratedQuestionBank.model_validate_json(raw)
                 return validate_question_bank(bank, request)
-            except (ValidationError, ValueError):
+            except (ValidationError, ValueError) as exc:
+                # Keep diagnostics categorical: never log document/provider output.
+                detail = "schema_validation" if isinstance(exc, ValidationError) else (
+                    "spanish_validation" if "español" in str(exc) else "source_validation"
+                )
                 last_error = QuestionGenerationProviderError(
                     "Groq returned an invalid question bank",
                     provider=self.name,
                     kind=LLMErrorKind.INVALID_OUTPUT,
+                    detail=detail,
                 )
             except QuestionGenerationProviderError as exc:
                 last_error = exc
