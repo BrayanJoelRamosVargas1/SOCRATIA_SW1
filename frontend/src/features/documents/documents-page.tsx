@@ -5,17 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { PreparationNotifications } from "@/components/preparation-notifications";
 import { DocumentIcon } from "@/components/ui/icons";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { getCurrentUser } from "@/features/auth/api";
 import { deleteDocument, listDocuments, uploadDocument } from "@/features/documents/api";
 import { ApiError } from "@/lib/api";
+import { apiRequest } from "@/lib/api";
 import { documentStatusLabels } from "@/types/document";
 import type { Document } from "@/types/document";
 import type { User } from "@/types/user";
 
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -40,10 +41,12 @@ export function DocumentsPage() {
   const [uploadProgress,setUploadProgress]=useState(0);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
+  const [maxSizeMB, setMaxSizeMB] = useState<number | null>(null);
 
   useEffect(() => {
-    Promise.all([getCurrentUser(), listDocuments()])
-      .then(([currentUser, items]) => {
+    Promise.all([getCurrentUser(), listDocuments(), apiRequest<{max_document_size_mb:number}>("/documents/capabilities")])
+      .then(([currentUser, items, capabilities]) => {
+        setMaxSizeMB(capabilities.max_document_size_mb);
         setUser(currentUser);
         setDocuments(items);
       })
@@ -62,8 +65,9 @@ export function DocumentsPage() {
       setError("Selecciona un archivo PDF o DOCX.");
       return;
     }
-    if (file.size > MAX_FILE_SIZE) {
-      setError("El archivo supera el límite de 10 MB del piloto.");
+    if (maxSizeMB === null) {setError("Espera a que cargue el límite de archivos del servidor.");return;}
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      setError(`El archivo supera el límite de ${maxSizeMB} MB.`);
       return;
     }
     setUploading(true);
@@ -118,6 +122,7 @@ export function DocumentsPage() {
           <span className="document-counter">{documents.length} {documents.length === 1 ? "documento" : "documentos"}</span>
         </header>
 
+        <PreparationNotifications />
         <div
           className={`upload-zone ${dragging ? "dragging" : ""} ${uploading ? "uploading" : ""}`}
           onDragEnter={() => setDragging(true)}
@@ -128,7 +133,7 @@ export function DocumentsPage() {
           <div className="upload-icon"><DocumentIcon /></div>
           <div>
             <h2>{uploading ? uploadProgress<100 ? `Subiendo documento · ${uploadProgress}%` : "Transferencia completa · validando y guardando…" : "Arrastra tu PDF o DOCX"}</h2>
-            <p>Validamos el tipo y guardamos el archivo de forma persistente. Máximo 10 MB en este piloto.</p>
+            <p>{maxSizeMB === null ? "Consultando capacidad de archivos…" : `Sube tu PDF o DOCX de hasta ${maxSizeMB} MB. Conservamos el archivo para preparar tu defensa.`}</p>
             {uploading && <progress aria-label="Transferencia del documento" max={100} value={uploadProgress} style={{width:"100%"}}/>}
           </div>
           <label className="button button-primary upload-button">

@@ -15,6 +15,7 @@ from app.modules.p1_gestion_identidad_seguridad.models import (
     session as session_models,  # noqa: F401
 )
 from app.modules.p1_gestion_identidad_seguridad.models import user as user_models  # noqa: F401
+from app.modules.p1_gestion_identidad_seguridad.models import push_subscription as push_models  # noqa: F401
 from app.modules.p2_gestion_documentos_preparacion.models import (
     preparation_task,  # noqa: F401
     document,  # noqa: F401

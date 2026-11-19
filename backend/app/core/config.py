@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     )
 
     public_registration_enabled: bool = True
+    push_public_key: str = ""
+    push_private_key: SecretStr | None = None
+    push_contact: str = "mailto:joelramostrbj@gmail.com"
+    self_hosted_llm_url: str = ""
+    self_hosted_llm_key: SecretStr | None = None
+    self_hosted_llm_model: str = "Qwen/Qwen3-4B-Instruct-2507"
+    preparation_primary_provider: str = Field(default="gemini", pattern="^(gemini|groq|self_hosted)$")
     evaluation_context_max_chars: int = Field(default=12000, ge=3000, le=60000)
     evaluation_max_retries: int = Field(default=1, ge=1, le=3)
     voice_tts_enabled: bool = True
@@ -56,7 +63,7 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     cors_origins: str = "http://localhost:3000"
     local_storage_path: Path = Path("./uploads")
-    max_document_size_mb: int = Field(default=20, ge=1, le=100)
+    max_document_size_mb: int = Field(default=50, ge=1, le=100)
 
     embedding_provider: str = "gemini"
     gemini_api_key: SecretStr | None = None

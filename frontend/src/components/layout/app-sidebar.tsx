@@ -5,6 +5,7 @@ import Link from "next/link";
 import { LayoutDashboard, Files, Mic, ChartNoAxesCombined, UserRound, CreditCard, ShieldCheck, Menu, PanelLeftClose, X, ArrowUpRight } from "lucide-react";
 import type { User } from "@/types/user";
 import { Logo } from "@/components/ui/logo";
+import { ProductGuide } from "@/components/product-guide";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { apiRequest } from "@/lib/api";
 import { warmNavigation } from "@/lib/navigation-prefetch";
@@ -81,6 +82,7 @@ export function AppSidebar({ user, active }: AppSidebarProps) {
   const profile = <Link href="/profile" className="workspace-profile" onClick={() => setOpen(false)}><span className="workspace-avatar">{user?.full_name?.slice(0, 1).toUpperCase() || "S"}</span><span><strong>{user?.full_name || "Tu espacio"}</strong><small>{isAdmin ? "Administrador" : "Preparación académica"}</small></span></Link>;
 
   return <>
+    <ProductGuide />
     <aside className={`dashboard-sidebar workspace-sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="sidebar-brand-row">{(!collapsed || isMobile) && <Logo />}<button ref={toggle} className="hamburger-btn" type="button" aria-label="Abrir o contraer navegación" aria-expanded={isMobile ? open : !collapsed} aria-controls="workspace-mobile-menu" onClick={() => window.innerWidth <= 980 ? setOpen(!open) : setCollapsed(!collapsed)}>{collapsed ? <Menu size={20} /> : <PanelLeftClose size={20} />}</button></div>
       <div className="workspace-desktop">{!collapsed && <><p className="workspace-caption">ESPACIO PERSONAL</p>{profile}</>}{navigation(collapsed)}

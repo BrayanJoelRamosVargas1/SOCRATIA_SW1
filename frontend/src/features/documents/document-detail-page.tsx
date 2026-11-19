@@ -301,6 +301,7 @@ export function DocumentDetailPage() {
 
             {questionBank && !isGenerating && (
               <>
+                <p><a className="button button-primary" href={`${API_URL}/documents/${document.id}/questions/export`} download>Descargar preguntas en PDF</a></p>
                 <div className="question-bank-meta">
                   <span><b>12</b> preguntas</span>
                   <span><b>{questionBank.provider_used}</b> proveedor</span>

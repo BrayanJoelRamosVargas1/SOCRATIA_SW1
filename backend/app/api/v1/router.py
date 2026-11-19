@@ -26,6 +26,10 @@ from app.modules.p3_gestion_simulacion.routes.simulation_routes import (
 )
 
 api_router = APIRouter()
+from app.modules.p1_gestion_identidad_seguridad.routes.push_routes import router as push_router
+api_router.include_router(push_router, prefix="/push", tags=["push"])
+from app.modules.p1_gestion_identidad_seguridad.routes.help_routes import router as help_router
+api_router.include_router(help_router, prefix="/help", tags=["help"])
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(users_router, prefix="/profile", tags=["profile"])
 api_router.include_router(documents_router, prefix="/documents", tags=["documents"])

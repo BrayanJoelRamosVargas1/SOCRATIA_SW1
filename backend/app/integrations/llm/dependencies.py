@@ -30,6 +30,11 @@ def get_question_generation_router() -> QuestionGenerationRouter:
         max_output_tokens=settings.groq_question_max_output_tokens,
         max_context_chars=settings.groq_question_max_context_chars,
     )
+    if settings.preparation_primary_provider == "groq":
+        primary, fallback = fallback, primary
+    elif settings.preparation_primary_provider == "self_hosted":
+        from app.integrations.llm.self_hosted import SelfHostedQuestions
+        primary = SelfHostedQuestions()
     return QuestionGenerationRouter(
         primary=primary,
         fallback=fallback,
@@ -56,6 +61,11 @@ def get_presentation_generation_router() -> PresentationGenerationRouter:
         max_output_tokens=settings.groq_question_max_output_tokens,
         max_context_chars=settings.groq_question_max_context_chars,
     )
+    if settings.preparation_primary_provider == "groq":
+        primary, fallback = fallback, primary
+    elif settings.preparation_primary_provider == "self_hosted":
+        from app.integrations.llm.self_hosted import SelfHostedPresentation
+        primary = SelfHostedPresentation()
     return PresentationGenerationRouter(
         primary=primary,
         fallback=fallback,

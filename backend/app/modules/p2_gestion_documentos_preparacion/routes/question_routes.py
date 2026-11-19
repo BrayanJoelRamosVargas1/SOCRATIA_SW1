@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -23,6 +23,22 @@ GenerationRouter = Annotated[
     QuestionGenerationRouter,
     Depends(get_question_generation_router),
 ]
+
+
+@router.get("/{document_id}/questions/export")
+def download_questions(document_id: str, current_user: CurrentUser, db: Database) -> Response:
+    from app.modules.p2_gestion_documentos_preparacion.repositories.document_repository import DocumentRepository
+    from app.modules.p2_gestion_documentos_preparacion.repositories.question_bank_repository import QuestionBankRepository
+    from app.modules.p2_gestion_documentos_preparacion.policies.document_policy import DocumentPolicy
+    from app.modules.p2_gestion_documentos_preparacion.exceptions import QuestionBankNotFoundError
+    from app.modules.p2_gestion_documentos_preparacion.services.question_export import export_questions
+    document = DocumentPolicy.can_read(current_user, DocumentRepository(db).get_by_id(document_id))
+    bank = QuestionBankRepository(db).get_ready_by_document(document.id)
+    if bank is None:
+        raise QuestionBankNotFoundError
+    return Response(export_questions(bank, document.original_name), media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="socratia-preguntas.pdf"',
+                             "Cache-Control": "private, no-store"})
 
 
 @router.post("/{document_id}/questions/generate", response_model=QuestionBankResponse)

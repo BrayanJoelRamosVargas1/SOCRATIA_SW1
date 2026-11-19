@@ -42,7 +42,12 @@ def execute_task(db,task):
             except QuestionBankNotFoundError:pass
         service.generate(user,task.document_id)
     else:
-        PresentationMaterialService(db=db,retrieval_router=get_retrieval_router(db,embeddings,vectors),generation_router=get_presentation_generation_router()).generate(user,task.document_id,duration_minutes=task.duration_minutes,regenerate=bool(task.regenerate))
+        service=PresentationMaterialService(db=db,retrieval_router=get_retrieval_router(db,embeddings,vectors),generation_router=get_presentation_generation_router())
+        if not task.regenerate:
+            from app.modules.p2_gestion_documentos_preparacion.repositories.presentation_material_repository import PresentationMaterialRepository
+            material=PresentationMaterialRepository(db).get_ready_by_document(task.document_id)
+            if material is not None and material.duration_minutes==task.duration_minutes:return
+        service.generate(user,task.document_id,duration_minutes=task.duration_minutes,regenerate=bool(task.regenerate))
 
 def recover_interrupted(db):
     tasks=db.scalars(select(PreparationTask).where(PreparationTask.status=="RUNNING")).all()
@@ -68,6 +73,13 @@ def run_one(db,executor=execute_task):
     if task:
         task.status=state;task.error_code=code;task.finished_at=datetime.now(UTC);task.elapsed_ms=elapsed;db.commit()
     logger.info("Preparation finished task=%s state=%s elapsed_ms=%s",task_id,state,elapsed)
+    if task:
+        try:
+            from app.modules.p1_gestion_identidad_seguridad.services.push_service import notify_preparation
+            notify_preparation(db,task)
+        except Exception:
+            db.rollback()
+            logger.warning("Preparation notification unavailable")
     return True
 
 def worker_loop(stop, session_factory=SessionLocal, runner=run_one):

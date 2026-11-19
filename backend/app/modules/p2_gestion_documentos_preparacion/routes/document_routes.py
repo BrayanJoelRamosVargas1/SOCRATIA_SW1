@@ -30,9 +30,15 @@ VectorStore = Annotated[VectorStoreProvider, Depends(get_vector_store_provider)]
 Database = Annotated[Session, Depends(get_db)]
 
 
+@router.get("/capabilities")
+def document_capabilities(current_user: CurrentUser) -> dict[str, int]:
+    from app.core.config import get_settings
+    return {"max_document_size_mb": get_settings().max_document_size_mb}
+
+
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def upload_document(
-    file: Annotated[UploadFile, File(description="PDF o DOCX de hasta 20 MB")],
+    file: Annotated[UploadFile, File(description="PDF o DOCX; límite disponible en /documents/capabilities")],
     current_user: CurrentUser,
     db: Database,
     storage_provider: Storage,

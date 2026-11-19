@@ -18,6 +18,14 @@ export function LogoutButton({ className = "" }: LogoutButtonProps = {}) {
     setLoading(true);
     setError(false);
     try {
+      if ("serviceWorker" in navigator) {
+        // A shared device must stop receiving the previous account's notifications.
+        try {
+          const registration = await navigator.serviceWorker.getRegistration();
+          const subscription = await registration?.pushManager.getSubscription();
+          await subscription?.unsubscribe();
+        } catch { /* Logout must remain possible if browser push is unavailable. */ }
+      }
       await logout();
       router.replace("/login");
       router.refresh();

@@ -64,6 +64,8 @@ services:
 
   preparation-worker:
     image: socratia-staging-backend
+    cpus: 1.0
+    mem_limit: 700m
     restart: unless-stopped
     env_file: ${STAGING_ENV_FILE:-.env.staging}
     environment:
