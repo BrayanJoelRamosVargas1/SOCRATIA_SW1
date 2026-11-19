@@ -27,3 +27,10 @@ Kaggle ofrece sesiones y cuotas, no se asumirá disponibilidad permanente. Un mo
 - Una generación diagnóstica de Groq sobre el mismo contexto ficticio fue válida en 2,74 s. Un fallo aislado de formato puede ocurrir; preguntas y diapositivas ahora permiten una sola corrección tras una respuesta inválida conocida. Se conserva validación estricta y, con un intento configurado, pueden consumirse hasta dos completaciones por proveedor Groq; esta corrección no repite fallos de red/autenticación.
 - Instrucciones visibles para Android y para iOS/iPadOS 16.4+ como aplicación añadida a inicio, según WebKit: https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/ . La recepción física en ambos sistemas sigue sin certificarse.
 - Segunda tanda: 35 pruebas de móvil/preparación/apagado pasaron; TypeScript y ESLint de los componentes modificados pasaron, sin compilar producción ni cargar modelos en la laptop.
+
+## Cierre de comprobación en AWS
+
+- Versión de ejecución 2260c93 publicada y verificada en RELEASE.json. Interfaz visible: límite 50 MB, Probar aviso y pasos de Android/iPhone; sin suscripción devuelve «Primero activa los avisos en este dispositivo», sin afirmar entrega.
+- Recorrido real sobre el PDF ficticio de 21 MiB: preguntas SUCCEEDED en 21.317 ms (Gemini alternativo); presentación SUCCEEDED en 26.857 ms. Se descargaron y validaron las 12 preguntas españolas en PDF y 10 diapositivas PPTX. Los tiempos no son una garantía para documentos grandes reales.
+- Modelo Kokoro ONNX ejecutado en contenedor aislado con --network none, CPU 0,75 y RAM 600 MiB, usando los modelos ya instalados: produjo WAV válido de 127.562 bytes en 12,43 s. No hubo descarga ni inferencia en la laptop. Esto demuestra síntesis de voz neuronal autohospedada sin API externa; no demuestra Qwen conectado al flujo de producción.
+- Sigue pendiente la recepción física de Web Push en Android/iPhone y la conexión segura de Qwen al flujo. Kaggle quedó con GPU detenida. La documentación académica permanece fuera de alcance.
