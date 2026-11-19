@@ -10,6 +10,7 @@ from app.integrations.llm.base import (
     QuestionGenerationProviderError,
     QuestionGenerationRequest,
     validate_question_bank,
+    correct_invalid_output_once,
 )
 from app.integrations.llm.prompt import SYSTEM_PROMPT, build_question_prompt
 
@@ -53,9 +54,10 @@ class GroqQuestionGenerationProvider:
         last_error: QuestionGenerationProviderError | None = None
         for attempt in range(self.max_attempts):
             try:
-                raw = self._request(request)
-                bank = GeneratedQuestionBank.model_validate_json(raw)
-                return validate_question_bank(bank, request)
+                return correct_invalid_output_once(
+                    lambda: self._request(request),
+                    lambda raw: validate_question_bank(GeneratedQuestionBank.model_validate_json(raw), request),
+                )
             except (ValidationError, ValueError) as exc:
                 # Keep diagnostics categorical: never log document/provider output.
                 detail = "schema_validation" if isinstance(exc, ValidationError) else (

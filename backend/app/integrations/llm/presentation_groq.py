@@ -3,7 +3,7 @@ import time
 import httpx
 from pydantic import ValidationError
 
-from app.integrations.llm.base import DocumentContextChunk, LLMErrorKind
+from app.integrations.llm.base import DocumentContextChunk, LLMErrorKind, correct_invalid_output_once
 from app.integrations.llm.groq import GROQ_CHAT_COMPLETIONS_URL, RETRYABLE_STATUS_CODES
 from app.integrations.llm.presentation import (
     PRESENTATION_JSON_SCHEMA,
@@ -54,8 +54,10 @@ class GroqPresentationGenerationProvider:
         last_error: PresentationGenerationProviderError | None = None
         for attempt in range(self.max_attempts):
             try:
-                result = GeneratedPresentation.model_validate_json(self._request(request))
-                return validate_presentation(result, request)
+                return correct_invalid_output_once(
+                    lambda: self._request(request),
+                    lambda raw: validate_presentation(GeneratedPresentation.model_validate_json(raw), request),
+                )
             except (ValidationError, ValueError):
                 last_error = PresentationGenerationProviderError(
                     "Groq returned invalid presentation material",

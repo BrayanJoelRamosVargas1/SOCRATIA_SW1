@@ -63,6 +63,23 @@ class QuestionGenerationFailed(Exception):
         self.latency_ms = latency_ms
 
 
+def correct_invalid_output_once(generate, validate):
+    """One bounded new completion after a known invalid response, never a timeout.
+
+    A network failure has an uncertain outcome and is not replayed here. The
+    correction still must pass the same schema, Spanish and source checks.
+    """
+    for correction in range(2):
+        try:
+            return validate(generate())
+        except QuestionGenerationProviderError as exc:
+            if exc.kind != LLMErrorKind.INVALID_OUTPUT or correction:
+                raise
+        except ValueError:
+            if correction:
+                raise
+
+
 @dataclass(frozen=True, slots=True)
 class DocumentContextChunk:
     id: str

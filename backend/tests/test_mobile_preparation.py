@@ -36,6 +36,30 @@ def test_push_supports_browser_keys():
     validate_subscription(subscription())
 
 
+def test_known_invalid_output_gets_one_correction_with_full_validation():
+    from app.integrations.llm.base import correct_invalid_output_once
+    call = Mock(side_effect=["bad", "valid"])
+    def validate(raw):
+        if raw != "valid":
+            raise ValueError("invalid schema or source")
+        return raw
+    assert correct_invalid_output_once(call, validate) == "valid"
+    assert call.call_count == 2
+    call = Mock(return_value="bad")
+    with pytest.raises(ValueError):
+        correct_invalid_output_once(call, validate)
+    assert call.call_count == 2
+
+
+@pytest.mark.parametrize("kind", ["transient", "auth", "permanent"])
+def test_correction_never_replays_network_or_auth_failures(kind):
+    from app.integrations.llm.base import correct_invalid_output_once, QuestionGenerationProviderError, LLMErrorKind
+    call = Mock(side_effect=QuestionGenerationProviderError("unavailable", provider="test", kind=LLMErrorKind(kind)))
+    with pytest.raises(QuestionGenerationProviderError):
+        correct_invalid_output_once(call, lambda raw: raw)
+    assert call.call_count == 1
+
+
 def test_direct_pgvector_results_are_not_discarded_as_lexical_fallback(monkeypatch):
     from app.integrations.retrieval.router import RetrievalRouter
     from app.integrations.retrieval.base import RetrievalMode, FallbackReason
