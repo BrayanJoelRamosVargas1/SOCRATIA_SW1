@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     push_public_key: str = ""
     push_private_key: SecretStr | None = None
     push_contact: str = "mailto:joelramostrbj@gmail.com"
+    # Mounted server-side only; never included in the APK or public repository.
+    fcm_service_account_file: str = ""
     self_hosted_llm_url: str = ""
     self_hosted_llm_key: SecretStr | None = None
     self_hosted_llm_model: str = "Qwen/Qwen3-4B-Instruct-2507"

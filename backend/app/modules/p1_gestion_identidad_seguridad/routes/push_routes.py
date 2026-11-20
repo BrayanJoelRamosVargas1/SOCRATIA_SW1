@@ -12,10 +12,65 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
 from app.modules.p1_gestion_identidad_seguridad.models.push_subscription import PushSubscription
+from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
 
 router = APIRouter()
 _test_usage = OrderedDict()
 _test_lock = Lock()
+
+
+class NativePushInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=20, max_length=4096, pattern=r"^[A-Za-z0-9_:\-]+$")
+
+
+@router.get("/native")
+def native_config(user: CurrentUser):
+    return {"enabled": bool(get_settings().fcm_service_account_file)}
+
+
+@router.post("/native", status_code=204)
+def subscribe_native(body: NativePushInput, user: CurrentUser, db: Session = Depends(get_db)):
+    if not get_settings().fcm_service_account_file:
+        raise HTTPException(503, "Los avisos de la APK todavía no están configurados")
+    digest = hashlib.sha256(body.token.encode()).hexdigest()
+    row = db.scalar(select(NativePushDevice).where(NativePushDevice.token_hash == digest))
+    if row is None or row.user_id != user.id:
+        count = len(db.scalars(select(NativePushDevice.id).where(NativePushDevice.user_id == user.id)).all())
+        if count >= 5:
+            raise HTTPException(409, "Desactiva un dispositivo antes de añadir otro")
+    if row is None:
+        row = NativePushDevice(token_hash=digest, token=body.token)
+        db.add(row)
+    row.user_id = user.id
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/native", status_code=204)
+def unsubscribe_native(body: NativePushInput, user: CurrentUser, db: Session = Depends(get_db)):
+    db.execute(delete(NativePushDevice).where(NativePushDevice.user_id == user.id,
+        NativePushDevice.token_hash == hashlib.sha256(body.token.encode()).hexdigest()))
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.post("/native/test")
+def test_native_notification(user: CurrentUser, db: Session = Depends(get_db)):
+    if not get_settings().fcm_service_account_file:
+        raise HTTPException(503, "Los avisos de la APK todavía no están configurados")
+    with _test_lock:
+        now = time.monotonic()
+        key = "native:" + user.id
+        if now - _test_usage.get(key, -60) < 60:
+            raise HTTPException(429, "Espera un minuto antes de enviar otro aviso")
+        _test_usage[key] = now
+        _test_usage.move_to_end(key)
+        while len(_test_usage) > 1024:
+            _test_usage.popitem(last=False)
+    from app.modules.p1_gestion_identidad_seguridad.services.native_push_service import deliver_native_push
+    return deliver_native_push(db, user.id, {"title": "Socratia · aviso de prueba",
+        "body": "Tus avisos de preparación están activos.", "url": "/documents", "tag": "socratia-native-test"})
 
 
 @router.post("/test")

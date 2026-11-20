@@ -64,3 +64,9 @@ Kaggle ofrece sesiones y cuotas, no se asumirá disponibilidad permanente. Un mo
 ### Resultado de recuperación y validación final
 
 Se recuperó el banco que estaba fallando en el caso reportado: doce preguntas aceptadas por el esquema, distribución y validación de español/fuentes, guardadas con Groq tras acotar contexto y razonamiento. La recuperación guardada registró 2.674 ms en esta muestra; no es una garantía de latencia. La recuperación no sobrescribió las diapositivas guardadas. Las 39 pruebas de móvil/preparación/regresiones pasaron; la tanda de documentos/exportación pasó 32 pruebas. Selector, contraste y diseño de exportación comprobados publicados; el PPTX nuevo se descargó y abrió estructuralmente, sin certificar todavía renderizado visual de todas sus páginas.
+
+### APK obligatoria: alcance acordado el 19 de noviembre
+
+El usuario reemplaza la propuesta de solo PWA por una APK complementaria: documentos y materiales propios, resultados y push, sin simulación móvil. Se implementa `mobile/` con pantallas empaquetadas, autenticación existente por HTTP nativo, PDF/PPTX compartibles y consulta de evaluaciones. La compilación Android se realiza en GitHub Actions para evitar Android Studio/Gradle en la laptop. El binario de pruebas no equivale a publicación en tienda ni certifica instalación/uso hasta verificarlo en un dispositivo.
+
+Push Android tiene registro y entrega FCM HTTP v1 propios; no se presenta Web Push como soporte automático de WebView. Firebase y su cuenta de servicio aún requieren configuración; el cliente informa esa limitación. No se crearon GPUs de pago ni servicios de presentación adicionales. Qwen sigue demostrado en Kaggle pero sin endpoint de producción; Kokoro sí tiene evidencia de inferencia autohospedada. Presenton sigue como opción investigada, no se afirma integrado sin servidor/API configurados.

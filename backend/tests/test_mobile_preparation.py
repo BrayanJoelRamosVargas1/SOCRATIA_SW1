@@ -36,6 +36,55 @@ def test_push_supports_browser_keys():
     validate_subscription(subscription())
 
 
+def test_native_push_requires_auth_and_configuration(client, monkeypatch):
+    from app.core.config import get_settings
+    assert client.get('/api/v1/push/native').status_code == 401
+    register(client, 'native-disabled@example.com')
+    monkeypatch.setattr(get_settings(), 'fcm_service_account_file', '')
+    assert client.get('/api/v1/push/native').json() == {'enabled': False}
+    assert client.post('/api/v1/push/native', json={'token': 'a' * 140}).status_code == 503
+
+
+def test_native_push_is_owner_scoped_and_cleans_only_unregistered_tokens(client, db_session, monkeypatch):
+    import httpx
+    from app.core.config import get_settings
+    from app.modules.p1_gestion_identidad_seguridad.services import native_push_service as service
+    from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
+    from sqlalchemy import select
+    monkeypatch.setattr(get_settings(), 'fcm_service_account_file', 'test-only.json')
+    register(client, 'native-owner@example.com')
+    user_id = client.get('/api/v1/profile').json()['id']
+    owner = {'token': 'owner-token:' + 'a' * 140}
+    assert client.post('/api/v1/push/native', json=owner).status_code == 204
+    assert client.post('/api/v1/push/native', json=owner).status_code == 204
+    assert client.post('/api/v1/push/native', json={'token': 'https://evil.example/path'}).status_code == 422
+    register(client, 'native-other@example.com')
+    assert client.request('DELETE', '/api/v1/push/native', json=owner).status_code == 204
+    assert client.post('/api/v1/push/native', json={'token': 'other:' + 'b' * 140}).status_code == 204
+    credentials = SimpleNamespace(valid=True, project_id='socratia-fixture', token='fixture-only')
+    monkeypatch.setattr(service, 'credentials_for', lambda _: credentials)
+    post = Mock(return_value=httpx.Response(404, json={'error': {'details': [{'errorCode': 'UNREGISTERED'}]}}))
+    monkeypatch.setattr(service.httpx, 'post', post)
+    result = service.deliver_native_push(db_session, user_id, {'title':'Socratia','body':'Material listo','url':'/documents'})
+    assert result == {'accepted': 0, 'failed': 1}
+    assert post.call_args.kwargs['timeout'] == 5
+    assert post.call_args.kwargs['json']['message']['token'] == owner['token']
+    rows = db_session.scalars(select(NativePushDevice)).all()
+    assert len(rows) == 1 and rows[0].token.startswith('other:')
+
+
+def test_native_push_test_is_bounded(client, monkeypatch):
+    from app.core.config import get_settings
+    from app.modules.p1_gestion_identidad_seguridad.services import native_push_service as service
+    register(client, 'native-test@example.com')
+    monkeypatch.setattr(get_settings(), 'fcm_service_account_file', 'fixture.json')
+    deliver = Mock(return_value={'accepted': 1, 'failed': 0})
+    monkeypatch.setattr(service, 'deliver_native_push', deliver)
+    assert client.post('/api/v1/push/native/test').json()['accepted'] == 1
+    assert client.post('/api/v1/push/native/test').status_code == 429
+    assert deliver.call_count == 1
+
+
 def test_excess_rubric_items_do_not_discard_bank_or_relax_source_checks():
     import json
     from conftest import FakeQuestionGenerationProvider

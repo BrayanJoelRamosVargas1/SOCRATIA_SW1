@@ -1,0 +1,56 @@
+name: APK Android de pruebas
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/mobile-apk.yml']
+permissions:
+  contents: read
+concurrency:
+  group: mobile-apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --no-audit --no-fund
+      - run: npm test && npm run build
+      - name: Firebase del proyecto (opcional hasta configurarlo)
+        env:
+          FIREBASE_ANDROID_JSON: ${{ secrets.FIREBASE_ANDROID_JSON }}
+        run: |
+          if [ -n "$FIREBASE_ANDROID_JSON" ]; then
+            printf '%s' "$FIREBASE_ANDROID_JSON" > android/app/google-services.json
+          else
+            echo 'APK de consulta: push nativo pendiente de configurar Firebase.'
+          fi
+      - run: npx cap sync android
+      - name: Compilar APK instalable de pruebas
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --no-daemon --max-workers=2 assembleDebug
+      - name: Huella del archivo
+        run: sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: socratia-android-${{ github.sha }}
+          path: |
+            mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            mobile/android/app/build/outputs/apk/debug/SHA256SUMS.txt
+          retention-days: 14

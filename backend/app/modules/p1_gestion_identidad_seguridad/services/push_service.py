@@ -11,13 +11,17 @@ logger = logging.getLogger(__name__)
 
 
 def notify_preparation(db, task):
-    return deliver_push(db, task.user_id, {
+    payload = {
         "title": "Socratia",
         "body": "Tu preparación está lista." if task.status == "SUCCEEDED"
         else "Una tarea requiere tu atención. Abre Socratia para revisarla.",
         "url": "/documents/" + task.document_id,
         "tag": "preparation-" + task.id,
-    })
+    }
+    result = deliver_push(db, task.user_id, payload)
+    from app.modules.p1_gestion_identidad_seguridad.services.native_push_service import deliver_native_push
+    native = deliver_native_push(db, task.user_id, payload)
+    return {key: result[key] + native[key] for key in ("accepted", "failed")}
 
 
 def deliver_push(db, user_id, payload):

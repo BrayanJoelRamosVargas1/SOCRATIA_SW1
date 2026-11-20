@@ -1,0 +1,8 @@
+{
+  "appId": "bo.socratia.mobile",
+  "appName": "Socratia",
+  "webDir": "dist",
+  "server": {"androidScheme":"https","cleartext":false},
+  "android": {"allowMixedContent":false},
+  "plugins": {"CapacitorHttp":{"enabled":true},"PushNotifications":{"presentationOptions":["badge","sound","alert"]}}
+}
