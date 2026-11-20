@@ -286,3 +286,12 @@ main:has(> .landing-nav) .button-large { min-height:54px; border-radius:15px; }
 .skeleton-secondary { height:12px; width:85%; opacity:.65; }
 @keyframes skeleton-sheen { from {background-position:100% 0} to {background-position:-100% 0} }
 @media(prefers-reduced-motion:reduce) { .skeleton-bar { animation:none; } }
+
+/* Camera feedback is readable in both the light calibration page and dark room. */
+.room-signal-card {color:#e9f3f4;}
+.room-signal-card .room-dress-card {color:#e9f3f4;background:#1b3741;border-color:#52727b;}
+.room-signal-card .room-dress-card p,.room-signal-card .room-privacy,.room-signal-card dt {color:#bed2d8;}
+.room-signal-card dd,.room-signal-card .room-dress-card strong,.room-signal-card .room-dress-continuous {color:#f1f7f8;}
+.room-signal-card .room-text-button {color:#b8f0df;}
+.room-signal-card .room-text-button:disabled {color:#a7bbc2;opacity:1;}
+.room-signal-card .room-dress-card input {accent-color:#91ddc5;}

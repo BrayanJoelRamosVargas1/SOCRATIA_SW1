@@ -7,9 +7,9 @@ import { useEffect, useState } from "react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { getCurrentUser } from "@/features/auth/api";
-import { getQuestionBank, listDocuments } from "@/features/documents/api";
+import { listDocuments } from "@/features/documents/api";
 import { createSimulation, listJuryProfiles } from "@/features/simulations/api";
-import { ApiError } from "@/lib/api";
+import { apiRequest, ApiError } from "@/lib/api";
 import type { Document } from "@/types/document";
 import type { JuryProfile } from "@/types/simulation";
 import type { User } from "@/types/user";
@@ -21,6 +21,7 @@ export function NewSimulationPage() {
   const [user, setUser] = useState<User | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [juries, setJuries] = useState<JuryProfile[]>([]);
+  const [readyIds, setReadyIds] = useState<string[]>([]);
   const [documentId, setDocumentId] = useState("");
   const [juryId, setJuryId] = useState("");
   const [duration, setDuration] = useState(15);
@@ -28,15 +29,14 @@ export function NewSimulationPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([getCurrentUser(), listDocuments(), listJuryProfiles()])
-      .then(async ([current, allDocuments, profiles]) => {
-        const processed = allDocuments.filter((item) => item.status === "PROCESSED");
-        const eligibility = await Promise.all(processed.map(async (item) => { try { await getQuestionBank(item.id); return item; } catch { return null; } }));
-        const ready = eligibility.filter((item): item is Document => item !== null);
-        setUser(current); setDocuments(ready); setJuries(profiles);
-        setDocumentId(ready[0]?.id ?? ""); setJuryId(profiles[0]?.id ?? "");
+    Promise.all([getCurrentUser(), listDocuments(), listJuryProfiles(), apiRequest<{ready_document_ids:string[]}>("/documents/readiness")])
+      .then(([current, allDocuments, profiles, readiness]) => {
+        setUser(current); setDocuments(allDocuments); setJuries(profiles);
+        const ready = allDocuments.filter(item=>readiness.ready_document_ids.includes(item.id));
+        setReadyIds(readiness.ready_document_ids);
+        setDocumentId(ready[0]?.id ?? allDocuments[0]?.id ?? ""); setJuryId(profiles[0]?.id ?? "");
       })
-      .catch(() => router.replace("/login"));
+      .catch((caught) => { if (caught instanceof ApiError && caught.status === 401) router.replace("/login"); else setError("No se pudo cargar la configuración. Revisa la conexión y actualiza la página."); });
   }, [router]);
 
   async function submit() {
@@ -65,7 +65,7 @@ export function NewSimulationPage() {
     <main className="dashboard-layout">
       <AppSidebar user={user} active="simulations" />
       <section className="dashboard-content simulations-content">
-        {!user ? (
+        {!user && error ? <div role="alert"><p>{error}</p><Link href="/documents">Volver a documentos</Link></div> : !user ? (
           <LoadingSkeleton label="Preparando configuración…"/>
         ) : (
           <>
@@ -88,11 +88,12 @@ export function NewSimulationPage() {
               {documents.map((item) => (
                 <option value={item.id} key={item.id}>
 
-                  {item.original_name}
+                  {item.original_name}{readyIds.includes(item.id) ? " · listo para practicar" : item.status === "PROCESSED" ? " · falta preparar preguntas" : " · pendiente de procesamiento"}
                 </option>
               ))}
             </select>
           </label>
+          {documentId && !readyIds.includes(documentId) && <p className="form-hint" role="status">Tu documento está guardado. {documents.find(item=>item.id===documentId)?.status === "PROCESSED" ? "Genera su banco de preguntas para usarlo en la defensa." : "Primero procesa el archivo y después genera sus preguntas."} <Link href={`/documents/${documentId}`}>Preparar este documento →</Link></p>}
           {documents.length === 0 && (
             <p className="form-hint">
               Primero sube y procesa un documento académico para generar su banco de preguntas socráticas.
@@ -158,7 +159,7 @@ export function NewSimulationPage() {
           <button
             className="button button-primary simulation-submit"
             type="button"
-            disabled={!documentId || !juryId || saving}
+            disabled={!documentId || !readyIds.includes(documentId) || !juryId || saving}
             onClick={() => void submit()}
           >
             {saving ? "Creando sala…" : "Continuar a Calibración de Hardware →"}

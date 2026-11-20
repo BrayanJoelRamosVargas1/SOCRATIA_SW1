@@ -84,13 +84,24 @@ def export_presentation(material, *, source_name: str, pdf_content: bytes | None
 
     for item in material.slides:
         slide = new_slide(item.title, item.position)
-        objective = item.objective if len(item.objective) <= 220 else item.objective[:217] + "…"
-        text(slide, objective, .7, 1.65, 11.9, .85, 17, color="526E74")
+        # A clear visual hierarchy, with editable cards instead of a wall of bullets.
+        objective = item.objective if len(item.objective) <= 180 else item.objective[:177] + "…"
+        text(slide, objective, .7, 1.6, 11.9, .75, 18, color="526E74")
         bullets = item.bullet_points[:5]
         for index, bullet in enumerate(bullets):
-            # A long original bullet stays complete in the notes, while the slide stays readable.
-            visible = bullet if len(bullet) <= 190 else bullet[:187] + "…"
-            text(slide, f"•  {visible}", .9, 2.65 + index * .78, 11.5, .75, 20 if len(visible) > 145 else 24)
+            columns = 1 if len(bullets) <= 3 else 2
+            x = .7 + (index % columns) * 6.05
+            y = 2.6 + (index // columns) * (1.16 if columns == 1 else 1.22)
+            width = 11.9 if columns == 1 else 5.8
+            card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(width), Inches(1.04))
+            card.fill.solid()
+            card.fill.fore_color.rgb = RGBColor.from_string("FFFFFF")
+            card.line.color.rgb = RGBColor.from_string("D5E4DF")
+            text(slide, f"{index+1:02}", x+.17, y+.18, .48, .45, 17, color="167B68", bold=True)
+            limit = 210 if columns == 1 else 130
+            visible = bullet if len(bullet) <= limit else bullet[:limit-1] + "…"
+            text(slide, visible, x+.83, y+.12, width-1.02, .82, 19 if columns == 1 else 17)
+        text(slide, f"EXPOSICIÓN · {max(1, round(item.estimated_seconds/60))} MIN", .72, 6.62, 10, .25, 10, color="167B68", bold=True)
         notes = slide.notes_slide.notes_text_frame
         if notes is not None:
             notes.text = (f"Objetivo: {item.objective}\n\n{item.speaker_notes}\n\n"

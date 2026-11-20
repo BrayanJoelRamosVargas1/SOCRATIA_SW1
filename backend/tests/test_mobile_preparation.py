@@ -120,10 +120,12 @@ def test_questions_pdf_preserves_spanish_and_excludes_answers():
 def test_pdf_route_is_owner_scoped(client):
     doc = processed_document(client, "pdfowner@example.com")
     assert client.post(f"/api/v1/documents/{doc}/questions/generate").status_code == 200
+    assert doc in client.get("/api/v1/documents/readiness").json()["ready_document_ids"]
     response = client.get(f"/api/v1/documents/{doc}/questions/export")
     assert response.status_code == 200 and response.content.startswith(b"%PDF")
     assert response.headers["cache-control"] == "private, no-store"
     register(client, "pdfoutsider@example.com")
+    assert doc not in client.get("/api/v1/documents/readiness").json()["ready_document_ids"]
     assert client.get(f"/api/v1/documents/{doc}/questions/export").status_code == 404
 
 

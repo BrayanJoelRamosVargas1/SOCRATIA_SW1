@@ -47,6 +47,19 @@ def upload_document(
     return DocumentResponse.model_validate(document)
 
 
+@router.get("/readiness")
+def document_readiness(current_user: CurrentUser, db: Database) -> dict[str, list[str]]:
+    """One owner-scoped query instead of downloading every question bank."""
+    from sqlalchemy import select
+    from app.modules.p2_gestion_documentos_preparacion.models.question_bank import QuestionBank, QuestionBankStatus
+    from app.modules.p2_gestion_documentos_preparacion.models.document import Document, DocumentStatus
+    ids = db.scalars(select(QuestionBank.document_id).join(Document, Document.id == QuestionBank.document_id).where(
+        Document.user_id == current_user.id, QuestionBank.user_id == current_user.id,
+        Document.status == DocumentStatus.PROCESSED, QuestionBank.status == QuestionBankStatus.READY,
+    )).all()
+    return {"ready_document_ids": list(ids)}
+
+
 @router.get("", response_model=list[DocumentResponse])
 def list_documents(
     current_user: CurrentUser,

@@ -80,6 +80,7 @@ export function DocumentDetailPage() {
   const [tasks,setTasks]=useState<PreparationTask[]>([]);
   const [submitting,setSubmitting]=useState(false);
   const [taskNotice,setTaskNotice]=useState("");
+  const submissionLock=useRef(false);
   const handledTasks=useRef(new Set<string>());
   const activeTask=tasks.find(taskIsActive);
   const activeTaskId=activeTask?.id;
@@ -167,7 +168,8 @@ export function DocumentDetailPage() {
   },[activeTaskId,params.id]);
 
   async function enqueue(kind:PreparationTask["kind"],regenerate=false){
-    if(!document || busy)return;
+    if(!document || busy || submissionLock.current)return;
+    submissionLock.current=true;
     setError("");setSubmitting(true);
     try {
       const task=await submitPreparationTask(document.id,kind,durationMinutes,regenerate);
@@ -176,7 +178,7 @@ export function DocumentDetailPage() {
     } catch(caught){
       setError(caught instanceof ApiError?caught.message:"No pudimos confirmar la solicitud. Consultaremos si quedó guardada.");
       try{setTasks(await listPreparationTasks(document.id));}catch{/* Never resubmit an uncertain request automatically. */}
-    } finally {setSubmitting(false);}
+    } finally {submissionLock.current=false;setSubmitting(false);}
   }
   async function runProcessing(){await enqueue("process");}
   async function runQuestionGeneration(){

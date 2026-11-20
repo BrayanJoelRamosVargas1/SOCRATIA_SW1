@@ -34,3 +34,20 @@ Kaggle ofrece sesiones y cuotas, no se asumirá disponibilidad permanente. Un mo
 - Recorrido real sobre el PDF ficticio de 21 MiB: preguntas SUCCEEDED en 21.317 ms (Gemini alternativo); presentación SUCCEEDED en 26.857 ms. Se descargaron y validaron las 12 preguntas españolas en PDF y 10 diapositivas PPTX. Los tiempos no son una garantía para documentos grandes reales.
 - Modelo Kokoro ONNX ejecutado en contenedor aislado con --network none, CPU 0,75 y RAM 600 MiB, usando los modelos ya instalados: produjo WAV válido de 127.562 bytes en 12,43 s. No hubo descarga ni inferencia en la laptop. Esto demuestra síntesis de voz neuronal autohospedada sin API externa; no demuestra Qwen conectado al flujo de producción.
 - Sigue pendiente la recepción física de Web Push en Android/iPhone y la conexión segura de Qwen al flujo. Kaggle quedó con GPU detenida. La documentación académica permanece fuera de alcance.
+
+## Hoja del docente: transcripción de los requisitos de software
+
+1. La app está completamente y correctamente terminada en un 100 %, de acuerdo a lo descrito en la definición de dicho proyecto.
+2. La aplicación implementa funcionalidades basadas en IA en modo local que vayan más allá de un chat, reconocimiento de imagen.
+3. La app contiene funcionalidades para ser publicadas en versión móvil que incluya notificaciones tipo push.
+4. La app está diseñada y desplegada en infraestructura como AWS, Azure, Google Cloud, y cuenta con un asistente inteligente para guiar al usuario para aprender a usar la app correctamente.
+5. Documentación: excluida por pedido del equipo; el borde de la foto además recorta parte del texto.
+
+### Nueva tanda de fallas reportadas
+
+- Selector de simulación vacío: la interfaz ocultaba documentos sin preguntas listas y también ocultaba errores de consulta. Ahora lista todos los archivos, identifica si falta procesamiento o preguntas y enlaza a la preparación; solo habilita continuar con banco comprobado.
+- Doble clic en generación: bloqueo inmediato con referencia, además del estado visual y la exclusión de tareas en servidor. No es necesario insistir mientras una tarea esté en curso.
+- Contraste: texto claro, controles y mensajes legibles en la tarjeta oscura de calibración y vestimenta.
+- PPTX: reemplazar la lista uniforme por tarjetas numeradas editables en una o dos columnas, jerarquía de texto y tiempo de exposición; conservar texto completo en notas y figuras atribuidas. Este cambio no equivale a diseño de una API externa ni certifica aún calidad visual renderizada.
+- Propuesta móvil: PWA instalable para Android/iPhone con carga, historial, práctica por texto/audio y avisos. Si el docente exige APK, evaluar cliente Capacitor con pantallas móviles y autenticación contra la API, evitando una mera promesa de publicar la web. iOS requiere herramientas/firma de Apple; no se ha generado APK/IPA.
+- API de presentaciones investigada: Gamma permite generación/exportación PPTX, pero su API consume créditos y requiere acceso de plan correspondiente. No se activó gasto ni se enviaron documentos privados. Fuentes: https://developers.gamma.app/ y https://gamma.app/pricing . Capacitor: https://capacitorjs.com/docs .
