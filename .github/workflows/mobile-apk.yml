@@ -51,6 +51,7 @@ jobs:
           mkdir -p "$HOME/.android"
           printf '%s' "$ANDROID_PILOT_KEYSTORE_B64" | base64 --decode > "$HOME/.android/debug.keystore"
           chmod 600 "$HOME/.android/debug.keystore"
+          printf 'SOCRATIA_PILOT_KEYSTORE=%s\n' "$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
       - name: Compilar APK instalable de pruebas
         run: |
           chmod +x android/gradlew
@@ -60,6 +61,9 @@ jobs:
         run: |
           sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/SHA256SUMS.txt
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/SIGNING-CERTIFICATE.txt
+          expected=$(keytool -exportcert -keystore "$SOCRATIA_PILOT_KEYSTORE" -alias androiddebugkey -storepass android | sha256sum | cut -d ' ' -f 1)
+          actual=$(awk -F ': ' '/certificate SHA-256 digest:/ {print $2; exit}' android/app/build/outputs/apk/debug/SIGNING-CERTIFICATE.txt)
+          test "$expected" = "$actual" || { echo 'La firma no coincide con la clave del piloto.'; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: socratia-android-${{ github.sha }}

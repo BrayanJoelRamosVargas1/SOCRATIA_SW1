@@ -16,7 +16,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // CI supplies the same pilot key on every runner; never use a runner-created key.
+    if (System.getenv('SOCRATIA_PILOT_KEYSTORE')) {
+        signingConfigs {
+            pilot {
+                storeFile file(System.getenv('SOCRATIA_PILOT_KEYSTORE'))
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (System.getenv('SOCRATIA_PILOT_KEYSTORE')) {
+                signingConfig signingConfigs.pilot
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
