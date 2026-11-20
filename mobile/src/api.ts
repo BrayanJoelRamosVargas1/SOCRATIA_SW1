@@ -6,7 +6,7 @@ export class ApiError extends Error { constructor(message: string, public status
 export async function api<T>(path: string, method = 'GET', data?: unknown, retry = true): Promise<T> {
   let response;
   try {
-    response = await CapacitorHttp.request({url: DEFAULT_SERVER + apiPath(path), method,
+    response = await CapacitorHttp.request({url: DEFAULT_SERVER + apiPath(path, method), method,
       headers: {'Content-Type':'application/json'}, data, connectTimeout:15000, readTimeout:30000});
   } catch { throw new ApiError('No pudimos conectar. Revisa Internet y vuelve a intentar.', 0); }
   if (response.status === 401 && retry && !path.startsWith('/auth/')) {
