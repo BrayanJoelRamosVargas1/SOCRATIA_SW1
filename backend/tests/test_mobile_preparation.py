@@ -36,6 +36,38 @@ def test_push_supports_browser_keys():
     validate_subscription(subscription())
 
 
+def test_excess_rubric_items_do_not_discard_bank_or_relax_source_checks():
+    import json
+    from conftest import FakeQuestionGenerationProvider
+    from app.integrations.llm.base import QuestionGenerationRequest, DocumentContextChunk, parse_question_bank, validate_question_bank
+    request = QuestionGenerationRequest("Prueba", (DocumentContextChunk("owned", "Evidencia del documento", .9),))
+    bank = FakeQuestionGenerationProvider(name="test", model="test").generate(request)
+    data = bank.model_dump(mode="json")
+    data["questions"][2]["expected_answer_points"] = ["Evidencia del documento"] * 8
+    result = validate_question_bank(parse_question_bank(json.dumps(data)), request)
+    assert len(result.questions) == 12 and len(result.questions[2].expected_answer_points) == 6
+    data["questions"][2]["source_chunk_ids"] = ["foreign-document"]
+    with pytest.raises(ValueError):
+        validate_question_bank(parse_question_bank(json.dumps(data)), request)
+
+
+def test_groq_failed_generation_still_requires_full_local_validation(monkeypatch):
+    import httpx
+    from conftest import FakeQuestionGenerationProvider
+    from app.integrations.llm.base import QuestionGenerationRequest, DocumentContextChunk, QuestionGenerationProviderError
+    from app.integrations.llm.groq import GroqQuestionGenerationProvider
+    request = QuestionGenerationRequest("Prueba", (DocumentContextChunk("owned", "Evidencia del documento", .9),))
+    bank = FakeQuestionGenerationProvider(name="test", model="test").generate(request)
+    body = {"error": {"code": "json_validate_failed", "failed_generation": bank.model_dump_json()}}
+    monkeypatch.setattr(httpx, "post", Mock(return_value=httpx.Response(400, json=body)))
+    provider = GroqQuestionGenerationProvider(api_key="fixture", model="fixture", timeout_seconds=1, max_attempts=1, max_output_tokens=4096, max_context_chars=5000)
+    assert len(provider.generate(request).questions) == 12
+    body["error"]["failed_generation"] = bank.model_dump_json().replace('"owned"', '"foreign"')
+    monkeypatch.setattr(httpx, "post", Mock(return_value=httpx.Response(400, json=body)))
+    with pytest.raises(QuestionGenerationProviderError):
+        provider.generate(request)
+
+
 def test_known_invalid_output_gets_one_correction_with_full_validation():
     from app.integrations.llm.base import correct_invalid_output_once
     call = Mock(side_effect=["bad", "valid"])

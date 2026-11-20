@@ -11,6 +11,7 @@ from app.integrations.llm.base import (
     QuestionGenerationRequest,
     validate_question_bank,
     correct_invalid_output_once,
+    parse_question_bank,
 )
 from app.integrations.llm.prompt import SYSTEM_PROMPT, build_question_prompt
 
@@ -56,7 +57,7 @@ class GroqQuestionGenerationProvider:
             try:
                 return correct_invalid_output_once(
                     lambda: self._request(request),
-                    lambda raw: validate_question_bank(GeneratedQuestionBank.model_validate_json(raw), request),
+                    lambda raw: validate_question_bank(parse_question_bank(raw), request),
                 )
             except (ValidationError, ValueError) as exc:
                 # Keep diagnostics categorical: never log document/provider output.
@@ -127,6 +128,12 @@ class GroqQuestionGenerationProvider:
                 detail=f"http_{response.status_code}",
             )
         if response.status_code == 400 and self._is_invalid_output_error(response):
+            # Groq can return JSON in failed_generation when its own schema gate
+            # rejects an output. Never trust it directly: generate() applies our
+            # complete schema, language and source checks before it can be saved.
+            candidate = response.json().get("error", {}).get("failed_generation")
+            if isinstance(candidate, str) and 0 < len(candidate) <= 200000:
+                return candidate
             raise QuestionGenerationProviderError(
                 "Groq returned an invalid structured response",
                 provider=self.name,

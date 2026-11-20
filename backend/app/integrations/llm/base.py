@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+import json
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -142,6 +143,20 @@ class GeneratedQuestionBank(BaseModel):
         if len(normalized) != len(set(normalized)):
             raise ValueError("questions must be unique")
         return self
+
+
+def parse_question_bank(raw: str) -> GeneratedQuestionBank:
+    """Bound excess internal rubric items without inventing or changing questions.
+
+    All other schema constraints remain strict; callers must still validate the
+    language and source identifiers against the supplied document context.
+    """
+    data = json.loads(raw)
+    if isinstance(data, dict) and isinstance(data.get("questions"), list):
+        for question in data["questions"]:
+            if isinstance(question, dict) and isinstance(question.get("expected_answer_points"), list):
+                question["expected_answer_points"] = question["expected_answer_points"][:6]
+    return GeneratedQuestionBank.model_validate(data)
 
 
 @dataclass(frozen=True, slots=True)

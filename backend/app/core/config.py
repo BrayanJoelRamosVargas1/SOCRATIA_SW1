@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     gemini_question_model: str = "gemini-1.5-flash"
     vision_model: str = "gemini-3.1-flash-lite"
     groq_question_model: str = "openai/gpt-oss-20b"
-    groq_question_max_context_chars: int = Field(default=10000, ge=3000, le=60000)
+    groq_question_max_context_chars: int = Field(default=5000, ge=3000, le=60000)
 
     document_chunk_size_chars: int = Field(default=3000, ge=500, le=12000)
     document_chunk_overlap_chars: int = Field(default=400, ge=0, le=3000)
