@@ -90,6 +90,8 @@ class GroqPresentationGenerationProvider:
             "temperature": 0.3,
             "max_completion_tokens": self.max_output_tokens,
         }
+        if self.model in {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}:
+            payload["reasoning_effort"] = "low"
         try:
             response = httpx.post(
                 GROQ_CHAT_COMPLETIONS_URL,

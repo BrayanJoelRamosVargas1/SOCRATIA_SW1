@@ -57,3 +57,6 @@ Kaggle ofrece sesiones y cuotas, no se asumirá disponibilidad permanente. Un mo
 - Alternativa de presentaciones investigada: Presenton, API de código abierto con exportación PPTX/PDF. No se instala en el piloto pequeño sin medir recursos ni se asume que sus proveedores de IA sean gratis: https://github.com/presenton/presenton .
 
 - Si Groq devuelve `json_validate_failed` con `failed_generation`, la salida se somete a nuestras mismas validaciones completas antes de aceptarla. No se acepta el texto del error como resultado sin comprobarlo ni se eliminan controles de fuentes; prueba de regresión rechaza una fuente ajena incluso en esta ruta.
+
+- El parser también selecciona tres preguntas por categoría cuando la respuesta contiene más de doce y todas las categorías tienen suficientes candidatos; no completa categorías ausentes ni acepta fuentes ajenas. GPT-OSS utiliza `reasoning_effort=low` para acotar coste/latencia de preparación; otros modelos conservan sus parámetros compatibles. Referencia: https://console.groq.com/docs/reasoning .
+- Despliegue incremental: solo se construyen servicios con cambios, se conservan como reversión las imágenes realmente en ejecución y se libera únicamente caché reconstruible. Evita reconstruir la interfaz en cambios exclusivos del backend; no amplía el disco ni elimina archivos de usuario.

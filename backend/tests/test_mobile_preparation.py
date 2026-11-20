@@ -44,6 +44,8 @@ def test_excess_rubric_items_do_not_discard_bank_or_relax_source_checks():
     bank = FakeQuestionGenerationProvider(name="test", model="test").generate(request)
     data = bank.model_dump(mode="json")
     data["questions"][2]["expected_answer_points"] = ["Evidencia del documento"] * 8
+    extra = dict(data["questions"][-1], question="¿Qué otra limitación de la evidencia debe explicarse ante el tribunal?")
+    data["questions"].append(extra)
     result = validate_question_bank(parse_question_bank(json.dumps(data)), request)
     assert len(result.questions) == 12 and len(result.questions[2].expected_answer_points) == 6
     data["questions"][2]["source_chunk_ids"] = ["foreign-document"]
@@ -66,6 +68,18 @@ def test_groq_failed_generation_still_requires_full_local_validation(monkeypatch
     monkeypatch.setattr(httpx, "post", Mock(return_value=httpx.Response(400, json=body)))
     with pytest.raises(QuestionGenerationProviderError):
         provider.generate(request)
+
+
+@pytest.mark.parametrize("model,expected", [("openai/gpt-oss-20b", "low"), ("other-model", None)])
+def test_reasoning_budget_is_only_set_on_supported_models(monkeypatch, model, expected):
+    import httpx
+    from app.integrations.llm.base import QuestionGenerationRequest, DocumentContextChunk
+    from app.integrations.llm.groq import GroqQuestionGenerationProvider
+    post = Mock(return_value=httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]}))
+    monkeypatch.setattr(httpx, "post", post)
+    provider = GroqQuestionGenerationProvider(api_key="fixture", model=model, timeout_seconds=1, max_attempts=1, max_output_tokens=4096, max_context_chars=5000)
+    provider._request(QuestionGenerationRequest("Prueba", (DocumentContextChunk("owned", "Evidencia", .9),)))
+    assert post.call_args.kwargs["json"].get("reasoning_effort") == expected
 
 
 def test_known_invalid_output_gets_one_correction_with_full_validation():

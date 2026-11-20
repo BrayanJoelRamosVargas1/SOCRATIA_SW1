@@ -156,6 +156,15 @@ def parse_question_bank(raw: str) -> GeneratedQuestionBank:
         for question in data["questions"]:
             if isinstance(question, dict) and isinstance(question.get("expected_answer_points"), list):
                 question["expected_answer_points"] = question["expected_answer_points"][:6]
+        # Select the requested three questions per category when the model
+        # provides extras. Missing categories and invalid retained items fail
+        # below; no question or answer is invented to fill a gap.
+        groups = {category.value: [] for category in QuestionCategory}
+        for question in data["questions"]:
+            if isinstance(question, dict) and question.get("category") in groups:
+                groups[question["category"]].append(question)
+        if len(data["questions"]) > 12 and all(len(items) >= 3 for items in groups.values()):
+            data["questions"] = [question for items in groups.values() for question in items[:3]]
     return GeneratedQuestionBank.model_validate(data)
 
 
