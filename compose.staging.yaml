@@ -51,6 +51,7 @@ services:
     volumes:
       - staging_documents:/data/uploads
       - /opt/socratia-voice/models:/data/voice-models:ro
+      - /opt/socratia-secrets:/run/socratia-secrets:ro
     depends_on:
       db:
         condition: service_healthy
@@ -77,6 +78,7 @@ services:
     command: [python, -m, app.cli.preparation_worker]
     volumes:
       - staging_documents:/data/uploads
+      - /opt/socratia-secrets:/run/socratia-secrets:ro
     depends_on:
       backend:
         condition: service_healthy
