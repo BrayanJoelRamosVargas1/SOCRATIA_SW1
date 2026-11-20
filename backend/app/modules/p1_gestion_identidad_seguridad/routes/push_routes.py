@@ -4,15 +4,17 @@ import time
 from collections import OrderedDict
 from threading import Lock
 from urllib.parse import urlsplit
-from fastapi import APIRouter, HTTPException, Depends, Response
-from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import select, delete
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
+
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
-from app.modules.p1_gestion_identidad_seguridad.models.push_subscription import PushSubscription
 from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
+from app.modules.p1_gestion_identidad_seguridad.models.push_subscription import PushSubscription
+from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
 
 router = APIRouter()
 _test_usage = OrderedDict()
@@ -29,10 +31,19 @@ def native_config(user: CurrentUser):
     return {"enabled": bool(get_settings().fcm_service_account_file)}
 
 
+@router.post("/native/status")
+def native_device_status(body: NativePushInput, user: CurrentUser, db: Session = Depends(get_db)):
+    """Verify this device for its owner, without exposing tokens or registering it."""
+    digest = hashlib.sha256(body.token.encode()).hexdigest()
+    registered = db.scalar(select(NativePushDevice.id).where(
+        NativePushDevice.user_id == user.id, NativePushDevice.token_hash == digest))
+    return {"registered": registered is not None}
+
+
 @router.post("/native", status_code=204)
 def subscribe_native(body: NativePushInput, user: CurrentUser, db: Session = Depends(get_db)):
     if not get_settings().fcm_service_account_file:
-        raise HTTPException(503, "Los avisos de la APK todavía no están configurados")
+        raise HTTPException(503, "Las notificaciones todavía no están disponibles")
     digest = hashlib.sha256(body.token.encode()).hexdigest()
     row = db.scalar(select(NativePushDevice).where(NativePushDevice.token_hash == digest))
     if row is None or row.user_id != user.id:
@@ -58,7 +69,7 @@ def unsubscribe_native(body: NativePushInput, user: CurrentUser, db: Session = D
 @router.post("/native/test")
 def test_native_notification(user: CurrentUser, db: Session = Depends(get_db)):
     if not get_settings().fcm_service_account_file:
-        raise HTTPException(503, "Los avisos de la APK todavía no están configurados")
+        raise HTTPException(503, "Las notificaciones todavía no están disponibles")
     with _test_lock:
         now = time.monotonic()
         key = "native:" + user.id
@@ -68,7 +79,9 @@ def test_native_notification(user: CurrentUser, db: Session = Depends(get_db)):
         _test_usage.move_to_end(key)
         while len(_test_usage) > 1024:
             _test_usage.popitem(last=False)
-    from app.modules.p1_gestion_identidad_seguridad.services.native_push_service import deliver_native_push
+    from app.modules.p1_gestion_identidad_seguridad.services.native_push_service import (
+        deliver_native_push,
+    )
     return deliver_native_push(db, user.id, {"title": "Socratia · aviso de prueba",
         "body": "Tus avisos de preparación están activos.", "url": "/documents", "tag": "socratia-native-test"})
 

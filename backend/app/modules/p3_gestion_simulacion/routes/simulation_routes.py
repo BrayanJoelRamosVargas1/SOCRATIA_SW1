@@ -1,17 +1,17 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
-from app.integrations.tts.base import TTSRequest, TTSProviderError
-from app.integrations.tts.dependencies import get_tts_provider
-from app.integrations.tts.local_tts import speech_segments
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.core.config import get_settings
-from app.modules.p3_gestion_simulacion.schemas.appearance import AppearanceInput, AppearanceResult
-from app.modules.p3_gestion_simulacion.services.appearance_service import AppearanceService
+from app.core.database import get_db
+from app.integrations.tts.base import TTSProviderError, TTSRequest
+from app.integrations.tts.dependencies import get_tts_provider
+from app.integrations.tts.local_tts import speech_segments
 from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
+from app.modules.p3_gestion_simulacion.repositories.turn_repository import TurnRepository
+from app.modules.p3_gestion_simulacion.schemas.appearance import AppearanceInput, AppearanceResult
 from app.modules.p3_gestion_simulacion.schemas.session import SessionSnapshot
 from app.modules.p3_gestion_simulacion.schemas.simulation import (
     CalibrationInput,
@@ -19,8 +19,8 @@ from app.modules.p3_gestion_simulacion.schemas.simulation import (
     SimulationCreateInput,
     SimulationResponse,
 )
+from app.modules.p3_gestion_simulacion.services.appearance_service import AppearanceService
 from app.modules.p3_gestion_simulacion.services.session_service import SessionService
-from app.modules.p3_gestion_simulacion.repositories.turn_repository import TurnRepository
 from app.modules.p3_gestion_simulacion.services.simulation_service import (
     SimulationService,
 )
@@ -54,7 +54,7 @@ async def prewarm_jury_speech(simulation_id: str, current_user: CurrentUser, db:
     if question and question.source == "BANK" and text and len(text) <= 800:
         try:
             for segment in speech_segments(text):
-                async for _chunk in get_tts_provider().synthesize(TTSRequest(text=segment, speaker_index=question.position % 3)):
+                async for _chunk in get_tts_provider().synthesize(TTSRequest(text=segment, speaker_index=(question.position - 1) % 3)):
                     pass
         except TTSProviderError:
             pass

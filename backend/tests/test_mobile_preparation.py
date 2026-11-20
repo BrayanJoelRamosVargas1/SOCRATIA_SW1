@@ -2,19 +2,22 @@ import base64
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock
+
 import pytest
 from fastapi import HTTPException
 from pypdf import PdfReader
+from test_question_banks import processed_document, register
+
 from app.modules.p1_gestion_identidad_seguridad.routes.push_routes import (
     PushInput,
     validate_subscription,
 )
 from app.modules.p2_gestion_documentos_preparacion.services.question_export import export_questions
-from test_question_banks import processed_document, register
 
 
 def subscription(endpoint="https://fcm.googleapis.com/fcm/send/test"):
-    enc = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")
+    def enc(b):
+        return base64.urlsafe_b64encode(b).decode().rstrip("=")
     return PushInput(endpoint=endpoint, p256dh=enc(b"\x04" + b"a" * 64), auth=enc(b"a" * 16))
 
 
@@ -45,12 +48,31 @@ def test_native_push_requires_auth_and_configuration(client, monkeypatch):
     assert client.post('/api/v1/push/native', json={'token': 'a' * 140}).status_code == 503
 
 
+def test_native_status_is_read_only_and_owner_scoped(client, monkeypatch, db_session):
+    from sqlalchemy import select
+
+    from app.core.config import get_settings
+    from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
+    body = {'token': 'device-token:' + 'a' * 140}
+    assert client.post('/api/v1/push/native/status', json=body).status_code == 401
+    monkeypatch.setattr(get_settings(), 'fcm_service_account_file', 'fixture.json')
+    register(client, 'native-status-owner@example.com')
+    assert client.post('/api/v1/push/native/status', json=body).json() == {'registered': False}
+    assert not db_session.scalars(select(NativePushDevice)).all()
+    assert client.post('/api/v1/push/native', json=body).status_code == 204
+    assert client.post('/api/v1/push/native/status', json=body).json() == {'registered': True}
+    register(client, 'native-status-outsider@example.com')
+    assert client.post('/api/v1/push/native/status', json=body).json() == {'registered': False}
+    assert len(db_session.scalars(select(NativePushDevice)).all()) == 1
+
+
 def test_native_push_is_owner_scoped_and_cleans_only_unregistered_tokens(client, db_session, monkeypatch):
     import httpx
-    from app.core.config import get_settings
-    from app.modules.p1_gestion_identidad_seguridad.services import native_push_service as service
-    from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
     from sqlalchemy import select
+
+    from app.core.config import get_settings
+    from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
+    from app.modules.p1_gestion_identidad_seguridad.services import native_push_service as service
     monkeypatch.setattr(get_settings(), 'fcm_service_account_file', 'test-only.json')
     register(client, 'native-owner@example.com')
     user_id = client.get('/api/v1/profile').json()['id']
@@ -69,6 +91,10 @@ def test_native_push_is_owner_scoped_and_cleans_only_unregistered_tokens(client,
     assert result == {'accepted': 0, 'failed': 1}
     assert post.call_args.kwargs['timeout'] == 5
     assert post.call_args.kwargs['json']['message']['token'] == owner['token']
+    notification = post.call_args.kwargs['json']['message']['android']['notification']
+    assert notification['channel_id'] == 'socratia_preparation'
+    assert notification['visibility'] == 'PRIVATE'
+    assert notification['default_sound'] is True
     rows = db_session.scalars(select(NativePushDevice)).all()
     assert len(rows) == 1 and rows[0].token.startswith('other:')
 
@@ -87,8 +113,15 @@ def test_native_push_test_is_bounded(client, monkeypatch):
 
 def test_excess_rubric_items_do_not_discard_bank_or_relax_source_checks():
     import json
+
     from conftest import FakeQuestionGenerationProvider
-    from app.integrations.llm.base import QuestionGenerationRequest, DocumentContextChunk, parse_question_bank, validate_question_bank
+
+    from app.integrations.llm.base import (
+        DocumentContextChunk,
+        QuestionGenerationRequest,
+        parse_question_bank,
+        validate_question_bank,
+    )
     request = QuestionGenerationRequest("Prueba", (DocumentContextChunk("owned", "Evidencia del documento", .9),))
     bank = FakeQuestionGenerationProvider(name="test", model="test").generate(request)
     data = bank.model_dump(mode="json")
@@ -105,7 +138,12 @@ def test_excess_rubric_items_do_not_discard_bank_or_relax_source_checks():
 def test_groq_failed_generation_still_requires_full_local_validation(monkeypatch):
     import httpx
     from conftest import FakeQuestionGenerationProvider
-    from app.integrations.llm.base import QuestionGenerationRequest, DocumentContextChunk, QuestionGenerationProviderError
+
+    from app.integrations.llm.base import (
+        DocumentContextChunk,
+        QuestionGenerationProviderError,
+        QuestionGenerationRequest,
+    )
     from app.integrations.llm.groq import GroqQuestionGenerationProvider
     request = QuestionGenerationRequest("Prueba", (DocumentContextChunk("owned", "Evidencia del documento", .9),))
     bank = FakeQuestionGenerationProvider(name="test", model="test").generate(request)
@@ -122,7 +160,8 @@ def test_groq_failed_generation_still_requires_full_local_validation(monkeypatch
 @pytest.mark.parametrize("model,expected", [("openai/gpt-oss-20b", "low"), ("other-model", None)])
 def test_reasoning_budget_is_only_set_on_supported_models(monkeypatch, model, expected):
     import httpx
-    from app.integrations.llm.base import QuestionGenerationRequest, DocumentContextChunk
+
+    from app.integrations.llm.base import DocumentContextChunk, QuestionGenerationRequest
     from app.integrations.llm.groq import GroqQuestionGenerationProvider
     post = Mock(return_value=httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]}))
     monkeypatch.setattr(httpx, "post", post)
@@ -148,7 +187,11 @@ def test_known_invalid_output_gets_one_correction_with_full_validation():
 
 @pytest.mark.parametrize("kind", ["transient", "auth", "permanent"])
 def test_correction_never_replays_network_or_auth_failures(kind):
-    from app.integrations.llm.base import correct_invalid_output_once, QuestionGenerationProviderError, LLMErrorKind
+    from app.integrations.llm.base import (
+        LLMErrorKind,
+        QuestionGenerationProviderError,
+        correct_invalid_output_once,
+    )
     call = Mock(side_effect=QuestionGenerationProviderError("unavailable", provider="test", kind=LLMErrorKind(kind)))
     with pytest.raises(QuestionGenerationProviderError):
         correct_invalid_output_once(call, lambda raw: raw)
@@ -156,10 +199,10 @@ def test_correction_never_replays_network_or_auth_failures(kind):
 
 
 def test_direct_pgvector_results_are_not_discarded_as_lexical_fallback(monkeypatch):
+    from app.integrations.retrieval.base import FallbackReason, RetrievalMode
     from app.integrations.retrieval.router import RetrievalRouter
-    from app.integrations.retrieval.base import RetrievalMode, FallbackReason
-    from app.integrations.vector_db.pgvector_provider import PgVectorStoreProvider
     from app.integrations.vector_db.base import VectorSearchResult
+    from app.integrations.vector_db.pgvector_provider import PgVectorStoreProvider
     vectors = PgVectorStoreProvider(db=None)
     vectors.query = Mock(return_value=[VectorSearchResult("chunk", "Evidencia", .9, {"text": "Evidencia"}, "pgvector")])
     lexical = SimpleNamespace(search=Mock(side_effect=AssertionError("Unexpected lexical fallback")))
@@ -176,9 +219,10 @@ def test_direct_pgvector_results_are_not_discarded_as_lexical_fallback(monkeypat
 
 
 def test_push_probe_is_authenticated_owner_scoped_and_bounded(client, monkeypatch):
-    from pydantic import SecretStr
-    from app.core.config import get_settings
     import pywebpush
+    from pydantic import SecretStr
+
+    from app.core.config import get_settings
     assert client.post("/api/v1/push/test").status_code == 401
     monkeypatch.setattr(get_settings(), "push_public_key", "public")
     monkeypatch.setattr(get_settings(), "push_private_key", SecretStr("private"))
@@ -260,8 +304,9 @@ def test_self_hosted_failure_keeps_provider_contract(monkeypatch):
 
 
 def test_upload_more_than_twenty_mb_uses_configured_limit(client, monkeypatch):
-    from app.core.config import get_settings
     from test_documents import valid_pdf
+
+    from app.core.config import get_settings
 
     register(client, "large@example.com")
     monkeypatch.setattr(get_settings(), "max_document_size_mb", 50)
@@ -277,12 +322,14 @@ def test_upload_more_than_twenty_mb_uses_configured_limit(client, monkeypatch):
 def test_push_is_owner_scoped_and_failure_does_not_expose_documents(
     client, db_session, monkeypatch
 ):
-    from app.core.config import get_settings
-    from app.cli.preparation_worker import run_one
-    from test_presentation_materials import upload
     from uuid import uuid4
-    from pydantic import SecretStr
+
     import pywebpush
+    from pydantic import SecretStr
+    from test_presentation_materials import upload
+
+    from app.cli.preparation_worker import run_one
+    from app.core.config import get_settings
 
     register(client, "pushowner@example.com")
     monkeypatch.setattr(get_settings(), "push_public_key", "testpublic")
@@ -308,11 +355,16 @@ def test_push_is_owner_scoped_and_failure_does_not_expose_documents(
 
 def test_preparation_provider_is_selected_without_loading_models(monkeypatch):
     from app.core.config import get_settings
-    from app.integrations.llm.dependencies import get_question_generation_router,get_presentation_generation_router
+    from app.integrations.llm.dependencies import (
+        get_presentation_generation_router,
+        get_question_generation_router,
+    )
     settings=get_settings()
     for selected,expected in [("groq","groq"),("self_hosted","self_hosted"),("gemini","gemini")]:
         monkeypatch.setattr(settings,"preparation_primary_provider",selected)
-        get_question_generation_router.cache_clear();get_presentation_generation_router.cache_clear()
+        get_question_generation_router.cache_clear()
+        get_presentation_generation_router.cache_clear()
         assert get_question_generation_router().primary.name==expected
         assert get_presentation_generation_router().primary.name==expected
-    get_question_generation_router.cache_clear();get_presentation_generation_router.cache_clear()
+    get_question_generation_router.cache_clear()
+    get_presentation_generation_router.cache_clear()

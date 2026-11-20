@@ -3,8 +3,10 @@ import logging
 import re
 from functools import lru_cache
 from threading import Lock
+
 import httpx
 from sqlalchemy import select
+
 from app.core.config import get_settings
 from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
@@ -49,7 +51,10 @@ def deliver_native_push(db, user_id, payload):
                 json={"message": {"token": device.token,
                     "notification": {"title": payload["title"], "body": payload["body"]},
                     "data": {"url": payload.get("url", "/documents")},
-                    "android": {"ttl": "3600s", "priority": "normal", "notification": {"tag": payload.get("tag", "socratia")}}}})
+                    "android": {"ttl": "3600s", "priority": "high", "notification": {
+                        "channel_id": "socratia_preparation", "icon": "ic_notification",
+                        "visibility": "PRIVATE", "default_sound": True,
+                        "tag": payload.get("tag", "socratia")}}}})
             if response.status_code == 200:
                 accepted += 1
                 continue

@@ -10,6 +10,8 @@ test('companion allows reading materials but rejects simulations, uploads and ar
   assert.throws(() => apiPath('/documents/abc', 'DELETE'));
   assert.equal(apiPath('/auth/login', 'POST'), '/api/v1/auth/login');
   assert.equal(apiPath('/push/native', 'DELETE'), '/api/v1/push/native');
+  assert.equal(apiPath('/push/native/status', 'POST'), '/api/v1/push/native/status');
+  assert.throws(() => apiPath('/push/native/status', 'DELETE'));
 });
 test('notification navigation never opens foreign links or executes input', () => {
   assert.equal(safeNotificationDocument('/documents/abc-123'), 'abc-123');

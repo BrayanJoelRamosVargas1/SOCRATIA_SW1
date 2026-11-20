@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { api, ApiError, exportFile, clearPrivateExports } from './api';
-import { enablePush, disablePush, initializePush } from './push';
+import { enablePush, disablePush, initializePush, getPushState, restorePush } from './push';
 import './style.css';
 
 type Document = {id:string; original_name:string; status:string; file_size:number};
@@ -9,24 +9,29 @@ const root = document.querySelector<HTMLDivElement>('#app')!;
 let user: {full_name:string} | null = null;
 let generation = 0;
 let busy = false;
+let pendingNotification: string | null | undefined;
 const labels: Record<string,string> = {UPLOADED:'Recibido',PROCESSING:'Procesando',PROCESSED:'Procesado',FAILED:'Requiere revisión',READY:'Listo',DRAFT:'Preparada',ACTIVE:'En curso',ABORTED:'Interrumpida',ERROR:'Requiere revisión',COMPLETED:'Finalizada',FINISHED:'Finalizada',EVALUATED:'Evaluada',CREATED:'Preparada',IN_PROGRESS:'En curso',CANCELLED:'Cancelada',METHODOLOGICAL:'Metodología',TECHNICAL:'Técnica',CRITICAL:'Análisis crítico',GENERAL:'General'};
 function el<K extends keyof HTMLElementTagNameMap>(tag:K, text='', className='') {const node=document.createElement(tag); node.textContent=text; node.className=className; return node;}
 function button(text:string, action:()=>unknown, secondary=false) {const node=el('button',text,secondary?'secondary':''); node.type='button'; node.addEventListener('click',()=>{void perform(action);}); return node;}
-function announce(message:string) {const box=document.querySelector('#message'); if (box) {box.textContent=message; box.scrollIntoView({block:'nearest'});}}
+function announce(message:string, success=false) {const box=document.querySelector('#message'); if (box) {box.textContent=message; box.classList.toggle('message-success',success);box.scrollIntoView({block:'nearest'});}}
 async function perform(action:()=>unknown) {
   if(busy) return;
   busy=true;
   try {await action();} catch(error) {if(error instanceof ApiError && error.status===401){user=null;login();}announce(error instanceof Error?error.message:'No se pudo completar la acción.');}
-  finally {busy=false;}
+  finally {busy=false;if(user && pendingNotification!==undefined)void perform(()=>openPreparation());}
 }
 function frame(title:string) {
   const ticket=++generation;
   root.replaceChildren();
-  const header=el('header'); header.append(el('span','S','brand'),el('div','Socratia · Mi preparación'));
+  const header=el('header'); header.append(el('span','S','brand'),el('div','Socratia'));
   const main=el('main'); main.append(el('p',user?.full_name ?? 'Tu preparación, contigo','eyebrow'),el('h1',title));
   const message=el('p','','message'); message.id='message'; message.setAttribute('role','status'); main.append(message);
   root.append(header,main);
-  if(user){const nav=el('nav');nav.setAttribute('aria-label','Secciones');nav.append(button('Documentos',()=>show('documents'),true),button('Resultados',()=>show('results'),true),button('Mi cuenta',settings,true));root.append(nav);}
+  if(user){const nav=el('nav');nav.setAttribute('aria-label','Secciones');for(const [label,action,active] of [
+    ['Documentos',()=>show('documents'),title==='Mis documentos'],
+    ['Resultados',()=>show('results'),title==='Mis resultados'],
+    ['Mi cuenta',()=>settings(),title==='Mi cuenta'],
+  ] as const){const item=button(label,action,true);if(active)item.setAttribute('aria-current','page');nav.append(item);}root.append(nav);}
   return {main,ticket};
 }
 function login() {
@@ -36,7 +41,7 @@ function login() {
   const emailLabel=el('label','Correo electrónico'), email=el('input');email.type='email';email.autocomplete='username';email.required=true;emailLabel.append(email);
   const passwordLabel=el('label','Contraseña'), password=el('input');password.type='password';password.autocomplete='current-password';password.required=true;passwordLabel.append(password);
   const submit=el('button','Iniciar sesión');submit.type='submit';form.append(emailLabel,passwordLabel,submit);
-  form.addEventListener('submit',event=>{event.preventDefault();void perform(async()=>{submit.disabled=true;try {const response=await api<{user:{full_name:string}}>('/auth/login','POST',{email:email.value.trim(),password:password.value});password.value='';user=response.user;await show('documents');}finally{submit.disabled=false;}});});
+  form.addEventListener('submit',event=>{event.preventDefault();void perform(async()=>{submit.disabled=true;try {const response=await api<{user:{full_name:string}}>('/auth/login','POST',{email:email.value.trim(),password:password.value});password.value='';user=response.user;await openPreparation();}finally{submit.disabled=false;}});});
   main.append(form,el('p','La creación de cuentas y las simulaciones se realizan en la versión web.','hint'));
 }
 async function show(page:'documents'|'results') {
@@ -82,21 +87,52 @@ async function evaluation(id:string) {
   for(const [index,turn] of result.turn_evaluations.entries()){const card=el('article','','card');card.append(el('h2',`Respuesta ${index+1}`));for(const text of [...turn.strengths,...turn.weaknesses])card.append(el('p',text));main.append(card);}
   main.append(button('Volver a resultados',()=>show('results'),true));
 }
-function settings() {
-  const {main}=frame('Mi cuenta');
-  main.append(el('p','Recibe un aviso cuando termine la preparación de tus materiales. No mostramos el contenido privado del documento en la pantalla bloqueada.','card'));
-  main.append(button('Activar notificaciones',async()=>{await enablePush();announce('Avisos activados en este celular.');}));
-  main.append(button('Desactivar notificaciones',async()=>{const config=await api<{enabled:boolean}>('/push/native');if(config.enabled)await disablePush();announce('Avisos desactivados.');},true));
-  main.append(button('Probar aviso',async()=>{const result=await api<{accepted:number}>('/push/native/test','POST');announce(result.accepted?'Envío aceptado. Comprueba la notificación en tu celular.':'No hay dispositivos registrados.');},true));
-  main.append(button('Cerrar sesión',async()=>{
+async function settings(notice='') {
+  const {main,ticket}=frame('Mi cuenta');
+  const card=el('section','','card settings-card');
+  const heading=el('div','','settings-heading');heading.append(el('span','↗','settings-symbol'),el('h2','Tus notificaciones'));
+  const state=el('p','Comprobando avisos…','push-state');state.setAttribute('aria-live','polite');
+  card.append(heading,state,el('p','Te avisamos cuando tus preguntas y diapositivas estén listas, aunque salgas de Socratia.'));
+  const controls=el('div','','settings-actions');card.append(controls,el('p','Tus documentos permanecen privados. Los avisos no muestran su contenido.','hint'));main.append(card);
+  main.append(el('p','Consulta y repasa tus materiales aquí. Prepara tus defensas desde Socratia en la web.','hint companion-hint'));
+  const logout=button('Cerrar sesión',async()=>{
     let pushError=false;
     try {const config=await api<{enabled:boolean}>('/push/native');if(config.enabled)await disablePush();}catch {pushError=true;}
     await api('/auth/logout','POST');
     if(Capacitor.isNativePlatform())await clearPrivateExports();
-    user=null;login();
+    pendingNotification=undefined;user=null;login();
     if(pushError)announce('Sesión cerrada. No pudimos desactivar los avisos; puedes revocarlos desde los ajustes de Android.');
-  },true));
-  main.append(el('p','La APK permite consultar y repasar. Las simulaciones, cámara y generación se utilizan desde la web.','hint'));
+  },true);logout.classList.add('logout');main.append(logout);
+  if(notice)announce(notice,true);
+  try {
+    if(!Capacitor.isNativePlatform()){state.textContent='Disponible en tu celular';return;}
+    const status=await getPushState();if(ticket!==generation)return;
+    state.textContent=status.enabled?'● Notificaciones activadas':status.available?'○ Notificaciones desactivadas':'Avisos no disponibles por el momento';
+    state.classList.toggle('push-enabled',status.enabled);
+    if(status.available){
+      controls.append(button(status.enabled?'Desactivar avisos':'Activar notificaciones',async()=>{
+        if(status.enabled)await disablePush();else await enablePush();
+        await settings(status.enabled?'Avisos desactivados.':'Ya puedes recibir novedades en este celular.');
+      },status.enabled));
+      if(status.enabled)controls.append(button('Enviar aviso de prueba',async()=>{
+        const result=await api<{accepted:number;failed:number}>('/push/native/test','POST');
+        announce(result.accepted?'Aviso enviado. Revisa la barra de notificaciones de tu celular.':result.failed?'No pudimos enviar el aviso. Desactiva y vuelve a activar las notificaciones.':'Activa las notificaciones en este celular antes de probar.',result.accepted>0);
+      },true));
+    }
+  }catch(error){
+    if(ticket!==generation)return;
+    if(error instanceof ApiError && error.status===401)throw error;
+    state.textContent='No pudimos comprobar tus avisos';
+    controls.append(button('Volver a comprobar',()=>settings(),true));
+  }
 }
-async function boot(){frame('Mi preparación');try{if(Capacitor.isNativePlatform())await initializePush(id=>{if(user)void perform(()=>documentDetail(id,'Mis materiales'));},announce);user=await api<{full_name:string}>('/profile');await show('documents');}catch(error){login();if(!(error instanceof ApiError && error.status===401))announce(error instanceof Error?error.message:'No pudimos conectar.');}}
+async function openPreparation(){
+  const target=pendingNotification;pendingNotification=undefined;
+  if(target)await documentDetail(target,'Mis materiales');else await show('documents');
+  if(Capacitor.isNativePlatform())try{await restorePush();}catch{/* Materials remain usable when push is unavailable. */}
+}
+async function boot(){frame('Mi preparación');try{
+  if(Capacitor.isNativePlatform())try{await initializePush(id=>{pendingNotification=id;if(user)void perform(()=>openPreparation());},message=>announce(message,true));}catch{/* Notification setup must not block access to materials. */}
+  user=await api<{full_name:string}>('/profile');await openPreparation();
+}catch(error){login();if(!(error instanceof ApiError && error.status===401))announce(error instanceof Error?error.message:'No pudimos conectar.');}}
 void boot();

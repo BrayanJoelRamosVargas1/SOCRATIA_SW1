@@ -43,17 +43,28 @@ jobs:
             echo 'APK de consulta: push nativo pendiente de configurar Firebase.'
           fi
       - run: npx cap sync android
+      - name: Firma estable del piloto
+        env:
+          ANDROID_PILOT_KEYSTORE_B64: ${{ secrets.ANDROID_PILOT_KEYSTORE_B64 }}
+        run: |
+          test -n "$ANDROID_PILOT_KEYSTORE_B64" || { echo 'Falta configurar la firma estable del piloto.'; exit 1; }
+          mkdir -p "$HOME/.android"
+          printf '%s' "$ANDROID_PILOT_KEYSTORE_B64" | base64 --decode > "$HOME/.android/debug.keystore"
+          chmod 600 "$HOME/.android/debug.keystore"
       - name: Compilar APK instalable de pruebas
         run: |
           chmod +x android/gradlew
           cd android
           ./gradlew --no-daemon --max-workers=2 assembleDebug
       - name: Huella del archivo
-        run: sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/SHA256SUMS.txt
+        run: |
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/SHA256SUMS.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/SIGNING-CERTIFICATE.txt
       - uses: actions/upload-artifact@v4
         with:
           name: socratia-android-${{ github.sha }}
           path: |
             mobile/android/app/build/outputs/apk/debug/app-debug.apk
             mobile/android/app/build/outputs/apk/debug/SHA256SUMS.txt
+            mobile/android/app/build/outputs/apk/debug/SIGNING-CERTIFICATE.txt
           retention-days: 14

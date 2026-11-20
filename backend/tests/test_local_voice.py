@@ -1,8 +1,10 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
+
 import pytest
 from fastapi import HTTPException
-from app.integrations.tts.base import TTSRequest, TTSProviderError
+
+from app.integrations.tts.base import TTSProviderError, TTSRequest
 from app.integrations.tts.local_tts import LocalTTSProvider
 from app.modules.p3_gestion_simulacion.routes import simulation_routes as routes
 
@@ -33,6 +35,16 @@ async def test_speech_uses_current_question_and_server_selected_speaker(speech):
 
 
 @pytest.mark.asyncio
+async def test_prewarm_uses_same_voice_as_actual_question(speech, monkeypatch):
+    _, calls = speech
+    question = SimpleNamespace(prompt_text="¿Cómo validó los resultados?", position=2, source="BANK")
+    monkeypatch.setattr(routes, "TurnRepository", lambda db: SimpleNamespace(next_pending_question=lambda _: question))
+    await routes.prewarm_jury_speech("id", Mock(), Mock())
+    await routes.jury_speech("id", routes.JurySpeechInput(text=question.prompt_text), Mock(), Mock())
+    assert [request.speaker_index for request in calls] == [1, 1]
+
+
+@pytest.mark.asyncio
 async def test_speech_rejects_arbitrary_text_before_synthesis(speech):
     _,calls=speech
     with pytest.raises(HTTPException) as error:
@@ -51,14 +63,14 @@ async def test_owner_check_precedes_voice_work(speech):
 
 
 @pytest.mark.asyncio
-async def test_prewarm_uses_zero_based_bank_position(speech,monkeypatch):
+async def test_prewarm_converts_bank_position_to_zero_based_speaker(speech,monkeypatch):
     service,calls=speech
     service.get_snapshot.return_value.status="ACTIVE"
     question=SimpleNamespace(source="BANK",position=2,prompt_text=None,question=SimpleNamespace(question="Siguiente pregunta"))
     monkeypatch.setattr(routes,"TurnRepository",lambda db:SimpleNamespace(next_pending_question=lambda id:question))
     await routes.prewarm_jury_speech("id",Mock(),Mock())
     assert calls[0].text=="Siguiente pregunta"
-    assert calls[0].speaker_index==2
+    assert calls[0].speaker_index==1
 
 
 def test_cpu_queue_is_bounded_and_busy_fails_without_loading_models():

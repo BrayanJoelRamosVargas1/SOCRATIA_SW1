@@ -95,7 +95,7 @@ with psycopg.connect(host='127.0.0.1',port=port,user='socratia',password=passwor
         if args.suite == 'spanish':
             selected = ['tests/test_spanish_content.py']
         if args.suite == 'mobile':
-            selected = ['tests/test_mobile_preparation.py', 'tests/test_preparation_tasks.py', 'tests/test_worker_shutdown.py']
+            selected = ['tests/test_mobile_preparation.py', 'tests/test_preparation_tasks.py', 'tests/test_worker_shutdown.py', 'tests/test_local_voice.py', 'tests/test_spanish_content.py']
         if args.suite == 'readiness':
             selected = ['tests/test_worker_shutdown.py', 'tests/test_websocket_revocation.py',
                 'tests/test_voice_cancellation.py', 'tests/test_trial_cost_controls.py',
