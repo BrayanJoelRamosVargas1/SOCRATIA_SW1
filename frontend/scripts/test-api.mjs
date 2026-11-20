@@ -50,3 +50,28 @@ await assert.rejects(spanish.apiRequest('/plans'),e=>e.message==='Ya existe un p
 const abort=new Error('cancelled');abort.name='AbortError';
 await assert.rejects(harness(async()=>{throw abort;}).apiRequest('/documents'),e=>e===abort);
 console.log('PASS: Spanish server/network errors, malformed payloads and unchanged cancellation semantics');
+
+let downloadRefreshes = 0, downloadValid = false;
+const binary = harness(async (url, options) => {
+  assert.equal(options.credentials, 'include');
+  if (url.endsWith('/auth/refresh')) {
+    downloadRefreshes++;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    downloadValid = true;
+    return new Response('{}');
+  }
+  assert.equal(options.cache, 'no-store');
+  if (!downloadValid) return new Response('{}', {status:401});
+  return new Response(new Uint8Array([0, 255, 37, 80, 68, 70]), {headers:{'Content-Type':'application/pdf'}});
+});
+const binaries = await Promise.all([binary.apiDownload('/documents/1/questions/export'), binary.apiDownload('/documents/1/presentation/export')]);
+assert.equal(downloadRefreshes, 1);
+for (const blob of binaries) assert.deepEqual([...new Uint8Array(await blob.arrayBuffer())], [0, 255, 37, 80, 68, 70]);
+let rejectedRefreshes = 0;
+const expiredDownload = harness(async url => {
+  if (url.endsWith('/auth/refresh')) rejectedRefreshes++;
+  return new Response('{}', {status:401});
+});
+await assert.rejects(expiredDownload.apiDownload('/documents/1/questions/export'), error => error.status === 401);
+assert.equal(rejectedRefreshes, 1);
+console.log('PASS: binary downloads preserve bytes, renew one shared session and stop on expired refresh');

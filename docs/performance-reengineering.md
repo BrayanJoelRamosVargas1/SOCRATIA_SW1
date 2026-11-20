@@ -95,6 +95,57 @@ progreso recuperable y deduplicación es la siguiente mejora arquitectónica, pe
 no se declara implementada. Agregar redes neuronales no sustituye estas mediciones;
 el seguimiento ya utiliza modelos neuronales de MediaPipe.
 
+### Actualización de preparación: 20 de noviembre de 2026
+
+La cola persistente ya está implementada: recupera trabajos pendientes, deduplica
+solicitudes y conserva resultados. No reenvía automáticamente llamadas externas
+interrumpidas cuyo consumo sea incierto.
+
+Se detectaron seis consultas de embeddings consecutivas por banco o presentación.
+Ahora los seis objetivos se envían juntos al coordinador de embeddings; las
+búsquedas vectoriales mantienen sus filtros por propietario y documento y se
+ejecutan sobre la misma sesión, sin compartirla entre hilos. Un fallo individual
+de búsqueda utiliza FTS sin descartar las demás consultas.
+
+Para consultas interactivas, Gemini usa un intento con timeout de 10 segundos;
+una cuota agotada pasa a búsqueda local sin esperar ni repetir la petición. La
+indexación de documentos conserva sus reintentos. El timeout es de transporte,
+no una garantía de que toda la preparación finalice en diez segundos. La
+generación de texto conserva validación de español, estructura y fuentes.
+
+Medición directa en AWS, sin regenerar ni modificar documentos de usuarios:
+
+| Documento de origen | Construir PDF de preguntas | Construir PPTX | Leer PDF de origen |
+|---|---:|---:|---:|
+| 21,02 MiB | 25 ms | 245 ms | 81 ms |
+| 3,40 MiB | 15 ms | 1034 ms | 14 ms |
+| 2,44 MiB | 14 ms | 1114 ms | 13 ms |
+
+Son tres muestras de construcción en el servidor, no tiempos de descarga ni
+p95. Los metadatos de esos materiales registraban generación con IA de entre
+19,3 y 35,0 segundos para preguntas y entre 2,7 y 25,2 para diapositivas. La
+espera principal observada está en preparación/proveedores, no en escribir el
+PDF. No se introduce una caché privada de exportaciones sin necesidad medida.
+
+La consola de la cuenta AWS 870900716266 mostró US$174,10 restantes estimados y
+US$25,90 utilizados estimados, con actualización aproximada cada 24 horas. El
+saldo contable cerrado mostraba US$179,70: para planificar se usa la estimación
+menor. Estos créditos no pagan Gemini, Groq u otros proveedores externos.
+
+IA propia: Kokoro ONNX está integrado en el servidor para voces. Qwen se validó
+en una sesión GPU de Kaggle, pero no está conectado a la generación productiva
+de preguntas o diapositivas. Una sesión temporal no constituye una API estable.
+
+Se reprodujo además un HTTP 401 al descargar PDF desde una pestaña antigua: los
+enlaces directos no renovaban la sesión. PDF y PPTX ahora usan la misma renovación
+coordinada que las consultas, preservan los bytes originales, bloquean clics
+duplicados y muestran errores en español. No generan nuevamente el contenido.
+
+El flujo manual `Imagen web de pruebas` compila la interfaz en GitHub Actions,
+fuera de la laptop y del servidor pequeño. Publica una imagen sin secretos,
+identificada por commit y SHA-256; el despliegue admite imágenes precargadas solo
+cuando su etiqueta de revisión coincide exactamente con el commit objetivo.
+
 ## Segunda mejora de navegación (18 de octubre)
 
 - Consultas de inicio en paralelo; precarga de datos por intención al enfocar o

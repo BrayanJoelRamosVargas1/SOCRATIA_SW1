@@ -87,7 +87,9 @@ class GeminiEmbeddingProvider:
             "Content-Type": "application/json",
             "x-goog-api-key": self.api_key,
         }
-        with httpx.Client(headers=headers, timeout=self.timeout_seconds) as client:
+        # Interactive retrieval can fall back to local FTS; indexing still retries.
+        timeout = min(self.timeout_seconds, 10) if is_query else self.timeout_seconds
+        with httpx.Client(headers=headers, timeout=timeout) as client:
             # We process documents. But we adaptive-batch them to fit rate limits.
             remaining = documents.copy()
             while remaining:
@@ -121,6 +123,8 @@ class GeminiEmbeddingProvider:
 
                 budget = self.rate_limiter.calculate_budget(estimated_tokens)
                 if not budget.is_allowed:
+                    if is_query:
+                        raise EmbeddingError("Query embedding budget exhausted; use local retrieval")
                     logger.info(
                         "Rate limiter active. Waiting %.2f ms for %s tokens",
                         budget.wait_ms,
@@ -176,6 +180,7 @@ class GeminiEmbeddingProvider:
             batch_chunks=len(documents),
             estimated_tokens=estimated_tokens,
             model_name=self.model,
+            max_attempts=1 if is_query else 6,
         )
         raw_embeddings = response.get("embeddings")
         if not isinstance(raw_embeddings, list) or len(raw_embeddings) != len(documents):
@@ -200,8 +205,9 @@ class GeminiEmbeddingProvider:
         batch_chunks: int,
         estimated_tokens: int,
         model_name: str,
+        max_attempts: int = 6,
     ) -> dict[str, object]:
-        for attempt in range(6):
+        for attempt in range(max_attempts):
             start_time = time.monotonic()
             http_status = None
             retry_after_ms = 0.0
@@ -221,7 +227,7 @@ class GeminiEmbeddingProvider:
                     latency_ms,
                     str(exc),
                 )
-                if attempt == 5:
+                if attempt == max_attempts - 1:
                     raise EmbeddingError("Gemini could not be reached") from exc
                 wait_ms = (2**attempt) * 1000.0
                 time.sleep(wait_ms / 1000.0)
@@ -229,7 +235,7 @@ class GeminiEmbeddingProvider:
 
             latency_ms = (time.monotonic() - start_time) * 1000.0
 
-            if response.status_code in RETRYABLE_STATUS_CODES and attempt < 5:
+            if response.status_code in RETRYABLE_STATUS_CODES and attempt < max_attempts - 1:
                 retry_after = response.headers.get("retry-after")
                 if retry_after and retry_after.isdigit():
                     delay = float(retry_after)

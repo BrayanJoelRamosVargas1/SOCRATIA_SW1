@@ -32,10 +32,18 @@ class RetrievalRouter:
     def retrieve_for_document(
         self, document: Document, user_id: str, query_text: str, top_k: int
     ) -> tuple[list[RetrievalResult], FallbackReason]:
+        return self.retrieve_many_for_document(document, user_id, [query_text], top_k)[0]
+
+    def retrieve_many_for_document(
+        self, document: Document, user_id: str, query_texts: list[str], top_k: int
+    ) -> list[tuple[list[RetrievalResult], FallbackReason]]:
+        """Embed preparation intents together, without sharing a DB session across threads."""
+        if not query_texts:
+            return []
 
         if str(document.user_id) != str(user_id):
             # Enforce tenant isolation at the retrieval core
-            return [], FallbackReason.NONE
+            return [([], FallbackReason.NONE) for _ in query_texts]
 
         active_profile = next(
             (
@@ -46,24 +54,41 @@ class RetrievalRouter:
             None,
         )
 
-        fallback_reason = FallbackReason.NONE
+        fallback_reason = FallbackReason.NO_SYNCED_VECTOR_STORE
+        query_vectors = None
+
+        if active_profile and active_profile.chunk_set_id and self._has_any_vector_route(active_profile.id):
+            try:
+                query_vectors = self.embeddings.embed_queries_for_document(document, query_texts)
+                if len(query_vectors) != len(query_texts) or any(not vector for vector in query_vectors):
+                    raise EmbeddingError("Unexpected query embedding count or empty vector")
+                fallback_reason = FallbackReason.NONE
+            except ValueError:
+                raise
+            except EmbeddingError:
+                logger.warning("Query embedding batch unavailable; using document-scoped FTS")
+                query_vectors = None
+                fallback_reason = FallbackReason.EMBEDDING_PROVIDERS_UNAVAILABLE
+            except Exception:
+                logger.exception("Query embedding batch failed; using document-scoped FTS")
+                query_vectors = None
+                fallback_reason = FallbackReason.VECTOR_RETRIEVAL_FAILED
+
+        return [self._retrieve_with_vector(
+            document, user_id, query_text, top_k, active_profile,
+            query_vectors[index] if query_vectors is not None else None, fallback_reason,
+        ) for index, query_text in enumerate(query_texts)]
+
+    def _retrieve_with_vector(
+        self, document, user_id, query_text, top_k, active_profile, query_vector, fallback_reason
+    ) -> tuple[list[RetrievalResult], FallbackReason]:
 
         if active_profile and active_profile.chunk_set_id:
-            # 1. Check if we have ANY vector route available for this profile before even embedding.
-            # If both stores are unavailable or have no SYNCED sync status, we can short-circuit.
-            has_vector_route = self._has_any_vector_route(active_profile.id)
+            # Embeddings and route availability were checked once for the batch.
+            has_vector_route = query_vector is not None
 
             if has_vector_route:
                 try:
-                    # 2. Embed the query respecting the document's embedding space
-                    query_vectors = self.embeddings.embed_queries_for_document(
-                        document, [query_text]
-                    )
-                    if not query_vectors:
-                        raise EmbeddingError("Empty embeddings returned")
-
-                    query_vector = query_vectors[0]
-
                     filters = {
                         "$and": [
                             {"user_id": {"$eq": str(user_id)}},
@@ -129,11 +154,6 @@ class RetrievalRouter:
                         str(e),
                     )
                     fallback_reason = FallbackReason.VECTOR_RETRIEVAL_FAILED
-            else:
-                fallback_reason = FallbackReason.NO_SYNCED_VECTOR_STORE
-        else:
-            fallback_reason = FallbackReason.NO_SYNCED_VECTOR_STORE
-
         # 4. Fallback to FTS if vector retrieval failed or no stores were available
         if active_profile and active_profile.chunk_set_id:
             logger.info("Executing FTS fallback for document %s", document.id)

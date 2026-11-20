@@ -1,9 +1,13 @@
+import logging
+import time
 from collections.abc import Sequence
 
 from app.integrations.llm.base import DocumentContextChunk
 from app.integrations.retrieval.base import FallbackReason, RetrievalMode
 from app.integrations.retrieval.router import RetrievalRouter
 from app.modules.p2_gestion_documentos_preparacion.models.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentContextUnavailableError(Exception):
@@ -29,15 +33,15 @@ class DocumentRetrievalService:
         document: Document,
         intents: Sequence[str],
     ) -> tuple[tuple[DocumentContextChunk, ...], RetrievalMode, FallbackReason]:
+        started_at = time.monotonic()
         deduplicated: dict[str, DocumentContextChunk] = {}
 
         overall_retrieval_mode = RetrievalMode.VECTOR_PRIMARY
         overall_fallback_reason = FallbackReason.NONE
 
-        for intent in intents:
-            matches, fallback_reason = self.router.retrieve_for_document(
-                document=document, user_id=user_id, query_text=intent, top_k=self.top_k
-            )
+        for matches, fallback_reason in self.router.retrieve_many_for_document(
+            document=document, user_id=user_id, query_texts=list(intents), top_k=self.top_k
+        ):
 
             if fallback_reason != FallbackReason.NONE:
                 overall_fallback_reason = fallback_reason
@@ -80,4 +84,9 @@ class DocumentRetrievalService:
         if not packed:
             raise DocumentContextUnavailableError
 
+        logger.info(
+            "Preparation retrieval intents=%s chunks=%s elapsed_ms=%s mode=%s fallback=%s",
+            len(intents), len(packed), round((time.monotonic() - started_at) * 1000),
+            overall_retrieval_mode, overall_fallback_reason,
+        )
         return tuple(packed), overall_retrieval_mode, overall_fallback_reason

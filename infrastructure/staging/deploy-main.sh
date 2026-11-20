@@ -92,8 +92,21 @@ if [[ "$COMPOSE_CHANGED" == true ]]; then
   [[ "$OLD_FRONTEND_BUILD" == "$(build_signature "$ROOT/compose.staging.yaml" frontend)" ]] || BUILD_FRONTEND=true
 fi
 printf 'IMAGE_BUILD backend=%s frontend=%s\n' "$BUILD_BACKEND" "$BUILD_FRONTEND"
-if [[ "$BUILD_BACKEND" == true ]]; then "${COMPOSE[@]}" build backend; fi
-if [[ "$BUILD_FRONTEND" == true ]]; then "${COMPOSE[@]}" build frontend; fi
+# Operators may preload an image built off-host. Accept it only for this exact
+# source commit; an older or unlabelled image must never silently skip a build.
+image_matches_target() {
+  [[ "$(sudo docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$1" 2>/dev/null || true)" == "$TARGET" ]]
+}
+if [[ "$BUILD_BACKEND" == true ]]; then
+  if image_matches_target socratia-staging-backend:latest; then
+    printf 'PREBUILT backend=%s\n' "$TARGET"
+  else "${COMPOSE[@]}" build backend; fi
+fi
+if [[ "$BUILD_FRONTEND" == true ]]; then
+  if image_matches_target socratia-staging-frontend:latest; then
+    printf 'PREBUILT frontend=%s\n' "$TARGET"
+  else "${COMPOSE[@]}" build frontend; fi
+fi
 # Workers must finish or be marked interrupted, never replay an uncertain AI request.
 "${COMPOSE[@]}" stop -t 180 preparation-worker 2>/dev/null || true
 "${COMPOSE[@]}" up -d --no-deps backend

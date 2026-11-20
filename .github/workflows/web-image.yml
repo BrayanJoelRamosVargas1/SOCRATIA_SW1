@@ -1,0 +1,32 @@
+name: Imagen web de pruebas
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: web-image-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar fuera de la laptop y del piloto AWS
+        run: |
+          docker build frontend --tag socratia-staging-frontend:latest \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
+            --build-arg NEXT_PUBLIC_APPEARANCE_AUTO=false \
+            --build-arg NEXT_PUBLIC_APPEARANCE_INTERVAL_SECONDS=60
+      - name: Preparar imagen y huella
+        run: |
+          docker save socratia-staging-frontend:latest | gzip -1 > socratia-frontend.tar.gz
+          sha256sum socratia-frontend.tar.gz > SHA256SUMS.txt
+      - name: Publicar imagen reproducible del commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "web-build-$GITHUB_SHA" socratia-frontend.tar.gz SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title "Piloto web ${GITHUB_SHA:0:7}" \
+            --prerelease --notes 'Imagen web de pruebas compilada en GitHub Actions. No contiene claves privadas ni documentos de usuarios.'

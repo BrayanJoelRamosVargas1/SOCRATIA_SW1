@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
-import { API_URL } from "@/lib/config";
 import { getCurrentUser } from "@/features/auth/api";
 import {
   deleteDocument,
@@ -16,7 +15,7 @@ import {
   getQuestionBank,
 } from "@/features/documents/api";
 import { listPreparationTasks, submitPreparationTask, taskIsActive, type PreparationTask } from "./preparation-tasks";
-import { ApiError } from "@/lib/api";
+import { ApiError, apiDownload } from "@/lib/api";
 import { documentStatusLabels } from "@/types/document";
 import type {
   Document,
@@ -89,6 +88,31 @@ export function DocumentDetailPage() {
   const isGenerating=busy && activeTask?.kind==="questions";
   const isGeneratingPresentation=busy && activeTask?.kind==="presentation";
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState<"questions" | "presentation" | null>(null);
+  const downloadLock = useRef(false);
+
+  async function downloadMaterial(kind: "questions" | "presentation") {
+    if (!document || downloadLock.current) return;
+    downloadLock.current = true;
+    setDownloading(kind);
+    setError("");
+    try {
+      const blob = await apiDownload(`/documents/${document.id}/${kind}/export`);
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = kind === "questions" ? "socratia-preguntas.pdf" : "socratia-defensa.pptx";
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "No pudimos descargar el archivo. Inténtalo de nuevo.");
+    } finally {
+      downloadLock.current = false;
+      setDownloading(null);
+    }
+  }
 
   useEffect(() => {
     let disposed=false;
@@ -303,7 +327,7 @@ export function DocumentDetailPage() {
 
             {questionBank && !isGenerating && (
               <>
-                <p><a className="button button-primary" href={`${API_URL}/documents/${document.id}/questions/export`} download>Descargar preguntas en PDF</a></p>
+                <p><button type="button" className="button button-primary" disabled={downloading !== null} onClick={() => void downloadMaterial("questions")}>{downloading === "questions" ? "Descargando PDF…" : "Descargar preguntas en PDF"}</button></p>
                 <div className="question-bank-meta">
                   <span><b>12</b> preguntas</span>
                   <span><b>{questionBank.provider_used}</b> proveedor</span>
@@ -360,7 +384,7 @@ export function DocumentDetailPage() {
 
             {presentation && !isGeneratingPresentation && (
               <>
-                <p><a className="button button-primary" href={`${API_URL}/documents/${document.id}/presentation/export`} download>Descargar PowerPoint</a></p>
+                <p><button type="button" className="button button-primary" disabled={downloading !== null} onClick={() => void downloadMaterial("presentation")}>{downloading === "presentation" ? "Descargando PowerPoint…" : "Descargar PowerPoint"}</button></p>
                 <p>Diapositivas editables y notas del expositor. Las imágenes extraíbles del PDF aparecen como anexo con su página de origen.</p>
                 <div className="question-bank-meta presentation-meta">
                   <span><b>{presentation.duration_minutes} min</b> exposición</span>
