@@ -19,16 +19,20 @@ TARGET=$(git --git-dir="$MIRROR" rev-parse FETCH_HEAD)
 PREVIOUS=$(cat "$STATE/deployed-commit" 2>/dev/null || true)
 BUILD_BACKEND=true
 BUILD_FRONTEND=true
+COMPOSE_CHANGED=false
 [[ "$TARGET" != "$PREVIOUS" ]] || exit 0
 # Do not repeatedly build a known failed commit every polling interval.
 [[ ! -f "$STATE/failed-commit" || "$(cat "$STATE/failed-commit")" != "$TARGET" ]] || exit 1
 if [[ -n "$PREVIOUS" ]]; then
   git --git-dir="$MIRROR" merge-base --is-ancestor "$PREVIOUS" "$TARGET"
-  if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- backend compose.staging.yaml; then
+  if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- backend; then
     BUILD_BACKEND=false
   fi
-  if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- frontend compose.staging.yaml; then
+  if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- frontend; then
     BUILD_FRONTEND=false
+  fi
+  if ! git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- compose.staging.yaml; then
+    COMPOSE_CHANGED=true
   fi
   # Documentation and test-only commits do not consume another production build.
   if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- \
@@ -44,6 +48,20 @@ if [[ -n "$PREVIOUS" ]]; then
 fi
 cd "$ROOT"
 COMPOSE=(sudo docker compose --env-file .env.staging -f compose.staging.yaml)
+# Runtime mounts, limits and environment do not change an image. Compare the
+# resolved build definitions separately so only changed build args/context/target
+# require a new image. Both Compose files reside beside the same environment.
+build_signature() {
+  sudo docker compose --env-file "$ROOT/.env.staging" -f "$1" config --format json |
+    python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["services"][sys.argv[1]].get("build"),sort_keys=True))' "$2"
+}
+if [[ "$COMPOSE_CHANGED" == true ]]; then
+  PREVIOUS_COMPOSE=$(mktemp "$ROOT/.previous-compose.XXXXXX.yaml")
+  git --git-dir="$MIRROR" show "$PREVIOUS:compose.staging.yaml" > "$PREVIOUS_COMPOSE"
+  OLD_BACKEND_BUILD=$(build_signature "$PREVIOUS_COMPOSE" backend)
+  OLD_FRONTEND_BUILD=$(build_signature "$PREVIOUS_COMPOSE" frontend)
+  rm -f "$PREVIOUS_COMPOSE"
+fi
 PUBLIC_DOMAIN=$("${COMPOSE[@]}" config --format json | python3 -c '
 import json,re,sys
 domain=json.load(sys.stdin)["services"]["proxy"]["environment"]["PUBLIC_DOMAIN"]
@@ -69,6 +87,11 @@ trap finish_failed ERR
 # Environment, uploads and runtime volumes are not tracked in Git and are preserved.
 git --git-dir="$MIRROR" archive "$TARGET" | tar -x -C "$ROOT"
 "${COMPOSE[@]}" config --quiet
+if [[ "$COMPOSE_CHANGED" == true ]]; then
+  [[ "$OLD_BACKEND_BUILD" == "$(build_signature "$ROOT/compose.staging.yaml" backend)" ]] || BUILD_BACKEND=true
+  [[ "$OLD_FRONTEND_BUILD" == "$(build_signature "$ROOT/compose.staging.yaml" frontend)" ]] || BUILD_FRONTEND=true
+fi
+printf 'IMAGE_BUILD backend=%s frontend=%s\n' "$BUILD_BACKEND" "$BUILD_FRONTEND"
 if [[ "$BUILD_BACKEND" == true ]]; then "${COMPOSE[@]}" build backend; fi
 if [[ "$BUILD_FRONTEND" == true ]]; then "${COMPOSE[@]}" build frontend; fi
 # Workers must finish or be marked interrupted, never replay an uncertain AI request.
