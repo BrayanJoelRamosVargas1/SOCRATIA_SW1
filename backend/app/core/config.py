@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     max_document_size_mb: int = Field(default=50, ge=1, le=100)
 
     embedding_provider: str = "gemini"
+    local_qwen_embedding_url: str = ""
+    local_qwen_embedding_key_file: str = ""
     gemini_api_key: SecretStr | None = None
     gemini_embedding_model: str = "text-embedding-004"
     embedding_dimensions: int = Field(default=768, ge=128, le=3072)

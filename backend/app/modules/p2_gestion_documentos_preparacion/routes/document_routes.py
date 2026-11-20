@@ -1,20 +1,33 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.integrations.embeddings.base import EmbeddingProvider
 from app.integrations.embeddings.dependencies import get_embedding_provider
+from app.integrations.retrieval.base import FallbackReason, RetrievalMode
+from app.integrations.retrieval.dependencies import get_retrieval_router
+from app.integrations.retrieval.router import RetrievalRouter
 from app.integrations.storage.base import StorageProvider
 from app.integrations.storage.dependencies import get_storage_provider
 from app.integrations.vector_db.base import VectorStoreProvider
 from app.integrations.vector_db.dependencies import get_vector_store_provider
 from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
+from app.modules.p2_gestion_documentos_preparacion.models.document import (
+    DocumentChunk,
+    DocumentStatus,
+)
 from app.modules.p2_gestion_documentos_preparacion.schemas.document import (
     DocumentProcessingResponse,
     DocumentResponse,
     ProcessingStatusResponse,
+)
+from app.modules.p2_gestion_documentos_preparacion.schemas.search import (
+    DocumentSearchMatch,
+    DocumentSearchRequest,
+    DocumentSearchResponse,
 )
 from app.modules.p2_gestion_documentos_preparacion.services.document_processing_service import (
     DocumentProcessingService,
@@ -28,6 +41,7 @@ Storage = Annotated[StorageProvider, Depends(get_storage_provider)]
 Embeddings = Annotated[EmbeddingProvider, Depends(get_embedding_provider)]
 VectorStore = Annotated[VectorStoreProvider, Depends(get_vector_store_provider)]
 Database = Annotated[Session, Depends(get_db)]
+Retrieval = Annotated[RetrievalRouter, Depends(get_retrieval_router)]
 
 
 @router.get("/capabilities")
@@ -51,8 +65,15 @@ def upload_document(
 def document_readiness(current_user: CurrentUser, db: Database) -> dict[str, list[str]]:
     """One owner-scoped query instead of downloading every question bank."""
     from sqlalchemy import select
-    from app.modules.p2_gestion_documentos_preparacion.models.question_bank import QuestionBank, QuestionBankStatus
-    from app.modules.p2_gestion_documentos_preparacion.models.document import Document, DocumentStatus
+
+    from app.modules.p2_gestion_documentos_preparacion.models.document import (
+        Document,
+        DocumentStatus,
+    )
+    from app.modules.p2_gestion_documentos_preparacion.models.question_bank import (
+        QuestionBank,
+        QuestionBankStatus,
+    )
     ids = db.scalars(select(QuestionBank.document_id).join(Document, Document.id == QuestionBank.document_id).where(
         Document.user_id == current_user.id, QuestionBank.user_id == current_user.id,
         Document.status == DocumentStatus.PROCESSED, QuestionBank.status == QuestionBankStatus.READY,
@@ -79,6 +100,39 @@ def get_document(
 ) -> DocumentResponse:
     document = DocumentService(db, storage_provider).get_for(current_user, document_id)
     return DocumentResponse.model_validate(document)
+
+
+@router.post("/{document_id}/search", response_model=DocumentSearchResponse)
+def search_document(
+    document_id: str, payload: DocumentSearchRequest, current_user: CurrentUser,
+    db: Database, storage_provider: Storage, retrieval: Retrieval,
+) -> DocumentSearchResponse:
+    # Authorize before any inference or vector access.
+    document = DocumentService(db, storage_provider).get_for(current_user, document_id)
+    if document.status != DocumentStatus.PROCESSED:
+        raise HTTPException(409, "Procesa el documento antes de buscar en su contenido.")
+    results, reason = retrieval.retrieve_for_document(document, current_user.id, payload.query, 3)
+    profile = next((p for p in document.embedding_profiles
+                    if p.id == document.active_embedding_profile_id), None)
+    degraded = reason != FallbackReason.NONE or any(
+        item.retrieval_mode == RetrievalMode.LEXICAL_FALLBACK for item in results
+    )
+    engine = "text" if degraded else "semantic"
+    if not degraded and profile and profile.provider == "qwen_local":
+        engine = "qwen_local"
+    # Fetch canonical excerpts scoped to this owner's document, never trust vector payload text.
+    chunks = {c.id: c for c in db.scalars(select(DocumentChunk).where(
+        DocumentChunk.document_id == document.id,
+        DocumentChunk.id.in_([r.chunk_id for r in results]),
+        DocumentChunk.chunk_set_id == profile.chunk_set_id if profile else True,
+    )).all()}
+    return DocumentSearchResponse(
+        engine=engine, model=profile.model if profile and not degraded else None,
+        degraded=degraded, matches=[DocumentSearchMatch(
+            fragment=chunks[r.chunk_id].chunk_index + 1,
+            excerpt=chunks[r.chunk_id].content[:900],
+        ) for r in results if r.chunk_id in chunks],
+    )
 
 
 @router.get("/{document_id}/status", response_model=ProcessingStatusResponse)

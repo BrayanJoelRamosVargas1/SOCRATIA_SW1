@@ -108,6 +108,9 @@ if [[ "$BUILD_FRONTEND" == true ]]; then
   else "${COMPOSE[@]}" build frontend; fi
 fi
 # Workers must finish or be marked interrupted, never replay an uncertain AI request.
+if "${COMPOSE[@]}" config --services | grep -qx qwen; then
+  "${COMPOSE[@]}" up -d --no-deps qwen
+fi
 "${COMPOSE[@]}" stop -t 180 preparation-worker 2>/dev/null || true
 "${COMPOSE[@]}" up -d --no-deps backend
 for attempt in $(seq 1 40); do

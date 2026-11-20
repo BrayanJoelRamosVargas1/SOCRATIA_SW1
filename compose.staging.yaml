@@ -33,6 +33,7 @@ services:
       args:
         INSTALL_LOCAL_VOICE: "true"
     restart: unless-stopped
+    networks: [default, qwen_private]
     env_file: ${STAGING_ENV_FILE:-.env.staging}
     environment:
       APP_ENV: production
@@ -68,6 +69,7 @@ services:
     cpus: 1.0
     mem_limit: 700m
     restart: unless-stopped
+    networks: [default, qwen_private]
     env_file: ${STAGING_ENV_FILE:-.env.staging}
     environment:
       APP_ENV: production
@@ -82,6 +84,61 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    logging: *logging
+
+  qwen:
+    profiles: [local-ai]
+    image: ghcr.io/ggml-org/llama.cpp@sha256:5b43086e3ba7ea5794d72904654f6cd41224a9b1c6ac0398f4940ee380d30f23
+    restart: unless-stopped
+    cpus: 1.5
+    cpu_shares: 128
+    mem_limit: 1100m
+    memswap_limit: 1400m
+    pids_limit: 128
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:size=32m]
+    networks: [qwen_private]
+    volumes:
+      - /opt/socratia-qwen/models:/models:ro
+      - /opt/socratia-secrets/qwen-api-key:/run/secrets/qwen-api-key:ro
+    command:
+      - --model
+      - /models/Qwen3-Embedding-0.6B-Q8_0.gguf
+      - --alias
+      - Qwen3-Embedding-0.6B-Q8_0
+      - --embedding
+      - --pooling
+      - last
+      - --embd-normalize
+      - '2'
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8080'
+      - --ctx-size
+      - '2048'
+      - --parallel
+      - '1'
+      - --threads
+      - '2'
+      - --threads-batch
+      - '2'
+      - --batch-size
+      - '1024'
+      - --ubatch-size
+      - '1024'
+      - --api-key-file
+      - /run/secrets/qwen-api-key
+      - --no-webui
+      - --log-disable
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, '3', 'http://127.0.0.1:8080/health']
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 5
     logging: *logging
 
   frontend:
@@ -120,3 +177,7 @@ volumes:
   staging_documents:
   staging_caddy_data:
   staging_caddy_config:
+
+networks:
+  qwen_private:
+    internal: true

@@ -1,5 +1,47 @@
 # Piloto privado de Socratia
 
+## IA propia en AWS (2026-11-20)
+
+El perfil opcional `local-ai` ejecuta Qwen3-Embedding-0.6B Q8 mediante llama.cpp
+en la CPU del servidor. No usa la laptop ni requiere una sesión de Kaggle.
+Es un modelo de recuperación semántica de 1024 dimensiones, no un chatbot:
+indexa documentos y encuentra fragmentos relacionados por significado.
+La interfaz del documento permite demostrarlo en «Encuentra ideas en tu documento».
+Solo muestra «Qwen · IA propia en el servidor» si el índice activo es Qwen y la
+consulta vectorial tuvo éxito. La alternativa por palabras se identifica como tal.
+
+Preparación en el host AWS existente:
+
+1. Ejecutar `sudo python3 infrastructure/scripts/provision_qwen_model.py`.
+   Comprueba tamaño y SHA-256 del modelo oficial fijado a una revisión. No imprime claves.
+2. Configurar en `.env.staging` (no en Git): `COMPOSE_PROFILES=local-ai`,
+   `LOCAL_QWEN_EMBEDDING_URL=http://qwen:8080/v1` y
+   `LOCAL_QWEN_EMBEDDING_KEY_FILE=/run/socratia-secrets/qwen-api-key`.
+3. Desplegar con Compose y verificar que `qwen` esté saludable. No publica puertos;
+   su red es interna y los archivos de modelo/clave se montan en solo lectura.
+4. Procesar un documento nuevo y probar `POST /api/v1/documents/{id}/search`.
+   Los documentos anteriores conservan su espacio de embeddings original:
+   nunca se comparan vectores Gemini y Qwen entre sí.
+
+El modelo y el motor se fijan por huella; cada secuencia está acotada a 1600
+caracteres. Los fragmentos más largos se dividen y agregan sin perder su final.
+Las búsquedas de la prueba aislada de cuatro temas acertaron 4/4 y tardaron
+0,88–0,99 segundos; una secuencia de 1600 caracteres tardó 8,27 segundos.
+Estos resultados no garantizan igual tiempo con documentos grandes o concurrencia.
+Se limita CPU/memoria para proteger la web; no se creó una GPU ni otro servidor.
+
+Kokoro también ejecuta las voces neuronales en AWS. La generación extensa de
+preguntas, diapositivas y ayuda sigue usando los proveedores configurados
+(Groq/Gemini); FCM entrega las notificaciones Android. Estos servicios externos
+no pasan a estar alojados en AWS por desplegar Socratia allí. La APK se instala
+en el teléfono y utiliza el mismo backend de AWS.
+
+Para la rúbrica: la IA propia se demuestra con recuperación semántica y voz
+neuronal; la versión móvil permite consultar materiales/resultados y recibir
+push; la web incluye ayuda inteligente. La recepción física de push Android fue
+confirmada por el usuario. La APK Android no es una aplicación nativa para iPhone.
+Esto no constituye una certificación de software completo al 100 % ni de nota académica.
+
 Estado al 2026-10-18: piloto publicado con HTTPS en
 https://socratia.34.204.9.87.sslip.io . Se verificaron el acceso de ambos roles,
 subida y procesamiento de un PDF ficticio, generación de presentación y descarga

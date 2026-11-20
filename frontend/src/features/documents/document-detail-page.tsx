@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { DocumentSemanticSearch } from "./document-semantic-search";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { getCurrentUser } from "@/features/auth/api";
 import {
@@ -233,6 +234,7 @@ export function DocumentDetailPage() {
           <LoadingSkeleton label="Abriendo tu documento y materiales…" rows={2}/>
         ) : (
           <>
+          <DocumentSemanticSearch documentId={document.id} />
             <Link className="detail-back" href="/documents">← Mis documentos</Link>
         <header className="detail-header">
           <div className={`file-mark detail-file-mark ${document.file_type.toLowerCase()}`}>

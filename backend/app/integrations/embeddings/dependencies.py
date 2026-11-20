@@ -6,6 +6,7 @@ from app.integrations.embeddings.coordinator import EmbeddingCoordinator
 from app.integrations.embeddings.gemini import GeminiEmbeddingProvider
 from app.integrations.embeddings.huggingface_e5 import HuggingFaceE5Provider
 from app.integrations.embeddings.local_e5 import LocalE5Provider
+from app.integrations.embeddings.local_qwen import LocalQwenEmbeddingProvider
 
 
 @lru_cache
@@ -47,4 +48,10 @@ def get_embedding_provider() -> EmbeddingCoordinator:
     )
 
     providers = [gemini_provider, cohere_provider, hf_remote_provider, hf_local_provider]
+    qwen = LocalQwenEmbeddingProvider(
+        url=settings.local_qwen_embedding_url,
+        key_file=settings.local_qwen_embedding_key_file,
+    )
+    if qwen.is_available:
+        providers.insert(0, qwen)
     return EmbeddingCoordinator(providers=providers)
