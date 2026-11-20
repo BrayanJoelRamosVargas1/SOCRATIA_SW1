@@ -17,11 +17,19 @@ fi
 git -c credential.helper= --git-dir="$MIRROR" fetch --no-tags origin main
 TARGET=$(git --git-dir="$MIRROR" rev-parse FETCH_HEAD)
 PREVIOUS=$(cat "$STATE/deployed-commit" 2>/dev/null || true)
+BUILD_BACKEND=true
+BUILD_FRONTEND=true
 [[ "$TARGET" != "$PREVIOUS" ]] || exit 0
 # Do not repeatedly build a known failed commit every polling interval.
 [[ ! -f "$STATE/failed-commit" || "$(cat "$STATE/failed-commit")" != "$TARGET" ]] || exit 1
 if [[ -n "$PREVIOUS" ]]; then
   git --git-dir="$MIRROR" merge-base --is-ancestor "$PREVIOUS" "$TARGET"
+  if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- backend compose.staging.yaml; then
+    BUILD_BACKEND=false
+  fi
+  if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- frontend compose.staging.yaml; then
+    BUILD_FRONTEND=false
+  fi
   # Documentation and test-only commits do not consume another production build.
   if git --git-dir="$MIRROR" diff --quiet "$PREVIOUS" "$TARGET" -- \
       backend/app backend/migrations backend/requirements.txt backend/requirements-local-voice.txt backend/Dockerfile backend/.dockerignore backend/alembic.ini \
@@ -47,8 +55,11 @@ STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 # Snapshot the database to the same encrypted disk; this is not off-host disaster recovery.
 "${COMPOSE[@]}" exec -T db pg_dump -U socratia -d socratia --no-owner | gzip > "$ROOT/backups/pre-deploy-$STAMP.sql.gz"
 gzip -t "$ROOT/backups/pre-deploy-$STAMP.sql.gz"
-sudo docker image tag socratia-staging-backend socratia-staging-backend:previous
-sudo docker image tag socratia-staging-frontend socratia-staging-frontend:previous
+# Preserve images actually running, including after a previous build failed.
+LIVE_BACKEND=$(sudo docker inspect --format '{{.Image}}' "$("${COMPOSE[@]}" ps -q backend)")
+LIVE_FRONTEND=$(sudo docker inspect --format '{{.Image}}' "$("${COMPOSE[@]}" ps -q frontend)")
+sudo docker image tag "$LIVE_BACKEND" socratia-staging-backend:previous
+sudo docker image tag "$LIVE_FRONTEND" socratia-staging-frontend:previous
 printf '%s\n' "$TARGET" > "$STATE/building-commit"
 finish_failed() {
   printf '%s\n' "$TARGET" > "$STATE/failed-commit"
@@ -58,8 +69,8 @@ trap finish_failed ERR
 # Environment, uploads and runtime volumes are not tracked in Git and are preserved.
 git --git-dir="$MIRROR" archive "$TARGET" | tar -x -C "$ROOT"
 "${COMPOSE[@]}" config --quiet
-"${COMPOSE[@]}" build backend
-"${COMPOSE[@]}" build frontend
+if [[ "$BUILD_BACKEND" == true ]]; then "${COMPOSE[@]}" build backend; fi
+if [[ "$BUILD_FRONTEND" == true ]]; then "${COMPOSE[@]}" build frontend; fi
 # Workers must finish or be marked interrupted, never replay an uncertain AI request.
 "${COMPOSE[@]}" stop -t 180 preparation-worker 2>/dev/null || true
 "${COMPOSE[@]}" up -d --no-deps backend
