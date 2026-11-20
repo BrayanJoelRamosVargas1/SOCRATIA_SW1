@@ -234,7 +234,6 @@ export function DocumentDetailPage() {
           <LoadingSkeleton label="Abriendo tu documento y materiales…" rows={2}/>
         ) : (
           <>
-          <DocumentSemanticSearch documentId={document.id} />
             <Link className="detail-back" href="/documents">← Mis documentos</Link>
         <header className="detail-header">
           <div className={`file-mark detail-file-mark ${document.file_type.toLowerCase()}`}>
@@ -309,6 +308,7 @@ export function DocumentDetailPage() {
           </section>
         ) : (
           <>
+          <DocumentSemanticSearch documentId={document.id} />
           <section className="question-bank-workspace">
             <header className="question-bank-header">
               <div>
