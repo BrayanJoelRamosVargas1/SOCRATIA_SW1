@@ -29,7 +29,13 @@ export async function exportFile(documentId: string, kind: 'questions' | 'presen
   const response = await CapacitorHttp.get({url: DEFAULT_SERVER + apiPath(`/documents/${documentId}/${kind}/export`), responseType:'arraybuffer', connectTimeout:15000, readTimeout:60000});
   if (response.status !== 200 || typeof response.data !== 'string') throw new Error('No se pudo descargar el material.');
   if (response.data.length > 14_000_000) throw new Error('Este material es grande. Descárgalo desde la web.');
-  const path = `socratia-${documentId}-${kind}.${kind === 'questions' ? 'pdf' : 'pptx'}`;
-  const file = await Filesystem.writeFile({path, data:response.data, directory:Directory.Cache});
+  const path = `socratia/socratia-${documentId}-${kind}.${kind === 'questions' ? 'pdf' : 'pptx'}`;
+  const file = await Filesystem.writeFile({path, data:response.data, directory:Directory.Cache, recursive:true});
   await Share.share({title:'Material de Socratia', files:[file.uri], dialogTitle:'Guardar o compartir material'});
+}
+
+export async function clearPrivateExports() {
+  const {Filesystem, Directory} = await import('@capacitor/filesystem');
+  try {await Filesystem.rmdir({path:'socratia', directory:Directory.Cache, recursive:true});}
+  catch { /* No cached exports on a new installation. */ }
 }

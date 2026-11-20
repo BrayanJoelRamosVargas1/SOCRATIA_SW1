@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { api, ApiError, exportFile } from './api';
+import { api, ApiError, exportFile, clearPrivateExports } from './api';
 import { enablePush, disablePush, initializePush } from './push';
 import './style.css';
 
@@ -88,7 +88,14 @@ function settings() {
   main.append(button('Activar notificaciones',async()=>{await enablePush();announce('Avisos activados en este celular.');}));
   main.append(button('Desactivar notificaciones',async()=>{const config=await api<{enabled:boolean}>('/push/native');if(config.enabled)await disablePush();announce('Avisos desactivados.');},true));
   main.append(button('Probar aviso',async()=>{const result=await api<{accepted:number}>('/push/native/test','POST');announce(result.accepted?'Envío aceptado. Comprueba la notificación en tu celular.':'No hay dispositivos registrados.');},true));
-  main.append(button('Cerrar sesión',async()=>{const config=await api<{enabled:boolean}>('/push/native');if(config.enabled)await disablePush();await api('/auth/logout','POST');user=null;login();},true));
+  main.append(button('Cerrar sesión',async()=>{
+    let pushError=false;
+    try {const config=await api<{enabled:boolean}>('/push/native');if(config.enabled)await disablePush();}catch {pushError=true;}
+    await api('/auth/logout','POST');
+    if(Capacitor.isNativePlatform())await clearPrivateExports();
+    user=null;login();
+    if(pushError)announce('Sesión cerrada. No pudimos desactivar los avisos; puedes revocarlos desde los ajustes de Android.');
+  },true));
   main.append(el('p','La APK permite consultar y repasar. Las simulaciones, cámara y generación se utilizan desde la web.','hint'));
 }
 async function boot(){frame('Mi preparación');try{if(Capacitor.isNativePlatform())await initializePush(id=>{if(user)void perform(()=>documentDetail(id,'Mis materiales'));},announce);user=await api<{full_name:string}>('/profile');await show('documents');}catch(error){login();if(!(error instanceof ApiError && error.status===401))announce(error instanceof Error?error.message:'No pudimos conectar.');}}
