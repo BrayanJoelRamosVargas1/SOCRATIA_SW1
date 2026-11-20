@@ -12,7 +12,7 @@ El proyecto usa Capacitor 8, Node 22, Java 21 y SDK 36. Para cambios ligeros: `n
 
 La dirección del piloto está fijada en `src/policy.mjs`, actualmente `https://socratia.54.221.46.202.sslip.io`. Si cambia la IP del servidor hay que actualizar y recompilar. No se pide al usuario que envíe credenciales a direcciones arbitrarias. Solo HTTPS; cookies de sesión manejadas por HTTP nativo y rotadas por `/auth/refresh`; no se escriben contraseñas o JWT en localStorage. El respaldo Android de los datos de la aplicación está desactivado. Los archivos que se comparten se guardan temporalmente en la caché privada; las copias guardadas voluntariamente fuera de la app permanecen en destino.
 
-## Push nativo (pendiente de configurar y probar en un celular)
+## Push nativo (configurado; pendiente de recepción en un celular)
 
 Web Push/VAPID no se reutiliza en Android WebView. El cliente usa Firebase Cloud Messaging y pide permiso de notificación voluntariamente. Se desactivó el inicio automático de FCM; la activación requiere acción del usuario.
 
@@ -24,5 +24,7 @@ Web Push/VAPID no se reutiliza en Android WebView. El cliente usa Firebase Cloud
 Sin configuración, los documentos y resultados funcionan y los controles explican que Firebase está pendiente. El servidor almacena como máximo cinco tokens por usuario; los avisos son genéricos, con destino a recursos del propio usuario. Eliminar una suscripción ajena está prohibido. Tokens `UNREGISTERED` se limpian; errores transitorios conservan la suscripción.
 
 Una APK es para Android. iPhone utiliza por ahora la PWA existente; una app nativa iOS requiere un proyecto iOS, macOS y firma de Apple. No se ha generado IPA ni verificado recepción física en ninguno de los dos sistemas.
+
+Estado del piloto: proyecto `socratia-movil` en Spark, app `bo.socratia.mobile`, configuración de cliente guardada en Actions y cuenta dedicada de servidor montada fuera de Git. AWS validó OAuth y un envío FCM `validate_only` con HTTP 200, sin entrega real. La APK está disponible como prepublicación de pruebas en https://github.com/BrayanJoelRamosVargas1/SOCRATIA_SW1/releases/tag/android-piloto-20261119 .
 
 Fuentes: https://capacitorjs.com/docs/apis/push-notifications y https://firebase.google.com/docs/cloud-messaging/android/client .
