@@ -15,6 +15,12 @@ from app.integrations.llm.router import QuestionGenerationRouter
 ENGLISH = "What is the primary problem the project aims to solve, and why is it significant for university tutoring coordination?"
 
 
+def test_short_spanish_technical_sentences_keep_punctuation_for_language_detection():
+    assert not foreign_prose("Presentar la arquitectura técnica del prototipo.")
+    assert foreign_prose("Buenas tardes, comenzamos. What is the main limitation of this research project?")
+    assert foreign_prose("Explain the architecture of the proposed prototype.")
+
+
 def request():
     return QuestionGenerationRequest(document_name="Documento de prueba", chunks=(DocumentContextChunk(id="chunk",text="La investigación estudia tutorías.",score=1),))
 

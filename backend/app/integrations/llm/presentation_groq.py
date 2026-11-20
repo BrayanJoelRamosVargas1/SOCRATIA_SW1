@@ -3,14 +3,18 @@ import time
 import httpx
 from pydantic import ValidationError
 
-from app.integrations.llm.base import DocumentContextChunk, LLMErrorKind, correct_invalid_output_once
+from app.integrations.llm.base import (
+    DocumentContextChunk,
+    LLMErrorKind,
+    correct_invalid_output_once,
+)
 from app.integrations.llm.groq import GROQ_CHAT_COMPLETIONS_URL, RETRYABLE_STATUS_CODES
 from app.integrations.llm.presentation import (
-    PRESENTATION_JSON_SCHEMA,
     GeneratedPresentation,
     PresentationGenerationProviderError,
     PresentationGenerationRequest,
-    validate_presentation,
+    parse_generated_presentation,
+    presentation_json_schema,
 )
 from app.integrations.llm.presentation_prompt import (
     PRESENTATION_SYSTEM_PROMPT,
@@ -56,7 +60,7 @@ class GroqPresentationGenerationProvider:
             try:
                 return correct_invalid_output_once(
                     lambda: self._request(request),
-                    lambda raw: validate_presentation(GeneratedPresentation.model_validate_json(raw), request),
+                    lambda raw: parse_generated_presentation(raw, request),
                 )
             except (ValidationError, ValueError):
                 last_error = PresentationGenerationProviderError(
@@ -84,7 +88,7 @@ class GroqPresentationGenerationProvider:
                 "json_schema": {
                     "name": "socratia_presentation_material",
                     "strict": True,
-                    "schema": PRESENTATION_JSON_SCHEMA,
+                    "schema": presentation_json_schema(request),
                 },
             },
             "temperature": 0.3,

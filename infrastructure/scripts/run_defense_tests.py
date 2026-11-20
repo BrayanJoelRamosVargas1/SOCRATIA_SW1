@@ -85,7 +85,8 @@ with psycopg.connect(host='127.0.0.1',port=port,user='socratia',password=passwor
         result = subprocess.run([str(python), 'scripts/validation_server.py', '--runtime', str(runtime)],
             cwd=backend, env=ui_env, **flags)
     else:
-        selected = (['tests/test_documents.py','tests/test_presentation_materials.py','tests/test_presentation_export.py']
+        selected = (['tests/test_documents.py','tests/test_presentation_materials.py','tests/test_presentation_export.py',
+                     'tests/test_presentation_schema.py','tests/test_presentation_schedule.py']
             if args.suite == 'documents' else [
                 'tests/test_simulation_sessions.py', 'tests/test_simulation_closure.py',
                 'tests/test_voice_cancellation.py', 'tests/test_local_voice.py',

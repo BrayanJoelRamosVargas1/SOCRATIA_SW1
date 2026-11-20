@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -185,6 +186,68 @@ PRESENTATION_JSON_SCHEMA: dict[str, object] = {
     "required": ["title", "total_duration_minutes", "target_word_count", "slides"],
     "additionalProperties": False,
 }
+
+
+def presentation_json_schema(request: PresentationGenerationRequest) -> dict:
+    """Constrain generation with the same bounds enforced after the response.
+
+    Previously the API schema permitted six bullets although our validator
+    rejected them, causing complete regenerations of otherwise useful slides.
+    """
+    schema = deepcopy(PRESENTATION_JSON_SCHEMA)
+    properties = schema["properties"]
+    properties["title"].update(minLength=3, maxLength=200)
+    properties["total_duration_minutes"]["enum"] = [request.duration_minutes]
+    properties["target_word_count"]["enum"] = [request.target_word_count]
+    minimum, maximum = slide_count_range(request.duration_minutes)
+    properties["slides"].update(minItems=minimum, maxItems=maximum)
+    slide = properties["slides"]["items"]["properties"]
+    slide["position"].update(minimum=1, maximum=18)
+    slide["title"].update(minLength=3, maxLength=160)
+    slide["objective"].update(minLength=8, maxLength=500)
+    slide["speaker_notes"].update(minLength=30, maxLength=5000)
+    slide["estimated_seconds"].update(minimum=20, maximum=600)
+    slide["bullet_points"].update(minItems=2, maxItems=5)
+    slide["bullet_points"]["items"]["minLength"] = 3
+    slide["source_chunk_ids"].update(minItems=1, maxItems=4)
+    slide["source_chunk_ids"]["items"]["enum"] = sorted(request.allowed_chunk_ids)
+    return schema
+
+
+def parse_generated_presentation(raw: str, request: PresentationGenerationRequest) -> GeneratedPresentation:
+    presentation = GeneratedPresentation.model_validate_json(raw)
+    total = sum(slide.estimated_seconds for slide in presentation.slides)
+    target = request.duration_minutes * 60
+    if not target * 0.9 <= total <= target * 1.1:
+        # These are rehearsal time allocations, not claims from the source.
+        # Fit the requested schedule without regenerating or changing any prose.
+        weights = [slide.estimated_seconds for slide in presentation.slides]
+        if len(weights) * 20 <= target <= len(weights) * 600:
+            pending = set(range(len(weights)))
+            seconds = [0] * len(weights)
+            remaining = target
+            while pending:
+                denominator = sum(weights[i] for i in pending)
+                proposed = {i: remaining * weights[i] / denominator for i in pending}
+                bounded = {i: 20 if value < 20 else 600 for i, value in proposed.items()
+                           if value < 20 or value > 600}
+                if bounded:
+                    for i, value in bounded.items():
+                        seconds[i] = value
+                        remaining -= value
+                        pending.remove(i)
+                    continue
+                for i, value in proposed.items():
+                    seconds[i] = int(value)
+                remainder = remaining - sum(seconds[i] for i in pending)
+                for i in sorted(pending, key=lambda i: (-(proposed[i] - seconds[i]), i))[:remainder]:
+                    seconds[i] += 1
+                break
+            presentation = presentation.model_copy(update={"slides": [
+                slide.model_copy(update={"estimated_seconds": seconds[i]})
+                for i, slide in enumerate(presentation.slides)
+            ]})
+    return validate_presentation(presentation, request)
 
 
 __all__ = [

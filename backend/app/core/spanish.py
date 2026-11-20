@@ -26,7 +26,8 @@ def foreign_prose(text: str) -> bool:
         return True
     if clean.strip().casefold() in {"introduction", "methodology", "conclusions", "results", "objectives", "limitations", "references", "background"}:
         return True
-    for part in re.split(r"[.!?\n:]\s*", clean):
+    # Preserve punctuation: stripping it can misclassify short Spanish prose.
+    for part in re.split(r"(?<=[.!?:])\s+|\n+", clean):
         words = re.findall(r"[^\W\d_]+", part, re.UNICODE)
         if len(words) < 6 or sum(map(len, words)) < 28:
             continue

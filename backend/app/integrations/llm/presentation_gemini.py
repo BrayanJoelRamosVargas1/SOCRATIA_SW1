@@ -6,11 +6,11 @@ from pydantic import ValidationError
 from app.integrations.llm.base import LLMErrorKind
 from app.integrations.llm.gemini import GEMINI_API_BASE_URL, RETRYABLE_STATUS_CODES
 from app.integrations.llm.presentation import (
-    PRESENTATION_JSON_SCHEMA,
     GeneratedPresentation,
     PresentationGenerationProviderError,
     PresentationGenerationRequest,
-    validate_presentation,
+    parse_generated_presentation,
+    presentation_json_schema,
 )
 from app.integrations.llm.presentation_prompt import (
     PRESENTATION_SYSTEM_PROMPT,
@@ -51,8 +51,7 @@ class GeminiPresentationGenerationProvider:
         last_error: PresentationGenerationProviderError | None = None
         for attempt in range(self.max_attempts):
             try:
-                result = GeneratedPresentation.model_validate_json(self._request(request))
-                return validate_presentation(result, request)
+                return parse_generated_presentation(self._request(request), request)
             except (ValidationError, ValueError):
                 last_error = PresentationGenerationProviderError(
                     "Gemini returned invalid presentation material",
@@ -73,7 +72,7 @@ class GeminiPresentationGenerationProvider:
             "contents": [{"role": "user", "parts": [{"text": build_presentation_prompt(request)}]}],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "responseJsonSchema": PRESENTATION_JSON_SCHEMA,
+                "responseJsonSchema": presentation_json_schema(request),
                 "temperature": 0.3,
                 "maxOutputTokens": self.max_output_tokens,
             },
