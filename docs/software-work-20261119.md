@@ -60,3 +60,7 @@ Kaggle ofrece sesiones y cuotas, no se asumirá disponibilidad permanente. Un mo
 
 - El parser también selecciona tres preguntas por categoría cuando la respuesta contiene más de doce y todas las categorías tienen suficientes candidatos; no completa categorías ausentes ni acepta fuentes ajenas. GPT-OSS utiliza `reasoning_effort=low` para acotar coste/latencia de preparación; otros modelos conservan sus parámetros compatibles. Referencia: https://console.groq.com/docs/reasoning .
 - Despliegue incremental: solo se construyen servicios con cambios, se conservan como reversión las imágenes realmente en ejecución y se libera únicamente caché reconstruible. Evita reconstruir la interfaz en cambios exclusivos del backend; no amplía el disco ni elimina archivos de usuario.
+
+### Resultado de recuperación y validación final
+
+Se recuperó el banco que estaba fallando en el caso reportado: doce preguntas aceptadas por el esquema, distribución y validación de español/fuentes, guardadas con Groq tras acotar contexto y razonamiento. La generación válida tardó 2,03 s en esta muestra; no es una garantía de latencia. La recuperación no sobrescribió las diapositivas guardadas. Las 39 pruebas de móvil/preparación/regresiones pasaron; la tanda de documentos/exportación pasó 32 pruebas. Selector, contraste y diseño de exportación comprobados publicados; el PPTX nuevo se descargó y abrió estructuralmente, sin certificar todavía renderizado visual de todas sus páginas.
