@@ -146,6 +146,22 @@ fuera de la laptop y del servidor pequeño. Publica una imagen sin secretos,
 identificada por commit y SHA-256; el despliegue admite imágenes precargadas solo
 cuando su etiqueta de revisión coincide exactamente con el commit objetivo.
 
+Validación posterior del código `0fecaea` en AWS: seis búsquedas consecutivas
+tardaron 1849 ms, frente a 344 ms al agruparlas. Ambas devolvieron seis resultados,
+sin fallback. Es una sola comparación de recuperación, no una mejora global del
+81 % ni una medición de generación de texto. La interfaz se compiló correctamente
+en GitHub Actions (ejecución `44672645454`) y se desplegó a las 04:14:39 UTC.
+
+Pasaron las 13 pruebas específicas de esta corrección, las pruebas de API del
+cliente y TypeScript. La ejecución amplia tuvo 359 pruebas aprobadas y un fallo
+en el doble HTTP de una prueba nueva; se corrigió ese doble y se volvieron a
+ejecutar las 13 específicas con resultado correcto. No se repitió toda la suite.
+Backend y base de datos quedaron saludables, con los cinco servicios activos y
+la revisión automática de despliegues restablecida. PDF y PPTX responden HTTP 200
+tras pulsar sus botones. La captura del archivo descargado en el navegador
+integrado quedó sin verificar por una limitación de seguridad de la herramienta;
+no se eludió esa restricción.
+
 ## Segunda mejora de navegación (18 de octubre)
 
 - Consultas de inicio en paralelo; precarga de datos por intención al enfocar o
