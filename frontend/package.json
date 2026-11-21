@@ -24,7 +24,7 @@
     "@met4citizen/talkinghead": "^1.7.0",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.54.0",
-    "next": "^16.0.0",
+    "next": "16.4.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.180.0"
@@ -36,7 +36,7 @@
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.180.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^16.0.0",
+    "eslint-config-next": "16.4.5",
     "playwright": "^1.64.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.1.0"
