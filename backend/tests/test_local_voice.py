@@ -119,3 +119,21 @@ async def test_segment_request_cannot_escape_current_question(speech):
         await routes.jury_speech("id",body.model_copy(update={"segment_index":99}),Mock(),Mock())
     assert error.value.status_code==422
     assert len(calls)==1
+
+def test_first_speech_batch_is_shorter_without_changing_words():
+    from app.integrations.tts.local_tts import speech_segments
+    text='Explique cómo validó los resultados de su investigación y cuáles fueron sus principales limitaciones. '*4
+    segments=speech_segments(text)
+    assert len(segments[0])<=64 and len(segments)>1
+    assert all(len(item)<=120 for item in segments)
+    assert ' '.join(segments)==' '.join(text.split())
+
+
+def test_cache_metrics_do_not_load_model_or_store_text():
+    from app.integrations.tts.local_tts import LocalTTSProvider
+    provider=LocalTTSProvider('missing')
+    provider._cache[('em_alex','Pregunta privada')]=b'RIFFfixture'
+    assert provider._render(TTSRequest(text='Pregunta privada'))==b'RIFFfixture'
+    assert provider._model is None
+    assert provider.last_metrics['cache_hit'] and provider.last_metrics['inference_s']==0
+    assert 'Pregunta privada' not in str(provider.last_metrics)

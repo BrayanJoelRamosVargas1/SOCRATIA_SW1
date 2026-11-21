@@ -14,6 +14,7 @@ from app.core.database import engine,SessionLocal
 from app.modules.p1_gestion_identidad_seguridad.models.user import User
 from app.modules.p2_gestion_documentos_preparacion.models.document import Document,DocumentStatus
 from app.modules.p2_gestion_documentos_preparacion.models.preparation_task import PreparationTask
+from app.modules.p1_gestion_identidad_seguridad.services.push_outbox import enqueue_preparation, dispatch_one
 
 logger=logging.getLogger(__name__)
 LOCK_ID=739204171
@@ -71,23 +72,32 @@ def run_one(db,executor=execute_task):
     elapsed=int((time.monotonic()-start)*1000)
     task=db.get(PreparationTask,task_id)
     if task:
-        task.status=state;task.error_code=code;task.finished_at=datetime.now(UTC);task.elapsed_ms=elapsed;db.commit()
+        task.status=state;task.error_code=code;task.finished_at=datetime.now(UTC);task.elapsed_ms=elapsed
+        # Task result and notification metadata commit together. A notification
+        # problem must never discard an already completed business operation.
+        try:
+            with db.begin_nested():enqueue_preparation(db,task)
+        except Exception:
+            logger.warning("Preparation notification enqueue unavailable")
+        db.commit()
     logger.info("Preparation finished task=%s state=%s elapsed_ms=%s",task_id,state,elapsed)
     if task:
         try:
-            from app.modules.p1_gestion_identidad_seguridad.services.push_service import notify_preparation
-            notify_preparation(db,task)
+            dispatch_one(db)
         except Exception:
             db.rollback()
             logger.warning("Preparation notification unavailable")
     return True
 
-def worker_loop(stop, session_factory=SessionLocal, runner=run_one):
+def worker_loop(stop, session_factory=SessionLocal, runner=run_one, dispatcher=dispatch_one):
     """Finish active work, but never claim another task after shutdown is requested."""
     while not stop.is_set():
         try:
             with session_factory() as db:
                 worked = runner(db)
+                if not stop.is_set():dispatch_worked = dispatcher(db)
+                else:dispatch_worked = False
+                worked = worked or dispatch_worked
             if not worked:
                 stop.wait(2)
         except Exception:

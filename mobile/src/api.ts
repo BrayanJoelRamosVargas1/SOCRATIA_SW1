@@ -1,12 +1,13 @@
 import { CapacitorHttp } from '@capacitor/core';
-import { DEFAULT_SERVER, apiPath } from './policy.mjs';
+import { DEFAULT_SERVER, apiPath, serverOrigin } from './policy.mjs';
+export const SERVER = serverOrigin(import.meta.env.VITE_SOCRATIA_SERVER_URL || DEFAULT_SERVER);
 
 let refresh: Promise<unknown> | null = null;
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
 export async function api<T>(path: string, method = 'GET', data?: unknown, retry = true): Promise<T> {
   let response;
   try {
-    response = await CapacitorHttp.request({url: DEFAULT_SERVER + apiPath(path, method), method,
+    response = await CapacitorHttp.request({url: SERVER + apiPath(path, method), method,
       headers: {'Content-Type':'application/json'}, data, connectTimeout:15000, readTimeout:30000});
   } catch { throw new ApiError('No pudimos conectar. Revisa Internet y vuelve a intentar.', 0); }
   if (response.status === 401 && retry && !path.startsWith('/auth/')) {
@@ -26,7 +27,7 @@ export async function exportFile(documentId: string, kind: 'questions' | 'presen
   const { Share } = await import('@capacitor/share');
   // Validate session and rotate cookies before requesting the binary export.
   await api('/profile');
-  const response = await CapacitorHttp.get({url: DEFAULT_SERVER + apiPath(`/documents/${documentId}/${kind}/export`), responseType:'arraybuffer', connectTimeout:15000, readTimeout:60000});
+  const response = await CapacitorHttp.get({url: SERVER + apiPath(`/documents/${documentId}/${kind}/export`), responseType:'arraybuffer', connectTimeout:15000, readTimeout:60000});
   if (response.status !== 200 || typeof response.data !== 'string') throw new Error('No se pudo descargar el material.');
   if (response.data.length > 14_000_000) throw new Error('Este material es grande. Descárgalo desde la web.');
   const path = `socratia/socratia-${documentId}-${kind}.${kind === 'questions' ? 'pdf' : 'pptx'}`;

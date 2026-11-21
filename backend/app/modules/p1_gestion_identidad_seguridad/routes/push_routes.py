@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.modules.p1_gestion_identidad_seguridad.models.native_push import NativePushDevice
+from app.modules.p1_gestion_identidad_seguridad.models.push_delivery import PushDelivery  # noqa: F401
 from app.modules.p1_gestion_identidad_seguridad.models.push_subscription import PushSubscription
 from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
 

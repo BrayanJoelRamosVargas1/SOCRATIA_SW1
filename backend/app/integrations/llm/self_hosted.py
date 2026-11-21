@@ -52,7 +52,10 @@ def completion(system, prompt, schema=None, max_tokens=4096):
         r.raise_for_status()
         if len(r.content) > 200000:
             raise ValueError("response_too_large")
-        content = r.json()["choices"][0]["message"]["content"]
+        choice = r.json()["choices"][0]
+        if choice.get("finish_reason") != "stop":
+            raise ValueError("incomplete_response")
+        content = choice["message"]["content"]
         if not isinstance(content, str) or not content.strip():
             raise ValueError("empty_response")
         return content

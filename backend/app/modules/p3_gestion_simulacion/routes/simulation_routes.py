@@ -53,7 +53,9 @@ async def prewarm_jury_speech(simulation_id: str, current_user: CurrentUser, db:
     text = (question.prompt_text or (question.question.question if question.question else "")) if question else ""
     if question and question.source == "BANK" and text and len(text) <= 800:
         try:
-            for segment in speech_segments(text):
+            # Bound speculative CPU/cache use to the opening audio; preparing an
+            # entire future question competes with the active user's response.
+            for segment in speech_segments(text)[:2]:
                 async for _chunk in get_tts_provider().synthesize(TTSRequest(text=segment, speaker_index=(question.position - 1) % 3)):
                     pass
         except TTSProviderError:

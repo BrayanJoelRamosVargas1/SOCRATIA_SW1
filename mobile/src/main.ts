@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { api, ApiError, exportFile, clearPrivateExports } from './api';
 import { enablePush, disablePush, initializePush, getPushState, restorePush } from './push';
 import './style.css';
+import { mountHelp, openWebProcedure } from './help';
 
 type Document = {id:string; original_name:string; status:string; file_size:number};
 type Simulation = {id:string; status:string; document:{name:string}; created_at:string};
@@ -31,6 +32,7 @@ function frame(title:string) {
     ['Documentos',()=>show('documents'),title==='Mis documentos'],
     ['Resultados',()=>show('results'),title==='Mis resultados'],
     ['Mi cuenta',()=>settings(),title==='Mi cuenta'],
+    ['Ayuda',()=>help(),title==='Ayuda'],
   ] as const){const item=button(label,action,true);if(active)item.setAttribute('aria-current','page');nav.append(item);}root.append(nav);}
   return {main,ticket};
 }
@@ -42,7 +44,11 @@ function login() {
   const passwordLabel=el('label','Contraseña'), password=el('input');password.type='password';password.autocomplete='current-password';password.required=true;passwordLabel.append(password);
   const submit=el('button','Iniciar sesión');submit.type='submit';form.append(emailLabel,passwordLabel,submit);
   form.addEventListener('submit',event=>{event.preventDefault();void perform(async()=>{submit.disabled=true;try {const response=await api<{user:{full_name:string}}>('/auth/login','POST',{email:email.value.trim(),password:password.value});password.value='';user=response.user;await openPreparation();}finally{submit.disabled=false;}});});
-  main.append(form,el('p','La creación de cuentas y las simulaciones se realizan en la versión web.','hint'));
+  main.append(form,button('¿Olvidaste tu contraseña?',()=>openWebProcedure('/forgot-password'),true),el('p','La creación de cuentas y las simulaciones se realizan en la versión web.','hint'));
+}
+function help(){
+  const {main}=frame('Ayuda');
+  mountHelp(main,section=>{void perform(()=>section==='account'?settings():show(section==='results'?'results':'documents'));});
 }
 async function show(page:'documents'|'results') {
   const {main,ticket}=frame(page==='documents'?'Mis documentos':'Mis resultados');

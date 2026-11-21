@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     embedding_provider: str = "gemini"
     local_qwen_embedding_url: str = ""
     local_qwen_embedding_key_file: str = ""
+    local_e5_enabled: bool = True
     gemini_api_key: SecretStr | None = None
     gemini_embedding_model: str = "text-embedding-004"
     embedding_dimensions: int = Field(default=768, ge=128, le=3072)

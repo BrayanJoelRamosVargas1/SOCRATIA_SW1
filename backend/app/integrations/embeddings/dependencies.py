@@ -47,7 +47,9 @@ def get_embedding_provider() -> EmbeddingCoordinator:
         batch_size=10,
     )
 
-    providers = [gemini_provider, cohere_provider, hf_remote_provider, hf_local_provider]
+    providers = [gemini_provider, cohere_provider, hf_remote_provider]
+    if settings.local_e5_enabled:
+        providers.append(hf_local_provider)
     qwen = LocalQwenEmbeddingProvider(
         url=settings.local_qwen_embedding_url,
         key_file=settings.local_qwen_embedding_key_file,

@@ -34,7 +34,7 @@ def test_idle_wait_is_interruptible_and_does_not_take_another_task():
             self.stopped = True
 
     stop = Stop()
-    worker.worker_loop(stop, lambda: nullcontext(None), lambda db: False)
+    worker.worker_loop(stop, lambda: nullcontext(None), lambda db: False, dispatcher=lambda db: False)
     assert stop.waits == [2]
 
 

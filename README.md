@@ -32,7 +32,38 @@ Sprint 1 está congelado en `v0.1.0-sprint1`. P2 está completo: CU06-CU11 cubre
 
 Voz en tiempo real, análisis visual, evaluación y pagos quedan para los siguientes incrementos. Pinecone opera como base vectorial de CU09 y fuente de recuperación de CU10/CU11.
 
-## Inicio rápido con Docker
+## Inicio local ligero y aislado (recomendado para la laptop)
+
+Reutiliza Python de `backend/.venv`, dependencias Node instaladas y Docker Desktop.
+No ejecuta modelos pesados ni construye imágenes de frontend/ML. El lanzador
+comprueba el nombre y la etiqueta del contenedor y usa únicamente `127.0.0.1:5436`;
+no toma la conexión `DATABASE_URL` del `.env` ni busca PostgreSQL en otros puertos.
+Las claves de proveedores se siguen leyendo del entorno privado; no las copies a Git.
+
+Desde la raíz, prepara solo la base y aplica las migraciones locales:
+
+```powershell
+backend/.venv/Scripts/python.exe scripts/local.py db
+backend/.venv/Scripts/python.exe scripts/local.py migrate
+```
+
+En tres terminales separadas, inicia API, tareas y web:
+
+```powershell
+backend/.venv/Scripts/python.exe scripts/local.py api
+backend/.venv/Scripts/python.exe scripts/local.py worker
+backend/.venv/Scripts/python.exe scripts/local.py web
+```
+
+Comprueba con `backend/.venv/Scripts/python.exe scripts/local.py check`.
+Abre `http://localhost:3000/login`. Detén cada proceso con Ctrl+C.
+El trabajador atiende tareas pendientes; generación y transcripción pueden usar
+cuota de los proveedores configurados. Push local está desactivado para evitar
+enviar avisos de pruebas a dispositivos reales. No se cambia la configuración AWS.
+El primer inicio crea una base aislada; no la conecta automáticamente con los datos
+de producción. Si ya existe el contenedor local verificado, conserva su volumen.
+
+## Inicio completo con Docker (puede compilar y cargar modelos)
 
 Requisitos: Docker Desktop con Docker Compose.
 
