@@ -75,9 +75,19 @@ STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 gzip -t "$ROOT/backups/pre-deploy-$STAMP.sql.gz"
 # Preserve images actually running, including after a previous build failed.
 LIVE_BACKEND=$(sudo docker inspect --format '{{.Image}}' "$("${COMPOSE[@]}" ps -q backend)")
-LIVE_FRONTEND=$(sudo docker inspect --format '{{.Image}}' "$("${COMPOSE[@]}" ps -q frontend)")
+LIVE_FRONTEND_CONTAINER=$("${COMPOSE[@]}" ps -q frontend)
+LIVE_FRONTEND=$(sudo docker inspect --format '{{.Image}}' "$LIVE_FRONTEND_CONTAINER")
 sudo docker image tag "$LIVE_BACKEND" socratia-staging-backend:previous
-sudo docker image tag "$LIVE_FRONTEND" socratia-staging-frontend:previous
+if sudo docker image inspect "$LIVE_FRONTEND" >/dev/null 2>&1; then
+  sudo docker image tag "$LIVE_FRONTEND" socratia-staging-frontend:previous
+else
+  # Loading a prebuilt tag can remove old image metadata in containerd's image
+  # store while its container still runs. Preserve that running frontend before
+  # replacing it. Never use this fallback for the backend: its runtime environment
+  # contains private credentials. This snapshot remains only on the encrypted host.
+  printf 'SNAPSHOT_RUNNING_FRONTEND %s\n' "$LIVE_FRONTEND_CONTAINER"
+  sudo docker commit --pause=false "$LIVE_FRONTEND_CONTAINER" socratia-staging-frontend:previous >/dev/null
+fi
 printf '%s\n' "$TARGET" > "$STATE/building-commit"
 finish_failed() {
   printf '%s\n' "$TARGET" > "$STATE/failed-commit"
