@@ -5,6 +5,7 @@ operator configuration, never user input. Redirects are deliberately disabled.
 """
 
 import httpx
+
 from app.core.config import get_settings
 from app.integrations.llm.base import (
     GeneratedQuestionBank,
@@ -12,7 +13,6 @@ from app.integrations.llm.base import (
     QuestionGenerationProviderError,
     validate_question_bank,
 )
-from app.integrations.llm.prompt import SYSTEM_PROMPT, build_question_prompt
 from app.integrations.llm.presentation import (
     GeneratedPresentation,
     PresentationGenerationProviderError,
@@ -22,9 +22,10 @@ from app.integrations.llm.presentation_prompt import (
     PRESENTATION_SYSTEM_PROMPT,
     build_presentation_prompt,
 )
+from app.integrations.llm.prompt import SYSTEM_PROMPT, build_question_prompt
 
 
-def completion(system, prompt, schema=None, max_tokens=4096):
+def completion(system, prompt, schema=None, max_tokens=4096, *, timeout_seconds=None):
     s = get_settings()
     if not s.self_hosted_llm_url or not s.self_hosted_llm_key:
         raise RuntimeError("self_hosted_not_configured")
@@ -41,7 +42,12 @@ def completion(system, prompt, schema=None, max_tokens=4096):
             "json_schema": {"name": "socratia", "strict": True, "schema": schema},
         }
     with httpx.Client(
-        timeout=httpx.Timeout(s.question_generation_timeout_seconds, connect=5),
+        timeout=httpx.Timeout(
+            timeout_seconds
+            if timeout_seconds is not None
+            else s.question_generation_timeout_seconds,
+            connect=5,
+        ),
         follow_redirects=False,
     ) as client:
         r = client.post(

@@ -2,11 +2,13 @@
 import {useState} from "react";
 import Link from "next/link";
 import {apiRequest} from "@/lib/api";
+import {ProductChatbot} from "./product-chatbot";
 type Reply={answer:string;explanation?:string;url:string;engine?:string;platform?:string};
 const webPaths=new Set(["/documents","/simulations/new","/history","/profile","/forgot-password","/register","/login","/admin/users"]);
 export function ProductGuide(){
  const [open,setOpen]=useState(false),[question,setQuestion]=useState(""),[busy,setBusy]=useState(false),[useAI,setUseAI]=useState(false);
  const [reply,setReply]=useState<Reply|null>(null);
+ const [chatOpen,setChatOpen]=useState(false);
  async function ask(text:string){
   if(busy)return;
   setBusy(true);
@@ -14,7 +16,7 @@ export function ProductGuide(){
   catch{setReply({answer:"No pudimos consultar la ayuda. Revisa tu conexión y sesión; puedes volver a intentar.",url:"/login"});}
   finally{setBusy(false);}
  }
- return <div style={{position:"fixed",right:16,bottom:16,zIndex:70,maxWidth:"calc(100vw - 32px)"}}>
+ return <><ProductChatbot open={chatOpen}/><div style={{position:"fixed",right:16,bottom:16,zIndex:70,maxWidth:"calc(100vw - 32px)"}}>
  {open&&<section aria-label="Guía de Socratia" style={{background:"white",color:"#14343b",padding:20,borderRadius:16,boxShadow:"0 8px 40px #1235",width:340,maxWidth:"100%",maxHeight:"70vh",overflowY:"auto"}}>
  <h2>¿Cómo uso Socratia?</h2><p>Instrucciones verificadas del producto. Puedes pedir una explicación adicional con IA.</p>
  <div>{["Subir documento","Generar preguntas","Recuperar contraseña","Activar avisos"].map(text=><button className="button" type="button" key={text} disabled={busy} onClick={()=>void ask(text)}>{text}</button>)}</div>
@@ -27,5 +29,7 @@ export function ProductGuide(){
  <small>{reply.engine==="guia_local_ia_no_disponible"?"La IA no respondió de forma completa. Puedes seguir los pasos verificados.":reply.engine==="modelo_propio"?"Explicación de modelo propio":reply.engine==="groq"?"Explicación con IA externa":"Guía del producto sin IA"}</small>
  {webPaths.has(reply.url)&&<p><Link href={reply.url}>Ir a ese apartado</Link></p>}</div>}
  </section>}
- <button className="button button-primary" type="button" aria-expanded={open} onClick={()=>setOpen(!open)}>{open?"Cerrar ayuda":"Ayuda con Socratia"}</button></div>;
+ <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+ <button className="button button-primary" type="button" aria-controls="socratia-chat" aria-expanded={chatOpen} onClick={()=>{setChatOpen(!chatOpen);setOpen(false);}}>{chatOpen?"Cerrar chatbot":"Chatbot"}</button>
+ <button className="button" type="button" aria-expanded={open} onClick={()=>{setOpen(!open);setChatOpen(false);}}>{open?"Cerrar guía":"Guía de uso"}</button></div></div></>;
 }
