@@ -21,8 +21,11 @@ class Settings(BaseSettings):
     fcm_service_account_file: str = ""
     self_hosted_llm_url: str = ""
     self_hosted_llm_key: SecretStr | None = None
+    self_hosted_llm_key_file: str = ""
     self_hosted_llm_model: str = "Qwen/Qwen3-4B-Instruct-2507"
-    preparation_primary_provider: str = Field(default="gemini", pattern="^(gemini|groq|self_hosted)$")
+    preparation_primary_provider: str = Field(
+        default="gemini", pattern="^(gemini|groq|self_hosted)$"
+    )
     evaluation_context_max_chars: int = Field(default=12000, ge=3000, le=60000)
     evaluation_max_retries: int = Field(default=1, ge=1, le=3)
     voice_tts_enabled: bool = True

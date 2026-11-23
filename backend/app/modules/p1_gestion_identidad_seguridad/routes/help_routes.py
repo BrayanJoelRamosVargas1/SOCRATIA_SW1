@@ -9,6 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.integrations.llm.self_hosted import is_configured
 from app.modules.p1_gestion_identidad_seguridad.policies.current_user import CurrentUser
 from app.modules.p1_gestion_identidad_seguridad.services.product_help import (
     guidance,
@@ -70,7 +71,7 @@ def chat(body: ChatRequest, user: CurrentUser):
     )
 
     settings = get_settings()
-    own_ready = bool(settings.self_hosted_llm_url and settings.self_hosted_llm_key)
+    own_ready = is_configured(settings)
     base = {"platform": body.platform, "url": "", "kind": "chatbot"}
     if body.local_only and not own_ready:
         return {
@@ -81,7 +82,7 @@ def chat(body: ChatRequest, user: CurrentUser):
     reserve_ai_usage(user.id)
     system = (
         "Eres el chatbot de Socratia, separado de la guía de uso. Conversa en español con frases "
-        "completas, en un máximo de 150 palabras. Responde consultas generales y ayuda con "
+        "completas, en un máximo de 80 palabras. Responde consultas generales y ayuda con "
         "investigación, metodología y preparación de defensas. Puedes plantear una pregunta de "
         "seguimiento. No tienes acceso a documentos, Internet en tiempo real, herramientas, "
         "contraseñas ni datos de otros usuarios. No afirmes haber leído archivos o realizado acciones. "
@@ -136,7 +137,7 @@ def ask(body: HelpRequest, user: CurrentUser):
     from app.core.spanish import require_spanish
 
     settings = get_settings()
-    own_model_ready = bool(settings.self_hosted_llm_url and settings.self_hosted_llm_key)
+    own_model_ready = is_configured(settings)
     if body.local_only and not own_model_ready:
         return {**result, "engine": "guia_local_modelo_no_configurado"}
     reserve_ai_usage(user.id)

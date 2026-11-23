@@ -1,0 +1,57 @@
+name: socratia-conversation
+services:
+  chat:
+    container_name: socratia-chat
+    image: ghcr.io/ggml-org/llama.cpp@sha256:5b43086e3ba7ea5794d72904654f6cd41224a9b1c6ac0398f4940ee380d30f23
+    restart: unless-stopped
+    cpus: 1.5
+    mem_limit: 900m
+    memswap_limit: 1400m
+    pids_limit: 128
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:size=32m]
+    networks: [qwen_private]
+    volumes:
+      - /opt/socratia-qwen/models:/models:ro
+      - /opt/socratia-secrets/qwen-api-key:/run/secrets/qwen-api-key:ro
+    command:
+      - --model
+      - /models/Qwen3-0.6B-Q8_0.gguf
+      - --alias
+      - Qwen3-0.6B-Q8_0
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8080'
+      - --ctx-size
+      - '4096'
+      - --parallel
+      - '1'
+      - --threads
+      - '2'
+      - --threads-batch
+      - '2'
+      - --batch-size
+      - '256'
+      - --ubatch-size
+      - '128'
+      - --jinja
+      - --api-key-file
+      - /run/secrets/qwen-api-key
+      - --no-webui
+      - --log-disable
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, '3', 'http://127.0.0.1:8080/health']
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 5
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+networks:
+  qwen_private:
+    external: true
+    name: socratia-staging_qwen_private

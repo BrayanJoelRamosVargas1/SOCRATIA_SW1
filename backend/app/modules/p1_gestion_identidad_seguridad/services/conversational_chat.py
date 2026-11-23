@@ -4,10 +4,10 @@ import httpx
 
 
 def complete_chat(system: str, prompt: str, settings) -> tuple[str, str]:
-    if settings.self_hosted_llm_url and settings.self_hosted_llm_key:
-        from app.integrations.llm.self_hosted import completion
+    from app.integrations.llm.self_hosted import completion, is_configured
 
-        return completion(system, prompt, max_tokens=700, timeout_seconds=20), "modelo_propio"
+    if is_configured(settings):
+        return completion(system, prompt, max_tokens=320, timeout_seconds=45), "modelo_propio"
     if not settings.groq_api_key:
         raise ValueError("provider_unavailable")
     payload = {

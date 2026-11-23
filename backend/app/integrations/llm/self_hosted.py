@@ -4,6 +4,8 @@ No model downloads or local inference in the API process. The endpoint is truste
 operator configuration, never user input. Redirects are deliberately disabled.
 """
 
+from pathlib import Path
+
 import httpx
 
 from app.core.config import get_settings
@@ -25,9 +27,27 @@ from app.integrations.llm.presentation_prompt import (
 from app.integrations.llm.prompt import SYSTEM_PROMPT, build_question_prompt
 
 
+def is_configured(settings=None):
+    settings = settings or get_settings()
+    return bool(
+        settings.self_hosted_llm_url
+        and (settings.self_hosted_llm_key or settings.self_hosted_llm_key_file)
+    )
+
+
+def _private_key(settings):
+    if settings.self_hosted_llm_key:
+        return settings.self_hosted_llm_key.get_secret_value()
+    # This is operator configuration, never a path accepted from a chat request.
+    key = Path(settings.self_hosted_llm_key_file).read_text().strip()
+    if not key or len(key) > 256 or any(char.isspace() for char in key):
+        raise ValueError("invalid_private_model_key")
+    return key
+
+
 def completion(system, prompt, schema=None, max_tokens=4096, *, timeout_seconds=None):
     s = get_settings()
-    if not s.self_hosted_llm_url or not s.self_hosted_llm_key:
+    if not is_configured(s):
         raise RuntimeError("self_hosted_not_configured")
     payload = {
         "model": s.self_hosted_llm_model,
@@ -52,7 +72,7 @@ def completion(system, prompt, schema=None, max_tokens=4096, *, timeout_seconds=
     ) as client:
         r = client.post(
             s.self_hosted_llm_url.rstrip("/") + "/chat/completions",
-            headers={"Authorization": "Bearer " + s.self_hosted_llm_key.get_secret_value()},
+            headers={"Authorization": "Bearer " + _private_key(s)},
             json=payload,
         )
         r.raise_for_status()
